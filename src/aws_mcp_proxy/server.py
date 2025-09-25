@@ -24,14 +24,14 @@ This server provides a unified interface to backend servers by:
 import argparse
 import asyncio
 import os
+from fastmcp.server.server import FastMCP
+from loguru import logger
 from src.aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from src.aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
     normalize_endpoint_url,
 )
-from fastmcp.server.server import FastMCP
-from loguru import logger
 from typing import Any
 
 

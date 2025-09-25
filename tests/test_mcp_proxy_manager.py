@@ -15,8 +15,8 @@
 """Tests for mcp_proxy_manager module."""
 
 import pytest
-from src.aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from fastmcp.server.server import FastMCP
+from src.aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from unittest.mock import AsyncMock, MagicMock
 
 

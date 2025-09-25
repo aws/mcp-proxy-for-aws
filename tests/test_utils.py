@@ -15,12 +15,13 @@
 """Tests for utils module."""
 
 import pytest
+from fastmcp.client.transports import StreamableHttpTransport
+from httpx import Timeout
 from src.aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
     normalize_endpoint_url,
 )
-from fastmcp.client.transports import StreamableHttpTransport
 from unittest.mock import MagicMock, patch
 
 
@@ -47,11 +48,16 @@ class TestCreateTransportWithSigv4:
         # We need to access the factory through the transport's internal structure
         if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
             factory = result.httpx_client_factory
-            test_kwargs = {'timeout': 30}
-            factory(**test_kwargs)
+            test_timeout = Timeout(30.0)
+            test_headers = {'Content-Type': 'application/json'}
+            factory(headers=test_headers, timeout=test_timeout)
 
             mock_create_sigv4_client.assert_called_once_with(
-                service=service, profile=profile, timeout=30
+                service=service,
+                profile=profile,
+                headers=test_headers,
+                timeout=test_timeout,
+                auth=None
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -71,7 +77,13 @@ class TestCreateTransportWithSigv4:
             factory = result.httpx_client_factory
             factory()
 
-            mock_create_sigv4_client.assert_called_once_with(service=service, profile=None)
+            mock_create_sigv4_client.assert_called_once_with(
+                service=service,
+                profile=None,
+                headers=None,
+                timeout=None,
+                auth=None
+            )
         else:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
