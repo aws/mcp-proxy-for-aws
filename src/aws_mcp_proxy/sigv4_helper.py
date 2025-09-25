@@ -16,10 +16,60 @@
 
 import boto3
 import httpx
+import logging
 import os
-from httpx_auth_awssigv4 import SigV4Auth
-from loguru import logger
-from typing import Optional
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+from botocore.credentials import Credentials
+from typing import Any, Dict, Generator, Optional
+
+
+logger = logging.getLogger(__name__)
+
+
+class SigV4HTTPXAuth(httpx.Auth):
+    """HTTPX Auth class that signs requests with AWS SigV4."""
+
+    def __init__(
+        self,
+        credentials: Credentials,
+        service: str,
+        region: str,
+    ):
+        """Initialize SigV4HTTPXAuth.
+
+        Args:
+            credentials: AWS credentials to use for signing
+            service: AWS service name to sign requests for
+            region: AWS region to sign requests for
+        """
+        self.credentials = credentials
+        self.service = service
+        self.region = region
+        self.signer = SigV4Auth(credentials, service, region)
+
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+        """Signs the request with SigV4 and adds the signature to the request headers."""
+        # Create an AWS request
+        headers = dict(request.headers)
+        # Header 'connection' = 'keep-alive' is not used in calculating the request
+        # signature on the server-side, and results in a signature mismatch if included
+        headers.pop('connection', None)  # Remove if present, ignore if not
+
+        aws_request = AWSRequest(
+            method=request.method,
+            url=str(request.url),
+            data=request.content,
+            headers=headers,
+        )
+
+        # Sign the request with SigV4
+        self.signer.add_auth(aws_request)
+
+        # Add the signature header to the original request
+        request.headers.update(dict(aws_request.headers))
+
+        yield request
 
 
 async def _handle_error_response(response: httpx.Response) -> None:
@@ -39,24 +89,24 @@ async def _handle_error_response(response: httpx.Response) -> None:
             # Read response content to extract error details
             await response.aread()
         except Exception as e:
-            logger.error(f'Failed to read response: {e}')
+            logger.error('Failed to read response: %s', e)
 
         # Try to extract error details with fallbacks
         error_msg = ''
         try:
             # Try to parse JSON error details
             error_details = response.json()
-            logger.error(f'HTTP {response.status_code} Error Details: {error_details}')
+            logger.error('HTTP %d Error Details: %s', response.status_code, error_details)
             error_msg = f'HTTP {response.status_code}: {error_details} for url {response.url}'
         except Exception:
             # If JSON parsing fails, use response text or status code
             try:
                 response_text = response.text
-                logger.error(f'HTTP {response.status_code} Error: {response_text}')
+                logger.error('HTTP %d Error: %s', response.status_code, response_text)
                 error_msg = f'HTTP {response.status_code}: {response_text} for url {response.url}'
             except Exception:
                 # Fallback to just status code and URL
-                logger.error(f'HTTP {response.status_code} Error for url {response.url}')
+                logger.error('HTTP %d Error for url %s', response.status_code, response.url)
                 error_msg = f'HTTP {response.status_code} Error for url {response.url}'
 
         # Raise the status error with enhanced message
@@ -102,7 +152,7 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
 
 def create_sigv4_auth(
     service: str, profile: Optional[str] = None, region: Optional[str] = None
-) -> SigV4Auth:
+) -> SigV4HTTPXAuth:
     """Create SigV4 authentication for AWS requests.
 
     Args:
@@ -111,7 +161,7 @@ def create_sigv4_auth(
         region: AWS region (defaults to AWS_REGION env var or us-west-2)
 
     Returns:
-        SigV4Auth instance
+        SigV4HTTPXAuth instance
 
     Raises:
         ValueError: If credentials cannot be obtained
@@ -125,15 +175,13 @@ def create_sigv4_auth(
         region = os.environ.get('AWS_REGION', 'us-west-2')
 
     # Create SigV4Auth with explicit credentials
-    sigv4_auth = SigV4Auth(
-        access_key=credentials.access_key,
-        secret_key=credentials.secret_key,
+    sigv4_auth = SigV4HTTPXAuth(
+        credentials=credentials,
         service=service,
         region=region,
-        token=credentials.token,
     )
 
-    logger.info(f"Created SigV4 authentication for service '{service}' in region '{region}'")
+    logger.info("Created SigV4 authentication for service '%s' in region '%s'", service, region)
     return sigv4_auth
 
 
@@ -141,9 +189,9 @@ def create_sigv4_client(
     service: str = 'eks-mcp',
     profile: Optional[str] = None,
     region: Optional[str] = None,
-    headers=None,
-    auth=None,
-    **kwargs,
+    headers: Optional[Dict[str, str]] = None,
+    auth: Optional[httpx.Auth] = None,
+    **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
 
@@ -180,7 +228,7 @@ def create_sigv4_client(
     sigv4_auth = create_sigv4_auth(service, profile, region)
 
     # Create the client with SigV4 auth and error handling event hook
-    logger.info(f"Creating httpx.AsyncClient with SigV4 authentication for service '{service}'")
+    logger.info("Creating httpx.AsyncClient with SigV4 authentication for service '%s'", service)
 
     return httpx.AsyncClient(
         auth=sigv4_auth,

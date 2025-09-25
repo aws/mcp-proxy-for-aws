@@ -14,12 +14,14 @@
 
 """MCP Proxy Manager for handling proxy content integration."""
 
+import logging
 from fastmcp.server.server import FastMCP
-from loguru import logger
 
 
 class McpProxyManager:
     """Manages the integration of proxy content (tools, resources, prompts) into MCP servers."""
+
+    logger = logging.getLogger(__name__)
 
     def __init__(self, target_mcp: FastMCP, allow_write: bool = False):
         """Initialize the MCP Proxy Manager.
@@ -45,10 +47,10 @@ class McpProxyManager:
             await self._add_resources(proxy)
             await self._add_prompts(proxy)
 
-            logger.info('Successfully added proxy content to MCP server')
+            self.logger.info('Successfully added proxy content to MCP server')
 
         except Exception as e:
-            logger.error(f'Failed to add proxy content to MCP server: {e}')
+            self.logger.error(f'Failed to add proxy content to MCP server: {e}')
             raise
 
     async def _add_tools(self, proxy: FastMCP) -> None:
@@ -61,7 +63,7 @@ class McpProxyManager:
             Exception: If tools cannot be retrieved or added
         """
         tools = await proxy.get_tools()
-        logger.info(f'Found {len(tools)} tools in proxy')
+        self.logger.info(f'Found {len(tools)} tools in proxy')
 
         for tool_name, tool in tools.items():
             # Check the tool annotations and disable if needed
@@ -69,7 +71,7 @@ class McpProxyManager:
             if not self.allow_write:
                 # In readOnly mode, skip the tools with no readOnlyHint=True annotation
                 if annotations and not annotations.readOnlyHint or not annotations:
-                    logger.info(f'Skipping tool {tool_name} needing write permissions')
+                    self.logger.info(f'Skipping tool {tool_name} needing write permissions')
                     continue
 
             self.target_mcp.add_tool(tool)
@@ -82,17 +84,17 @@ class McpProxyManager:
         """
         try:
             resources = await proxy.get_resources()
-            logger.info(f'Found {len(resources)} resources in proxy')
+            self.logger.info(f'Found {len(resources)} resources in proxy')
 
             for resource_uri, resource in resources.items():
                 self.target_mcp.add_resource(resource)
-                logger.debug(f'Added resource: {resource_uri}')
+                self.logger.debug(f'Added resource: {resource_uri}')
 
         except AttributeError:
             # Proxy doesn't have resources, which is fine
-            logger.debug("Proxy doesn't have resources method")
+            self.logger.debug("Proxy doesn't have resources method")
         except Exception as e:
-            logger.warning(f'Failed to get resources from proxy: {e}')
+            self.logger.warning(f'Failed to get resources from proxy: {e}')
 
     async def _add_prompts(self, proxy: FastMCP) -> None:
         """Add prompts from proxy to target MCP server.
@@ -102,14 +104,14 @@ class McpProxyManager:
         """
         try:
             prompts = await proxy.get_prompts()
-            logger.info(f'Found {len(prompts)} prompts in proxy')
+            self.logger.info(f'Found {len(prompts)} prompts in proxy')
 
             for prompt_name, prompt in prompts.items():
                 self.target_mcp.add_prompt(prompt)
-                logger.debug(f'Added prompt: {prompt_name}')
+                self.logger.debug(f'Added prompt: {prompt_name}')
 
         except AttributeError:
             # Proxy doesn't have prompts, which is fine
-            logger.debug("Proxy doesn't have prompts method")
+            self.logger.debug("Proxy doesn't have prompts method")
         except Exception as e:
-            logger.warning(f'Failed to get prompts from proxy: {e}')
+            self.logger.warning(f'Failed to get prompts from proxy: {e}')
