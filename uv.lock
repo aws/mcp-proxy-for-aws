@@ -209,6 +209,70 @@ wheels = [
 ]
 
 [[package]]
+name = "aws-mcp-proxy"
+version = "0.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "boto3" },
+    { name = "botocore" },
+    { name = "fastmcp" },
+    { name = "httpx-auth-awssigv4" },
+    { name = "loguru" },
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "requests-auth-aws-sigv4" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "black" },
+    { name = "isort" },
+    { name = "mypy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "checkov" },
+    { name = "commitizen" },
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "black", marker = "extra == 'dev'", specifier = ">=23.3.0" },
+    { name = "boto3", specifier = ">=1.34.0" },
+    { name = "botocore", specifier = ">=1.34.0" },
+    { name = "fastmcp", specifier = ">=2.11.2" },
+    { name = "httpx-auth-awssigv4" },
+    { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
+    { name = "loguru", specifier = ">=0.7.0" },
+    { name = "mcp", specifier = ">=1.12.3" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.3.0" },
+    { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "requests-auth-aws-sigv4" },
+]
+provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "checkov", specifier = ">=3.2.402" },
+    { name = "commitizen", specifier = ">=4.2.2" },
+    { name = "pre-commit", specifier = ">=4.1.0" },
+    { name = "pyright", specifier = ">=1.1.398" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
+    { name = "pytest-mock", specifier = ">=3.12.0" },
+    { name = "ruff", specifier = ">=0.9.7" },
+]
+
+[[package]]
 name = "backports-asyncio-runner"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2465,16 +2529,16 @@ wheels = [
 
 [[package]]
 name = "pydantic-settings"
-version = "2.10.1"
+version = "2.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/85/1ea668bbab3c50071ca613c6ab30047fb36ab0da1b92fa8f17bbc38fd36c/pydantic_settings-2.10.1.tar.gz", hash = "sha256:06f0062169818d0f5524420a360d632d5857b83cffd4d42fe29597807a1614ee", size = 172583, upload-time = "2025-06-24T13:26:46.841Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/c5/dbbc27b814c71676593d1c3f718e6cd7d4f00652cefa24b75f7aa3efb25e/pydantic_settings-2.11.0.tar.gz", hash = "sha256:d0e87a1c7d33593beb7194adb8470fc426e95ba02af83a0f23474a04c9a08180", size = 188394, upload-time = "2025-09-24T14:19:11.764Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/f0/427018098906416f580e3cf1366d3b1abfb408a0652e9f31600c24a1903c/pydantic_settings-2.10.1-py3-none-any.whl", hash = "sha256:a60952460b99cf661dc25c29c0ef171721f98bfcb52ef8d9ea4c943d7c8cc796", size = 45235, upload-time = "2025-06-24T13:26:45.485Z" },
+    { url = "https://files.pythonhosted.org/packages/83/d6/887a1ff844e64aa823fb4905978d882a633cfe295c32eacad582b78a7d8b/pydantic_settings-2.11.0-py3-none-any.whl", hash = "sha256:fe2cea3413b9530d10f3a5875adffb17ada5c1e1bab0b2885546d7310415207c", size = 48608, upload-time = "2025-09-24T14:19:10.015Z" },
 ]
 
 [[package]]
@@ -3195,70 +3259,6 @@ wheels = [
 ]
 
 [[package]]
-name = "src-aws-mcp-proxy"
-version = "0.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "boto3" },
-    { name = "botocore" },
-    { name = "fastmcp" },
-    { name = "httpx-auth-awssigv4" },
-    { name = "loguru" },
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "requests-auth-aws-sigv4" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "black" },
-    { name = "isort" },
-    { name = "mypy" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "checkov" },
-    { name = "commitizen" },
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-mock" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.3.0" },
-    { name = "boto3", specifier = ">=1.34.0" },
-    { name = "botocore", specifier = ">=1.34.0" },
-    { name = "fastmcp", specifier = ">=2.11.2" },
-    { name = "httpx-auth-awssigv4" },
-    { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
-    { name = "loguru", specifier = ">=0.7.0" },
-    { name = "mcp", specifier = ">=1.12.3" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.3.0" },
-    { name = "pydantic", specifier = ">=2.10.6" },
-    { name = "requests-auth-aws-sigv4" },
-]
-provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "checkov", specifier = ">=3.2.402" },
-    { name = "commitizen", specifier = ">=4.2.2" },
-    { name = "pre-commit", specifier = ">=4.1.0" },
-    { name = "pyright", specifier = ">=1.1.398" },
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", specifier = ">=0.26.0" },
-    { name = "pytest-cov", specifier = ">=4.1.0" },
-    { name = "pytest-mock", specifier = ">=3.12.0" },
-    { name = "ruff", specifier = ">=0.9.7" },
-]
-
-[[package]]
 name = "sse-starlette"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3411,16 +3411,16 @@ wheels = [
 
 [[package]]
 name = "uvicorn"
-version = "0.36.1"
+version = "0.37.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/ed/e0d942cf6ce404057c24289dab268dfe0750b187782f6aabd6c3146d3c56/uvicorn-0.36.1.tar.gz", hash = "sha256:048e68f2a0fe291cd848ed076f18c026e1b0bc69991495f087634ac9a41e8706", size = 80269, upload-time = "2025-09-23T12:22:08.318Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/57/1616c8274c3442d802621abf5deb230771c7a0fec9414cb6763900eb3868/uvicorn-0.37.0.tar.gz", hash = "sha256:4115c8add6d3fd536c8ee77f0e14a7fd2ebba939fed9b02583a97f80648f9e13", size = 80367, upload-time = "2025-09-23T13:33:47.486Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4b/94/3f40bff35271ffb2e0a79af51cc5e1eb2e3105c6f9fb460861858d91289b/uvicorn-0.36.1-py3-none-any.whl", hash = "sha256:059086ecb470a021553f17bf860fce2095611d92fb8b669c44325b3435a0a654", size = 67867, upload-time = "2025-09-23T12:22:06.261Z" },
+    { url = "https://files.pythonhosted.org/packages/85/cd/584a2ceb5532af99dd09e50919e3615ba99aa127e9850eafe5f31ddfdb9a/uvicorn-0.37.0-py3-none-any.whl", hash = "sha256:913b2b88672343739927ce381ff9e2ad62541f9f8289664fa1d1d3803fa2ce6c", size = 67976, upload-time = "2025-09-23T13:33:45.842Z" },
 ]
 
 [[package]]
