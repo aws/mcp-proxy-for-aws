@@ -16,8 +16,8 @@
 
 import httpx
 import re
+from aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from fastmcp.client.transports import StreamableHttpTransport
-from src.aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from typing import Dict, Optional
 from urllib.parse import urlparse
 

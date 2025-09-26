@@ -15,18 +15,18 @@
 """Tests for the aws-mcp-proxy Server."""
 
 import pytest
-from src.aws_mcp_proxy.server import main, parse_args, setup_mcp_mode
-from src.aws_mcp_proxy.sigv4_helper import create_sigv4_client
-from src.aws_mcp_proxy.utils import determine_service_name
+from aws_mcp_proxy.server import main, parse_args, setup_mcp_mode
+from aws_mcp_proxy.sigv4_helper import create_sigv4_client
+from aws_mcp_proxy.utils import determine_service_name
 from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestServer:
     """Tests for the server module."""
 
-    @patch('src.aws_mcp_proxy.server.McpProxyManager')
-    @patch('src.aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('src.aws_mcp_proxy.server.FastMCP.as_proxy')
+    @patch('aws_mcp_proxy.server.McpProxyManager')
+    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
+    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
     async def test_setup_mcp_mode(
         self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
     ):
@@ -59,9 +59,9 @@ class TestServer:
         mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
-    @patch('src.aws_mcp_proxy.server.McpProxyManager')
-    @patch('src.aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('src.aws_mcp_proxy.server.FastMCP.as_proxy')
+    @patch('aws_mcp_proxy.server.McpProxyManager')
+    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
+    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
     async def test_setup_mcp_mode_with_tools(
         self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
     ):
@@ -94,9 +94,9 @@ class TestServer:
         mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
-    @patch('src.aws_mcp_proxy.server.McpProxyManager')
-    @patch('src.aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('src.aws_mcp_proxy.server.FastMCP.as_proxy')
+    @patch('aws_mcp_proxy.server.McpProxyManager')
+    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
+    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
     async def test_setup_mcp_mode_tool_registration_error(
         self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
     ):
@@ -133,7 +133,7 @@ class TestServer:
         args = parse_args()
         assert args.endpoint == 'https://test.example.com'
 
-    @patch('src.aws_mcp_proxy.server.asyncio.run')
+    @patch('aws_mcp_proxy.server.asyncio.run')
     @patch('sys.argv', ['test', '--endpoint', 'https://test.example.com'])
     def test_main_function(self, mock_asyncio_run):
         """Test that main function runs server correctly."""
@@ -146,7 +146,7 @@ class TestServer:
         # Assert
         mock_asyncio_run.assert_called_once()
 
-    @patch('src.aws_mcp_proxy.server.asyncio.run')
+    @patch('aws_mcp_proxy.server.asyncio.run')
     @patch('sys.argv', ['test', '--endpoint', 'https://test.example.com'])
     def test_main_error_handling(self, mock_asyncio_run):
         """Test that main function handles errors gracefully."""
@@ -172,9 +172,9 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('src.aws_mcp_proxy.sigv4_helper.boto3.Session')
-    @patch('src.aws_mcp_proxy.sigv4_helper.httpx.AsyncClient')
-    @patch('src.aws_mcp_proxy.sigv4_helper.SigV4Auth')
+    @patch('aws_mcp_proxy.sigv4_helper.boto3.Session')
+    @patch('aws_mcp_proxy.sigv4_helper.httpx.AsyncClient')
+    @patch('aws_mcp_proxy.sigv4_helper.SigV4Auth')
     def test_create_sigv4_client(self, mock_sigv4_auth, mock_async_client, mock_session):
         """Test creating SigV4 authenticated client with HTTPX auth."""
         # Arrange
@@ -196,7 +196,7 @@ class TestServer:
         mock_sigv4_auth.assert_called_once_with(mock_credentials, 'test-service', 'us-west-2')
         mock_async_client.assert_called_once()
 
-    @patch('src.aws_mcp_proxy.sigv4_helper.boto3.Session')
+    @patch('aws_mcp_proxy.sigv4_helper.boto3.Session')
     def test_create_sigv4_client_no_credentials(self, mock_session):
         """Test creating SigV4 client with no credentials."""
         # Arrange
@@ -213,7 +213,7 @@ class TestServer:
         """Test that main is called when module is executed directly."""
         # This test is more complex because we need to test the actual module execution
         # We'll test by checking if the server module has the correct structure
-        import src.aws_mcp_proxy.server as server_module
+        import aws_mcp_proxy.server as server_module
 
         # Verify the module has the main function
         assert hasattr(server_module, 'main')

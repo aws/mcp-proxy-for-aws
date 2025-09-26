@@ -14,17 +14,17 @@
 
 """Tests for the main function in server.py."""
 
-from src.aws_mcp_proxy.server import main
+from aws_mcp_proxy.server import main
 from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestMain:
     """Tests for the main function."""
 
-    @patch('src.aws_mcp_proxy.server.asyncio.run')
-    @patch('src.aws_mcp_proxy.server.setup_mcp_mode')
-    @patch('src.aws_mcp_proxy.server.FastMCP')
-    @patch('sys.argv', ['src.aws-mcp-proxy', '--endpoint', 'https://test.example.com'])
+    @patch('aws_mcp_proxy.server.asyncio.run')
+    @patch('aws_mcp_proxy.server.setup_mcp_mode')
+    @patch('aws_mcp_proxy.server.FastMCP')
+    @patch('sys.argv', ['aws-mcp-proxy', '--endpoint', 'https://test.example.com'])
     def test_main_default(self, mock_fastmcp, mock_setup_mcp, mock_asyncio_run):
         """Test main function with default arguments."""
         # Create mock FastMCP instance
@@ -58,7 +58,7 @@ class TestMain:
 
         # Get the source code of the module
         import inspect
-        from src.aws_mcp_proxy import server
+        from aws_mcp_proxy import server
 
         # Get the source code
         source = inspect.getsource(server)
