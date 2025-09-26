@@ -16,7 +16,7 @@
 
 import logging
 import pytest
-from src.aws_mcp_proxy.logging_config import configure_logging
+from aws_mcp_proxy.logging_config import configure_logging
 
 
 def test_configure_logging_default_level():
