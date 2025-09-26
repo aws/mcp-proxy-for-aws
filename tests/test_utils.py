@@ -16,7 +16,6 @@
 
 import pytest
 from fastmcp.client.transports import StreamableHttpTransport
-from httpx import Timeout
 from src.aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
@@ -47,17 +46,18 @@ class TestCreateTransportWithSigv4:
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
         if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
+            from httpx import Timeout
+
             factory = result.httpx_client_factory
-            test_timeout = Timeout(30.0)
-            test_headers = {'Content-Type': 'application/json'}
-            factory(headers=test_headers, timeout=test_timeout)
+            test_kwargs = {'headers': {'test': 'header'}, 'timeout': Timeout(30.0), 'auth': None}
+            factory(**test_kwargs)
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
                 profile=profile,
-                headers=test_headers,
-                timeout=test_timeout,
-                auth=None
+                headers={'test': 'header'},
+                timeout=Timeout(30.0),
+                auth=None,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -75,14 +75,10 @@ class TestCreateTransportWithSigv4:
         # We need to access the factory through the transport's internal structure
         if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
             factory = result.httpx_client_factory
-            factory()
+            factory(headers=None, timeout=None, auth=None)
 
             mock_create_sigv4_client.assert_called_once_with(
-                service=service,
-                profile=None,
-                headers=None,
-                timeout=None,
-                auth=None
+                service=service, profile=None, headers=None, timeout=None, auth=None
             )
         else:
             # If we can't access the factory directly, just verify the transport was created

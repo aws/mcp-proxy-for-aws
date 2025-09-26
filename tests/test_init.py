@@ -27,16 +27,16 @@ class TestInit:
         import src.aws_mcp_proxy
 
         # Check that __version__ is defined
-        assert hasattr(src.aws_mcp_proxy, "__version__")
+        assert hasattr(src.aws_mcp_proxy, '__version__')
 
         # Check that __version__ is a string
         assert isinstance(src.aws_mcp_proxy.__version__, str)
 
         # Check that __version__ follows semantic versioning (major.minor.patch)
-        version_pattern = r"^\d+\.\d+\.\d+$"
-        assert re.match(
-            version_pattern, src.aws_mcp_proxy.__version__
-        ), f"Version '{src.aws_mcp_proxy.__version__}' does not follow semantic versioning"
+        version_pattern = r'^\d+\.\d+\.\d+$'
+        assert re.match(version_pattern, src.aws_mcp_proxy.__version__), (
+            f"Version '{src.aws_mcp_proxy.__version__}' does not follow semantic versioning"
+        )
 
     def test_module_reload(self):
         """Test that the module can be reloaded."""

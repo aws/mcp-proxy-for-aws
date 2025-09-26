@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """AWS MCP Proxy Server entry point.
 
 This server provides a unified interface to backend servers by:
@@ -23,9 +24,10 @@ This server provides a unified interface to backend servers by:
 
 import argparse
 import asyncio
+import logging
 import os
 from fastmcp.server.server import FastMCP
-from loguru import logger
+from src.aws_mcp_proxy.logging_config import configure_logging
 from src.aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from src.aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
@@ -33,6 +35,9 @@ from src.aws_mcp_proxy.utils import (
     normalize_endpoint_url,
 )
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 async def setup_mcp_mode(mcp: FastMCP, args) -> None:
@@ -47,7 +52,9 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     region = os.getenv('AWS_REGION', 'us-west-2')
 
     # Log server configuration
-    logger.info(f'Using service: {service}, region: {region}, profile: {profile or "default"}')
+    logger.info(
+        'Using service: %s, region: %s, profile: %s', service, region, profile or 'default'
+    )
     logger.info('Running in MCP mode')
 
     # Normalize endpoint URL
@@ -104,6 +111,13 @@ Examples:
         help='Allow tools that require write permissions to be enabled',
     )
 
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='INFO',
+        help='Set the logging level (default: INFO)',
+    )
+
     return parser.parse_args()
 
 
@@ -111,7 +125,8 @@ def main():
     """Run the MCP server."""
     args = parse_args()
 
-    # Set up logging
+    # Configure logging
+    configure_logging(args.log_level)
     logger.info('Starting AWS MCP Proxy Server')
 
     # Create FastMCP instance
@@ -131,7 +146,7 @@ def main():
             await mcp.run_async()
 
         except Exception as e:
-            logger.error(f'Failed to start server: {e}')
+            logger.error('Failed to start server: %s', e)
             raise
 
     # Run the server
