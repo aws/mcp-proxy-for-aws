@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # dependabot should continue to update this to the latest hash.
-FROM public.ecr.aws/sam/build-python3.10@sha256:05d8a73b9daf15e437f30f474bbf67f8fa53be662a09a6d62515fd8132cfb13a AS uv
+FROM public.ecr.aws/docker/library/python:3.10.18-alpine3.22@sha256:16a3e827aa3a9afdb2b6d16072a2f4b04b0014be1939ba38ee36db82ec68c7fe AS uv
 
 # Install the project into `/app`
 WORKDIR /app
@@ -47,7 +47,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Make the directory just in case it doesn't exist
 RUN mkdir -p /root/.local
 
-FROM public.ecr.aws/sam/build-python3.10@sha256:05d8a73b9daf15e437f30f474bbf67f8fa53be662a09a6d62515fd8132cfb13a
+# dependabot should continue to update this to the latest hash.
+FROM public.ecr.aws/docker/library/python:3.10.18-alpine3.22@sha256:16a3e827aa3a9afdb2b6d16072a2f4b04b0014be1939ba38ee36db82ec68c7fe
 
 # Place executables in the environment at the front of the path and include other binaries
 ENV PATH="/app/.venv/bin:$PATH:/usr/sbin"
@@ -55,12 +56,10 @@ ENV PATH="/app/.venv/bin:$PATH:/usr/sbin"
 # Install lsof for the healthcheck
 # Install other tools as needed for the MCP server
 # Add non-root user and ability to change directory into /root
-RUN yum update -y && \
-    yum install -y lsof && \
-    yum clean all -y && \
-    rm -rf /var/cache/yum && \
-    groupadd --force --system app && \
-    useradd app -g app -d /app && \
+RUN apk update && \
+    apk --no-cache add lsof && \
+    addgroup -S app && \
+    adduser -S app -G app -h /app && \
     chmod o+x /root
 
 # Get the project from the uv layer
@@ -75,4 +74,4 @@ USER app
 
 # When running the container, add --db-path and a bind mount to the host's db file
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "docker-healthcheck.sh" ]
-ENTRYPOINT ["src.aws-mcp-proxy"]
+ENTRYPOINT ["aws-mcp-proxy"]
