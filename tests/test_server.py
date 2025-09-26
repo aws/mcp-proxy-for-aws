@@ -176,7 +176,7 @@ class TestServer:
     @patch('src.aws_mcp_proxy.sigv4_helper.httpx.AsyncClient')
     @patch('src.aws_mcp_proxy.sigv4_helper.SigV4Auth')
     def test_create_sigv4_client(self, mock_sigv4_auth, mock_async_client, mock_session):
-        """Test creating SigV4 authenticated client."""
+        """Test creating SigV4 authenticated client with HTTPX auth."""
         # Arrange
         mock_credentials = Mock()
         mock_credentials.access_key = 'test_access_key'
@@ -193,13 +193,7 @@ class TestServer:
 
         # Assert
         mock_session.assert_called_once_with(profile_name='test-profile')
-        mock_sigv4_auth.assert_called_once_with(
-            access_key='test_access_key',
-            secret_key='test_secret_key',
-            service='test-service',
-            region='us-west-2',
-            token='test_token',
-        )
+        mock_sigv4_auth.assert_called_once_with(mock_credentials, 'test-service', 'us-west-2')
         mock_async_client.assert_called_once()
 
     @patch('src.aws_mcp_proxy.sigv4_helper.boto3.Session')

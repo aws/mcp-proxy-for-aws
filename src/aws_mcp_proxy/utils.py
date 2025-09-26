@@ -13,9 +13,10 @@
 # limitations under the License.
 
 """Utility functions for the AWS MCP Proxy."""
+
+import httpx
 import re
 from fastmcp.client.transports import StreamableHttpTransport
-from httpx import AsyncClient, Auth, Timeout
 from src.aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from typing import Dict, Optional
 from urllib.parse import urlparse
@@ -34,17 +35,14 @@ def create_transport_with_sigv4(
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
     """
+
     def client_factory(
         headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[Timeout] = None,
-        auth: Optional[Auth] = None
-    ) -> AsyncClient:
+        timeout: Optional[httpx.Timeout] = None,
+        auth: Optional[httpx.Auth] = None,
+    ) -> httpx.AsyncClient:
         return create_sigv4_client(
-            service=service,
-            profile=profile,
-            headers=headers,
-            timeout=timeout,
-            auth=auth
+            service=service, profile=profile, headers=headers, timeout=timeout, auth=auth
         )
 
     return StreamableHttpTransport(
