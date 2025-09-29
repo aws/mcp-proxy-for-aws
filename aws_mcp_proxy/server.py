@@ -31,7 +31,6 @@ from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
-    normalize_endpoint_url,
 )
 from fastmcp.server.server import FastMCP
 from typing import Any
@@ -57,11 +56,8 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     )
     logger.info('Running in MCP mode')
 
-    # Normalize endpoint URL
-    endpoint_url = normalize_endpoint_url(args.endpoint)
-
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(endpoint_url, service, profile)
+    transport = create_transport_with_sigv4(args.endpoint, service, profile)
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
