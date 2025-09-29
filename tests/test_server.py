@@ -127,14 +127,14 @@ class TestServer:
             await setup_mcp_mode(mock_mcp, mock_args)
         assert 'Tool registration failed' in str(exc_info.value)
 
-    @patch('sys.argv', ['test', '--endpoint', 'https://test.example.com'])
+    @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):
         """Test parse_args with default arguments."""
         args = parse_args()
         assert args.endpoint == 'https://test.example.com'
 
     @patch('aws_mcp_proxy.server.asyncio.run')
-    @patch('sys.argv', ['test', '--endpoint', 'https://test.example.com'])
+    @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_main_function(self, mock_asyncio_run):
         """Test that main function runs server correctly."""
         # Arrange
@@ -147,7 +147,7 @@ class TestServer:
         mock_asyncio_run.assert_called_once()
 
     @patch('aws_mcp_proxy.server.asyncio.run')
-    @patch('sys.argv', ['test', '--endpoint', 'https://test.example.com'])
+    @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_main_error_handling(self, mock_asyncio_run):
         """Test that main function handles errors gracefully."""
         # Arrange
