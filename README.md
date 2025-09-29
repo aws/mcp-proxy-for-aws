@@ -21,7 +21,7 @@ The proxy handles SigV4 authentication using local AWS credentials and provides 
 ### Quick start
 
 ```bash
-uv run src/aws_mcp_proxy/server.py --endpoint <a sigv4 mcp>
+uv run aws_mcp_proxy/server.py <a sigv4 mcp>
 ```
 
 #### Details
@@ -49,10 +49,9 @@ Example with all options
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/aws_mcp_proxy/src/aws_mcp_proxy",
+        "/path/to/aws_mcp_proxy",
         "run",
-        "server.py",
-        "--endpoint",
+        "aws_mcp_proxy/server.py",
         "<remote-server-url>",
         "--service",
         "<service-code>",
@@ -69,7 +68,7 @@ Example with all options
 
 In MCP mode, the backend server is configured directly through command-line arguments:
 
-* `--endpoint`: The MCP endpoint URL (required)
+* `endpoint`: The MCP endpoint URL (required, first positional argument)
 * `--service`: AWS service name for SigV4 signing (optional, inferred from endpoint if not provided)
 * `--profile`: AWS profile to use (optional, uses AWS_PROFILE environment variable if not provided)
 

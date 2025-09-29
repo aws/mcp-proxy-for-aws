@@ -75,19 +75,18 @@ def parse_args():
         epilog="""
 Examples:
   # Run with EKS MCP endpoint
-  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws
+  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws
 
   # Run with custom service and profile
-  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
+  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
 
   # Run with write permissions enabled
-  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --allow-write
+  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --allow-write
         """,
     )
 
     parser.add_argument(
-        '--endpoint',
-        required=True,
+        'endpoint',
         help='MCP endpoint URL (e.g., https://eks-mcp.us-west-2.api.aws)',
     )
 

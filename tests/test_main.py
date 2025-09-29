@@ -24,7 +24,7 @@ class TestMain:
     @patch('aws_mcp_proxy.server.asyncio.run')
     @patch('aws_mcp_proxy.server.setup_mcp_mode')
     @patch('aws_mcp_proxy.server.FastMCP')
-    @patch('sys.argv', ['aws-mcp-proxy', '--endpoint', 'https://test.example.com'])
+    @patch('sys.argv', ['aws-mcp-proxy', 'https://test.example.com'])
     def test_main_default(self, mock_fastmcp, mock_setup_mcp, mock_asyncio_run):
         """Test main function with default arguments."""
         # Create mock FastMCP instance
