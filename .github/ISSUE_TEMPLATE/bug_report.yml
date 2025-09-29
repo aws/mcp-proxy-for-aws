@@ -67,11 +67,11 @@ body:
       required: true
 
   - type: input
-    id: server-version
+    id: version
     attributes:
-      label: Server Version
+      Release Version / Commit id
     validations:
-      required: false
+      required: true
 
   - type: textarea
     id: other
@@ -81,3 +81,20 @@ body:
         e.g. detailed explanation, stacktraces, related issues, suggestions how to fix, links for us to have context, eg. associated pull-request, stackoverflow, slack, etc
     validations:
       required: false
+
+  - type: checkboxes
+    id: search-verification
+    attributes:
+      label: Search verification
+      description: Please verify that you have completed the following:
+      options:
+        - label: I have searched existing issues and verified this is not a duplicate
+          required: true
+  - type: testarea
+    id: related-issues
+    attributes:
+      label: Related issues
+      description: "Are there any related issues? If so, please link them here (e.g., #123, #456)"
+      placeholder: "#123, #456, or type 'None'"
+    validations:
+      required: true
