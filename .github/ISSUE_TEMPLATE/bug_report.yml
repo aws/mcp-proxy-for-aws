@@ -1,0 +1,100 @@
+---
+name: "🐛 Bug Report"
+description: Report a bug
+title: "Short issue description"
+labels: [bug]
+assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: What is the problem? A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: |
+        What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+      description: |
+        What actually happened?
+
+        Please include full errors, uncaught exceptions, stack traces, and relevant logs.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: |
+        Provide a self-contained, concise snippet of code that can be used to reproduce the issue.
+        For more complex issues provide a repo with the smallest sample that reproduces the bug.
+
+        Avoid including business logic or unrelated code, it makes diagnosis more difficult.
+        The code sample should be an SSCCE. See http://sscce.org/ for details. In short, please provide a code sample that we can copy/paste, run and reproduce.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Possible Solution
+      description: |
+        Suggest a fix/reason for the bug
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Information/Context
+      description: |
+        Anything else that might be relevant for troubleshooting this bug. Providing context helps us come up with a solution that is most useful in the real world.
+    validations:
+      required: false
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating System
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Release Version
+    validations:
+      required: true
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other information
+      description: |
+        e.g. detailed explanation, stacktraces, related issues, suggestions how to fix, links for us to have context, eg. associated pull-request, stackoverflow, slack, etc
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: search-verification
+    attributes:
+      label: Search verification
+      description: Please verify that you have completed the following
+      options:
+        - label: I have searched existing issues and verified this is not a duplicate
+          required: true
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related issues
+      description: "Are there any related issues? If so, please link them here (e.g., #123, #456)"
+      placeholder: "#123, #456, or type 'None'"
+    validations:
+      required: true
