@@ -26,14 +26,13 @@ import argparse
 import asyncio
 import logging
 import os
-from fastmcp.server.server import FastMCP
-from src.aws_mcp_proxy.logging_config import configure_logging
-from src.aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
-from src.aws_mcp_proxy.utils import (
+from aws_mcp_proxy.logging_config import configure_logging
+from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
+from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
-    normalize_endpoint_url,
 )
+from fastmcp.server.server import FastMCP
 from typing import Any
 
 
@@ -57,11 +56,8 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     )
     logger.info('Running in MCP mode')
 
-    # Normalize endpoint URL
-    endpoint_url = normalize_endpoint_url(args.endpoint)
-
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(endpoint_url, service, profile)
+    transport = create_transport_with_sigv4(args.endpoint, service, profile)
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
@@ -79,13 +75,13 @@ def parse_args():
         epilog="""
 Examples:
   # Run with EKS MCP endpoint
-  src.aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws
+  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws
 
   # Run with custom service and profile
-  src.aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
+  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
 
   # Run with write permissions enabled
-  src.aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --allow-write
+  aws-mcp-proxy --endpoint https://eks-mcp.us-west-2.api.aws --allow-write
         """,
     )
 

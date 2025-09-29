@@ -16,8 +16,8 @@
 
 import httpx
 import re
+from aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from fastmcp.client.transports import StreamableHttpTransport
-from src.aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
@@ -49,22 +49,6 @@ def create_transport_with_sigv4(
         url=url,
         httpx_client_factory=client_factory,
     )
-
-
-def normalize_endpoint_url(endpoint: str, path: str = '/mcp') -> str:
-    """Normalize endpoint URL by ensuring it has the correct path.
-
-    Args:
-        endpoint: The base endpoint URL
-        path: The path to append (defaults to '/mcp')
-
-    Returns:
-        Normalized endpoint URL
-    """
-    endpoint_url = endpoint.rstrip('/')
-    if not endpoint_url.endswith(path):
-        endpoint_url += path
-    return endpoint_url
 
 
 def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:

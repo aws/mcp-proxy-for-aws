@@ -15,19 +15,18 @@
 """Tests for utils module."""
 
 import pytest
-from fastmcp.client.transports import StreamableHttpTransport
-from src.aws_mcp_proxy.utils import (
+from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_service_name,
-    normalize_endpoint_url,
 )
+from fastmcp.client.transports import StreamableHttpTransport
 from unittest.mock import MagicMock, patch
 
 
 class TestCreateTransportWithSigv4:
     """Test cases for create_transport_with_sigv4 function (line 129)."""
 
-    @patch('src.aws_mcp_proxy.utils.create_sigv4_client')
+    @patch('aws_mcp_proxy.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
         mock_client = MagicMock()
@@ -63,7 +62,7 @@ class TestCreateTransportWithSigv4:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
 
-    @patch('src.aws_mcp_proxy.utils.create_sigv4_client')
+    @patch('aws_mcp_proxy.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
         url = 'https://eks-mcp.us-west-2.api.aws/mcp'
@@ -83,40 +82,6 @@ class TestCreateTransportWithSigv4:
         else:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
-
-
-class TestNormalizeEndpointUrl:
-    """Test cases for normalize_endpoint_url function (lines 151-153)."""
-
-    def test_normalize_endpoint_url_default_path(self):
-        """Test normalizing endpoint URL with default /mcp path."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws'
-        result = normalize_endpoint_url(endpoint)
-        assert result == 'https://eks-mcp.us-west-2.api.aws/mcp'
-
-    def test_normalize_endpoint_url_custom_path(self):
-        """Test normalizing endpoint URL with custom path."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws'
-        result = normalize_endpoint_url(endpoint, '/api/v1')
-        assert result == 'https://eks-mcp.us-west-2.api.aws/api/v1'
-
-    def test_normalize_endpoint_url_trailing_slash(self):
-        """Test normalizing endpoint URL that already has trailing slash."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws/'
-        result = normalize_endpoint_url(endpoint)
-        assert result == 'https://eks-mcp.us-west-2.api.aws/mcp'
-
-    def test_normalize_endpoint_url_already_has_path(self):
-        """Test normalizing endpoint URL that already has the path."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws/mcp'
-        result = normalize_endpoint_url(endpoint)
-        assert result == 'https://eks-mcp.us-west-2.api.aws/mcp'
-
-    def test_normalize_endpoint_url_different_existing_path(self):
-        """Test normalizing endpoint URL that has a different existing path."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws/api'
-        result = normalize_endpoint_url(endpoint)
-        assert result == 'https://eks-mcp.us-west-2.api.aws/api/mcp'
 
 
 class TestValidateRequiredArgs:

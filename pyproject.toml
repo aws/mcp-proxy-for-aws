@@ -44,7 +44,7 @@ repository = "https://github.com/aws/aws-mcp-proxy.git"
 changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/src/aws-mcp-proxy/CHANGELOG.md"
 
 [project.scripts]
-"aws-mcp-proxy" = "src.aws_mcp_proxy.server:main"
+"aws-mcp-proxy" = "aws_mcp_proxy.server:main"
 
 [dependency-groups]
 dev = [
@@ -118,21 +118,21 @@ line-ending = "auto"
 docstring-code-format = true
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["aws_mcp_proxy", "tests"]
 exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.0.0"
+version = "0.1.0"
 tag_format = "v$version"
 version_files = [
     "pyproject.toml:version",
-    "src/aws_mcp_proxy/__init__.py:__version__"
+    "aws_mcp_proxy/__init__.py:__version__"
 ]
 update_changelog_on_bump = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["aws_mcp_proxy"]
 
 [tool.bandit]
 exclude_dirs = ["venv", ".venv", "tests"]
@@ -155,4 +155,4 @@ exclude_also = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["aws_mcp_proxy"]
