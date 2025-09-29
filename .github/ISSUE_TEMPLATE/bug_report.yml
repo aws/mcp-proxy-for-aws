@@ -86,7 +86,7 @@ body:
     id: search-verification
     attributes:
       label: Search verification
-      description: Please verify that you have completed the following:
+      description: Please verify that you have completed the following
       options:
         - label: I have searched existing issues and verified this is not a duplicate
           required: true
