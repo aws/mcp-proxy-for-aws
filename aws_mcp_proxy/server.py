@@ -63,7 +63,7 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
 
     # Use McpProxyManager to add proxy content
-    proxy_manager = McpProxyManager(mcp, args.allow_write)
+    proxy_manager = McpProxyManager(mcp, args.read_only)
     await proxy_manager.add_proxy_content(proxy)
 
 
@@ -81,7 +81,7 @@ Examples:
   aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
 
   # Run with write permissions enabled
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --allow-write
+  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --read-only
         """,
     )
 
@@ -101,9 +101,9 @@ Examples:
     )
 
     parser.add_argument(
-        '--allow-write',
+        '--read-only',
         action='store_true',
-        help='Allow tools that require write permissions to be enabled',
+        help='Disable tools which may require write permissions (readOnlyHint True or unknown)',
     )
 
     parser.add_argument(

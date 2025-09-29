@@ -69,19 +69,19 @@ class TestMcpProxyManager:
         prompt.copy.return_value = prompt
         return prompt
 
-    def test_init_default_allow_write(self, mock_target_mcp):
-        """Test McpProxyManager initialization with default allow_write."""
+    def test_init_default_read_only(self, mock_target_mcp):
+        """Test McpProxyManager initialization with default read_only."""
         manager = McpProxyManager(mock_target_mcp)
 
         assert manager.target_mcp == mock_target_mcp
-        assert manager.allow_write is False
+        assert manager.read_only is False
 
-    def test_init_custom_allow_write(self, mock_target_mcp):
-        """Test McpProxyManager initialization with custom allow_write."""
-        manager = McpProxyManager(mock_target_mcp, allow_write=True)
+    def test_init_custom_read_only(self, mock_target_mcp):
+        """Test McpProxyManager initialization with custom read_only."""
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
 
         assert manager.target_mcp == mock_target_mcp
-        assert manager.allow_write is True
+        assert manager.read_only is True
 
     @pytest.mark.asyncio
     async def test_add_proxy_content_success(
@@ -93,7 +93,7 @@ class TestMcpProxyManager:
         mock_proxy.get_resources.return_value = {'test_resource': mock_resource}
         mock_proxy.get_prompts.return_value = {'test_prompt': mock_prompt}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=True)
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
         await manager.add_proxy_content(mock_proxy)
 
         # Verify all methods were called
@@ -120,7 +120,7 @@ class TestMcpProxyManager:
 
     @pytest.mark.asyncio
     async def test_add_tools_skip_write_tools(self, mock_target_mcp, mock_proxy, mock_tool):
-        """Test that tools requiring write permissions are skipped when allow_write=False."""
+        """Test that tools requiring write permissions are skipped when read_only=True."""
         # Setup tool with write permissions required
         annotations = MagicMock()
         annotations.readOnlyHint = False
@@ -128,15 +128,15 @@ class TestMcpProxyManager:
 
         mock_proxy.get_tools.return_value = {'write_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=False)
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
         await manager._add_tools(mock_proxy)
 
         # Verify tool was not added (skipped)
         mock_target_mcp.add_tool.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_add_tools_allow_write_tools(self, mock_target_mcp, mock_proxy, mock_tool):
-        """Test that tools requiring write permissions are added when allow_write=True."""
+    async def test_add_tools_not_read_only_tools(self, mock_target_mcp, mock_proxy, mock_tool):
+        """Test that tools requiring write permissions are added when read_only=False."""
         # Setup tool with write permissions required
         annotations = MagicMock()
         annotations.readOnlyHint = False
@@ -144,7 +144,7 @@ class TestMcpProxyManager:
 
         mock_proxy.get_tools.return_value = {'write_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=True)
+        manager = McpProxyManager(mock_target_mcp, read_only=False)
         await manager._add_tools(mock_proxy)
 
         # Verify tool was added
@@ -160,7 +160,7 @@ class TestMcpProxyManager:
 
         mock_proxy.get_tools.return_value = {'readonly_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=False)
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
         await manager._add_tools(mock_proxy)
 
         # Verify tool was added
@@ -276,13 +276,13 @@ class TestMcpProxyManager:
 
     @pytest.mark.asyncio
     async def test_add_tools_no_annotations(self, mock_target_mcp, mock_proxy, mock_tool):
-        """Test that tools with no annotations are skipped when allow_write=False."""
+        """Test that tools with no annotations are skipped when read_only=True."""
         # Setup tool with no annotations
         mock_tool.annotations = None
 
         mock_proxy.get_tools.return_value = {'no_annotations_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=False)
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
         await manager._add_tools(mock_proxy)
 
         # Verify tool was not added (skipped)
@@ -290,13 +290,13 @@ class TestMcpProxyManager:
 
     @pytest.mark.asyncio
     async def test_add_tools_empty_annotations(self, mock_target_mcp, mock_proxy, mock_tool):
-        """Test that tools with empty annotations are skipped when allow_write=False."""
+        """Test that tools with empty annotations are skipped when read_only=True."""
         # Setup tool with empty annotations
         mock_tool.annotations = {}
 
         mock_proxy.get_tools.return_value = {'empty_annotations_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp, allow_write=False)
+        manager = McpProxyManager(mock_target_mcp, read_only=True)
         await manager._add_tools(mock_proxy)
 
         # Verify tool was not added (skipped)

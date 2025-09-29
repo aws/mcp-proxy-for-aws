@@ -35,7 +35,7 @@ Add this to your MCP client configuration, replacing env variables to match the 
 Optional arguments you can add:
 - `--service`: AWS service name for SigV4 signing (inferred from endpoint if not provided)
 - `--profile`: AWS profile to use (uses AWS_PROFILE environment variable if not provided)
-- `--allow-write`: Allow tools that require write permissions to be enabled (by default, only tools with the `readOnlyHint` annotation are enabled)
+- `--read-only`: Disable tools which require write permissions. (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))
 
 NOTE: `remote-server-url` should be your remote mcp server's URL (including the `/mcp` part). `service-code` should be the service code for your own mcp service, such as `eks-mcp`.
 
@@ -57,7 +57,7 @@ Example with all options
         "<service-code>",
         "--profile",
         "default",
-        "--allow-write"
+        "--read-only"
       ]
     }
   }
