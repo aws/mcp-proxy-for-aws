@@ -69,7 +69,7 @@ body:
   - type: input
     id: version
     attributes:
-      Release Version / Commit id
+      label: Release Version
     validations:
       required: true
 
@@ -90,7 +90,7 @@ body:
       options:
         - label: I have searched existing issues and verified this is not a duplicate
           required: true
-  - type: testarea
+  - type: textarea
     id: related-issues
     attributes:
       label: Related issues
