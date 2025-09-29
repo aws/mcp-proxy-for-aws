@@ -1,0 +1,22 @@
+---
+name: 💭 Questions
+description: Ask a question about this project
+title: "Short question description"
+labels: [question]
+assignees: []
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: A clear and concise description of the question.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: |
+        Any relevant context about your question.
+    validations:
+      required: true
