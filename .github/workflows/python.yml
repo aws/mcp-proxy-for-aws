@@ -38,19 +38,23 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --all-extras --dev
 
+      - name: Validate test directory exists
+        run: |
+          if [ ! -d "tests" ]; then
+            echo "ERROR: Tests directory not found!"
+            echo "This project requires tests to be present in the 'tests/' directory."
+            echo "Please add tests before proceeding."
+            exit 1
+          fi
+          echo "✓ Tests directory found"
+
       - name: Run tests
         run: |
-          if [ -d "tests" ]; then
-            uv run --frozen pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml:${{ matrix.package }}-coverage.xml
-          else
-            echo "No tests directory found, skipping tests"
-          fi
+          uv run --frozen pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml:${{ matrix.package }}-coverage.xml
 
-#      - name: Upload coverage reports to Codecov
-#        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 #v5.4.3
-#        with:
-#          token: ${{ secrets.CODECOV_TOKEN }}
-#          files: ${{ matrix.package }}-coverage.xml
+      - name: Check unit test coverage sufficient
+        run: |
+          uv run --frozen coverage report --fail-under=80
 
       - name: Run pyright
         run: uv run --frozen pyright
