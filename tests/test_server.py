@@ -206,7 +206,7 @@ class TestServer:
 
         # Act & Assert
         with pytest.raises(ValueError) as exc_info:
-            create_sigv4_client()
+            create_sigv4_client(service='test-service')
         assert 'No AWS credentials found' in str(exc_info.value)
 
     def test_main_module_execution(self):
