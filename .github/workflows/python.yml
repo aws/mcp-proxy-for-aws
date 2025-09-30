@@ -48,6 +48,10 @@ jobs:
           fi
           echo "✓ Tests directory found"
 
+      - name: Run pre-commit
+        run: |
+          uv run pre-commit run --all-files
+
       - name: Run tests
         run: |
           uv run --frozen pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml:${{ matrix.package }}-coverage.xml
