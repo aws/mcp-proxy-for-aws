@@ -243,7 +243,7 @@ class TestCreateSigv4Auth:
         # Verify auth was created correctly
         assert isinstance(result, SigV4HTTPXAuth)
         assert result.service == 'test-service'
-        assert result.region == 'us-west-2'  # default region
+        assert result.region == 'us-east-1'  # default region
         assert result.credentials == mock_credentials
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')

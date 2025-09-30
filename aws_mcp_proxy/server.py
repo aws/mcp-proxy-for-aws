@@ -98,13 +98,13 @@ Examples:
     parser.add_argument(
         '--profile',
         help='AWS profile to use (uses AWS_PROFILE environment variable if not provided)',
-        default=os.getenv('AWS_PROFILE', 'default')
+        default=os.getenv('AWS_PROFILE', 'default'),
     )
 
     parser.add_argument(
         '--region',
         help='AWS region to use (uses AWS_REGION if not provided)',
-        default=os.getenv('AWS_REGION', 'us-east-1')
+        default=os.getenv('AWS_REGION', 'us-east-1'),
     )
 
     parser.add_argument(

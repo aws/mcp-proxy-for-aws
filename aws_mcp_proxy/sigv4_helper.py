@@ -158,7 +158,7 @@ def create_sigv4_auth(
     Args:
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
-        region: AWS region (defaults to AWS_REGION env var or us-west-2)
+        region: AWS region (defaults to AWS_REGION env var or us-east-1)
 
     Returns:
         SigV4HTTPXAuth instance
@@ -172,7 +172,7 @@ def create_sigv4_auth(
 
     # Get region from parameter, environment variable, or default
     if not region:
-        region = os.environ.get('AWS_REGION', 'us-west-2')
+        region = os.environ.get('AWS_REGION', 'us-east-1')
 
     # Create SigV4Auth with explicit credentials
     sigv4_auth = SigV4HTTPXAuth(
@@ -198,7 +198,7 @@ def create_sigv4_client(
     Args:
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
-        region: AWS region (optional, defaults to AWS_REGION env var or us-west-2)
+        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         headers: Headers to include in requests
         auth: Auth parameter (ignored as we provide our own)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
