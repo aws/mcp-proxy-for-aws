@@ -307,7 +307,7 @@ class TestCreateSigv4Client:
         result = create_sigv4_client()
 
         # Verify client was created correctly
-        mock_create_auth.assert_called_once_with('your-service', None, None)
+        mock_create_auth.assert_called_once_with(None, None, None)
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args

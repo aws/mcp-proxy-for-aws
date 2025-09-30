@@ -186,7 +186,7 @@ def create_sigv4_auth(
 
 
 def create_sigv4_client(
-    service: str = 'your-service',
+    service: Optional[str] = None,
     profile: Optional[str] = None,
     region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
