@@ -307,7 +307,7 @@ class TestCreateSigv4Client:
         result = create_sigv4_client()
 
         # Verify client was created correctly
-        mock_create_auth.assert_called_once_with('eks-mcp', None, None)
+        mock_create_auth.assert_called_once_with('your-service', None, None)
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -403,11 +403,11 @@ class TestCreateSigv4Client:
         }
 
         result = create_sigv4_client(
-            service='eks-mcp', headers=prompt_context_headers, region='us-west-2'
+            service='test-service', headers=prompt_context_headers, region='us-west-2'
         )
 
         # Verify client was created correctly with prompt context
-        mock_create_auth.assert_called_once_with('eks-mcp', None, 'us-west-2')
+        mock_create_auth.assert_called_once_with('test-service', None, 'us-west-2')
 
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args
