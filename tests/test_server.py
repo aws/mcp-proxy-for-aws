@@ -37,7 +37,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -56,7 +56,7 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
+        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
@@ -72,7 +72,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -91,7 +91,7 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
+        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
@@ -107,7 +107,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
