@@ -17,6 +17,7 @@
 import pytest
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
+    determine_aws_region,
     determine_service_name,
 )
 from fastmcp.client.transports import StreamableHttpTransport
@@ -35,8 +36,9 @@ class TestCreateTransportWithSigv4:
         url = 'https://eks-mcp.us-west-2.api.aws/mcp'
         service = 'eks-mcp'
         profile = 'test-profile'
+        region = 'us-east-1'
 
-        result = create_transport_with_sigv4(url, service, profile)
+        result = create_transport_with_sigv4(url, service, profile, region)
 
         # Verify result is StreamableHttpTransport
         assert isinstance(result, StreamableHttpTransport)
@@ -54,6 +56,7 @@ class TestCreateTransportWithSigv4:
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
                 profile=profile,
+                region=region,
                 headers={'test': 'header'},
                 timeout=Timeout(30.0),
                 auth=None,
@@ -77,7 +80,7 @@ class TestCreateTransportWithSigv4:
             factory(headers=None, timeout=None, auth=None)
 
             mock_create_sigv4_client.assert_called_once_with(
-                service=service, profile=None, headers=None, timeout=None, auth=None
+                service=service, profile=None, region=None, headers=None, timeout=None, auth=None
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -144,3 +147,45 @@ class TestValidateRequiredArgs:
         assert 'Could not determine AWS service name' in str(exc_info.value)
         assert endpoint in str(exc_info.value)
         assert '--service argument' in str(exc_info.value)
+
+
+class TestDetermineRegion:
+    """Test cases for determine_aws_region function."""
+
+    def test_determine_region_with_region(self):
+        """Test determination when region is provided."""
+        endpoint = 'https://mcp.us-east-1.api.aws/mcp'
+        region = 'custom-region'
+
+        result = determine_aws_region(endpoint, region)
+
+        assert result == region
+
+    def test_determine_region_without_region_success(self):
+        """Test determination when region is not provided but can be parsed."""
+        endpoint = 'https://mcp.us-east-1.api.aws/mcp'
+        expected_region = 'us-east-1'
+
+        result = determine_aws_region(endpoint)
+
+        assert result == expected_region
+
+    def test_determine_region_with_complex_service_name(self):
+        """Test parsing region from endpoint with complex service name."""
+        endpoint = 'https://eks-mcp-beta.us-west-2.api.aws/mcp'
+        expected_region = 'us-west-2'
+
+        result = determine_aws_region(endpoint)
+
+        assert result == expected_region
+
+    def test_determine_region_without_region_failure(self):
+        """Test determination when region cannot be determined."""
+        endpoint = 'https://service.example.com'
+
+        with pytest.raises(ValueError) as exc_info:
+            determine_aws_region(endpoint)
+
+        assert 'Could not determine AWS region' in str(exc_info.value)
+        assert endpoint in str(exc_info.value)
+        assert '--region argument' in str(exc_info.value)

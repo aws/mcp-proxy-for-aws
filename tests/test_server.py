@@ -36,6 +36,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.allow_write = False
 
@@ -71,6 +72,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.allow_write = False
 
@@ -106,6 +108,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.allow_write = False
 

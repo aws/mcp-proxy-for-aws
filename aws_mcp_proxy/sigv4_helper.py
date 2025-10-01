@@ -190,7 +190,6 @@ def create_sigv4_client(
     profile: Optional[str] = None,
     region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
-    auth: Optional[httpx.Auth] = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.

@@ -23,7 +23,10 @@ from urllib.parse import urlparse
 
 
 def create_transport_with_sigv4(
-    url: str, service: str, profile: Optional[str] = None
+    url: str,
+    service: str,
+    profile: Optional[str] = None,
+    region: Optional[str] = None,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -31,6 +34,7 @@ def create_transport_with_sigv4(
         url: The endpoint URL
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
+        region: AWS region to use (Optional)
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
@@ -42,7 +46,12 @@ def create_transport_with_sigv4(
         auth: Optional[httpx.Auth] = None,
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
-            service=service, profile=profile, headers=headers, timeout=timeout, auth=auth
+            service=service,
+            profile=profile,
+            region=region,
+            headers=headers,
+            timeout=timeout,
+            auth=auth,
         )
 
     return StreamableHttpTransport(
@@ -81,3 +90,35 @@ def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
             'Please provide the service name explicitly using --service argument.'
         )
     return determined_service
+
+
+def determine_aws_region(endpoint: str, region: Optional[str] = None) -> str:
+    """Validate and determine the AWS region.
+
+    Args:
+        endpoint: The endpoint URL
+        region: Optional region name
+
+    Returns:
+        Validated AWS region
+
+    Raises:
+        ValueError: If region cannot be determined
+    """
+    if region:
+        return region
+
+    # Parse AWS region from endpoint URL
+    parsed = urlparse(endpoint)
+    hostname = parsed.hostname or ''
+
+    # Extract region name (pattern: service.region.api.aws or service-name.region.api.aws)
+    region_match = re.search(r'\.([a-z0-9-]+)\.api\.aws', hostname)
+    determined_region = region_match.group(1) if region_match else None
+
+    if not determined_region:
+        raise ValueError(
+            f"Could not determine AWS region from endpoint '{endpoint}'. "
+            'Please provide the region explicitly using --region argument.'
+        )
+    return determined_region

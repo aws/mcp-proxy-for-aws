@@ -226,6 +226,7 @@ class TestCreateSigv4Auth:
     """Test cases for the create_sigv4_auth function."""
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
+    @patch.dict(os.environ, {"AWS_REGION": ""})
     def test_create_sigv4_auth_default(self, mock_create_session):
         """Test creating SigV4 auth with default parameters."""
         # Mock session and credentials
@@ -236,6 +237,9 @@ class TestCreateSigv4Auth:
         mock_credentials.token = 'test_token'
         mock_session.get_credentials.return_value = mock_credentials
         mock_create_session.return_value = mock_session
+
+        # Remove AWS_REGION to check default
+        del os.environ['AWS_REGION']
 
         # Test auth creation
         result = create_sigv4_auth('test-service')
