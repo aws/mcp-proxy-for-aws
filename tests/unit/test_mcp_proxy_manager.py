@@ -404,7 +404,7 @@ class TestRateLimitingBehavior:
 
         call_count = 0
 
-        async def mock_call_next(ctx):
+        async def mock_call_next(context):
             nonlocal call_count
             call_count += 1
             return f'success_{call_count}'
@@ -498,7 +498,7 @@ class TestRetryBehavior:
 
         call_count = 0
 
-        async def failing_then_success(ctx):
+        async def failing_then_success(context):
             nonlocal call_count
             call_count += 1
             if call_count <= 2:  # Fail first 2 attempts
@@ -539,12 +539,14 @@ class TestRetryBehavior:
 
         call_count = 0
 
-        async def timeout_then_success(ctx):
+        async def timeout_then_success(context):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise TimeoutError('Request timed out')
             return 'success after timeout'
+
+        assert retry_middleware is not None, 'RetryMiddleware should be found'
 
         result = await retry_middleware.on_request(context, timeout_then_success)
 
@@ -578,10 +580,12 @@ class TestRetryBehavior:
 
         call_count = 0
 
-        async def successful_call(ctx):
+        async def successful_call(context):
             nonlocal call_count
             call_count += 1
             return 'success'
+
+        assert retry_middleware is not None, 'RetryMiddleware should be found'
 
         result = await retry_middleware.on_request(context, successful_call)
 
@@ -615,13 +619,15 @@ class TestRetryBehavior:
 
         call_count = 0
 
-        async def value_error_call(ctx):
+        async def value_error_call(context):
             nonlocal call_count
             call_count += 1
             raise ValueError('This should not be retried')
 
         # Should raise immediately without retries (if ValueError is not in retry_exceptions)
         with pytest.raises(ValueError, match='This should not be retried'):
+            assert retry_middleware is not None, 'RetryMiddleware should be found'
+
             await retry_middleware.on_request(context, value_error_call)
 
         # Should have been called only once (no retries for non-retriable exceptions)
