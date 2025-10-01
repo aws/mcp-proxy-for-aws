@@ -190,6 +190,7 @@ def create_sigv4_client(
     profile: Optional[str] = None,
     region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
+    auth: Optional[httpx.Auth] = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
@@ -199,6 +200,7 @@ def create_sigv4_client(
         profile: AWS profile to use (optional)
         region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         headers: Headers to include in requests
+        auth: Auth parameter (ignored as we provide our own)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:
