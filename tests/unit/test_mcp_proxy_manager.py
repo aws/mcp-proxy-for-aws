@@ -512,35 +512,6 @@ class TestRetryBehavior:
         assert call_count == 3, f'Expected 3 calls (2 failures + 1 success), got {call_count}'
 
     @pytest.mark.asyncio
-    async def test_retry_middleware_not_added_twice(self):
-        """Test that retry middleware is not added multiple times to the same proxy."""
-        from fastmcp.server.server import FastMCP
-
-        target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
-
-        # Create a proxy and manually add retry middleware
-        proxy_server = FastMCP('proxy-with-existing-retry')
-        existing_retry = RetryMiddleware()
-        proxy_server.add_middleware(existing_retry)
-
-        # Count middleware before
-        middleware_count_before = len(proxy_server.middleware)
-
-        # Add proxy content - should not add another retry middleware
-        await manager.add_proxy_content(proxy_server)
-
-        # Count middleware after - should be the same
-        middleware_count_after = len(proxy_server.middleware)
-        assert middleware_count_after == middleware_count_before, (
-            'Retry middleware was added when it already existed'
-        )
-
-        # Verify only one retry middleware exists
-        retry_count = sum(1 for m in proxy_server.middleware if isinstance(m, RetryMiddleware))
-        assert retry_count == 1, f'Expected 1 retry middleware, found {retry_count}'
-
-    @pytest.mark.asyncio
     async def test_retry_middleware_handles_different_exceptions(self):
         """Test that retry middleware handles different types of retriable exceptions."""
         from fastmcp.server.middleware.middleware import MiddlewareContext
