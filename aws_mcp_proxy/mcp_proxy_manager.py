@@ -15,6 +15,8 @@
 """MCP Proxy Manager for handling proxy content integration."""
 
 import logging
+from fastmcp.server.middleware.error_handling import RetryMiddleware
+from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 from fastmcp.server.server import FastMCP
 
 
@@ -30,6 +32,7 @@ class McpProxyManager:
             target_mcp: The target MCP server to add content to
             read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
         """
+        self.add_rate_limiting_middleware(target_mcp)
         self.target_mcp = target_mcp
         self.read_only = read_only
 
@@ -42,6 +45,8 @@ class McpProxyManager:
         Raises:
             Exception: If tools cannot be retrieved or added
         """
+        self._add_retry_middleware(proxy)
+
         try:
             await self._add_tools(proxy)
             await self._add_resources(proxy)
@@ -115,3 +120,33 @@ class McpProxyManager:
             self.logger.debug("Proxy doesn't have prompts method")
         except Exception as e:
             self.logger.warning(f'Failed to get prompts from proxy: {e}')
+
+    def _add_retry_middleware(self, mcp: FastMCP) -> None:
+        """Add retry with exponential backoff middleware to target MCP server.
+
+        Args:
+            mcp: The FastMCP instance to add exponential backoff to
+        """
+        """Add retry middleware if not already present."""
+        if not any(isinstance(m, RetryMiddleware) for m in (mcp.middleware or [])):
+            self.logger.info('Adding retry middleware')
+            mcp.add_middleware(RetryMiddleware())
+        else:
+            self.logger.info('Retry middleware already present')
+
+    def add_rate_limiting_middleware(self, mcp):
+        """Add retry with exponential backoff middleware to target MCP server.
+
+        Args:
+            mcp: The FastMCP instance to add rate limiting to
+        """
+        if not any(isinstance(m, RateLimitingMiddleware) for m in (mcp.middleware or [])):
+            self.logger.info('Adding rate limiting middleware')
+            mcp.add_middleware(
+                RateLimitingMiddleware(
+                    max_requests_per_second=5,
+                    burst_capacity=10,
+                )
+            )
+        else:
+            self.logger.info('Rate limiting middleware already present')
