@@ -130,7 +130,7 @@ class McpProxyManager:
         self.logger.info('Adding retry middleware')
         mcp.add_middleware(RetryMiddleware())
 
-    def add_rate_limiting_middleware(self, mcp):
+    def _add_rate_limiting_middleware(self, mcp):
         """Add retry with exponential backoff middleware to target MCP server.
 
         Args:
