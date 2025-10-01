@@ -74,20 +74,20 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with EKS MCP endpoint
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws
+  # Run with your endpoint
+  aws-mcp-proxy <SigV4 MCP endpoint URL>
 
   # Run with custom service and profile
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
+  aws-mcp-proxy <SigV4 MCP endpoint URL> --service <aws-service> --profile default
 
   # Run with write permissions enabled
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --read-only
+  aws-mcp-proxy <SigV4 MCP endpoint URL> --read-only
         """,
     )
 
     parser.add_argument(
         'endpoint',
-        help='MCP endpoint URL (e.g., https://eks-mcp.us-west-2.api.aws)',
+        help='SigV4 MCP endpoint URL',
     )
 
     parser.add_argument(

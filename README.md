@@ -37,7 +37,7 @@ Optional arguments you can add:
 - `--profile`: AWS profile to use (uses AWS_PROFILE environment variable if not provided)
 - `--read-only`: Disable tools which require write permissions. (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))
 
-NOTE: `remote-server-url` should be your remote mcp server's URL (including the `/mcp` part). `service-code` should be the service code for your own mcp service, such as `eks-mcp`.
+NOTE: `remote-server-url` should be your remote mcp server's URL (including the `/mcp` part). `service-code` should be the service code for the MCP to be connected.
 
 Example with all options
 ```json

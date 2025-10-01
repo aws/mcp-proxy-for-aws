@@ -186,7 +186,7 @@ def create_sigv4_auth(
 
 
 def create_sigv4_client(
-    service: str = 'eks-mcp',
+    service: str,
     profile: Optional[str] = None,
     region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
