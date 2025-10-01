@@ -32,7 +32,7 @@ class McpProxyManager:
             target_mcp: The target MCP server to add content to
             read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
         """
-        self.add_rate_limiting_middleware(target_mcp)
+        self._add_rate_limiting_middleware(target_mcp)
         self.target_mcp = target_mcp
         self.read_only = read_only
 
