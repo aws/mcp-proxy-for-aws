@@ -199,7 +199,6 @@ def create_sigv4_client(
         profile: AWS profile to use (optional)
         region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         headers: Headers to include in requests
-        auth: Auth parameter (ignored as we provide our own)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:

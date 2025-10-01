@@ -226,7 +226,7 @@ class TestCreateSigv4Auth:
     """Test cases for the create_sigv4_auth function."""
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
-    @patch.dict(os.environ, {"AWS_REGION": ""})
+    @patch.dict(os.environ, {'AWS_REGION': ''})
     def test_create_sigv4_auth_default(self, mock_create_session):
         """Test creating SigV4 auth with default parameters."""
         # Mock session and credentials
