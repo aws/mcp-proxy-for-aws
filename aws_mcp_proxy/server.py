@@ -30,6 +30,7 @@ from aws_mcp_proxy.logging_config import configure_logging
 from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
+    determine_aws_region,
     determine_service_name,
 )
 from fastmcp.server.server import FastMCP
@@ -46,9 +47,11 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     # Validate and determine service
     service = determine_service_name(args.endpoint, args.service)
 
-    # Get profile and region
-    profile = args.profile or os.getenv('AWS_PROFILE')
-    region = os.getenv('AWS_REGION', 'us-west-2')
+    # Validate and determine region
+    region = determine_aws_region(args.endpoint, args.region)
+
+    # Get profile
+    profile = args.profile
 
     # Log server configuration
     logger.info(
@@ -57,7 +60,7 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     logger.info('Running in MCP mode')
 
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(args.endpoint, service, profile)
+    transport = create_transport_with_sigv4(args.endpoint, service, region, profile)
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
@@ -98,6 +101,13 @@ Examples:
     parser.add_argument(
         '--profile',
         help='AWS profile to use (uses AWS_PROFILE environment variable if not provided)',
+        default=os.getenv('AWS_PROFILE', 'default'),
+    )
+
+    parser.add_argument(
+        '--region',
+        help='AWS region to use (uses AWS_REGION if not provided)',
+        default=os.getenv('AWS_REGION', 'default'),
     )
 
     parser.add_argument(

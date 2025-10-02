@@ -151,14 +151,14 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
 
 
 def create_sigv4_auth(
-    service: str, profile: Optional[str] = None, region: Optional[str] = None
+    service: str, region: str, profile: Optional[str] = None
 ) -> SigV4HTTPXAuth:
     """Create SigV4 authentication for AWS requests.
 
     Args:
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
-        region: AWS region (defaults to AWS_REGION env var or us-west-2)
+        region: AWS region (defaults to AWS_REGION env var or us-east-1)
 
     Returns:
         SigV4HTTPXAuth instance
@@ -169,10 +169,6 @@ def create_sigv4_auth(
     # Create session and get credentials
     session = create_aws_session(profile)
     credentials = session.get_credentials()
-
-    # Get region from parameter, environment variable, or default
-    if not region:
-        region = os.environ.get('AWS_REGION', 'us-west-2')
 
     # Create SigV4Auth with explicit credentials
     sigv4_auth = SigV4HTTPXAuth(
@@ -187,8 +183,8 @@ def create_sigv4_auth(
 
 def create_sigv4_client(
     service: str,
+    region: str,
     profile: Optional[str] = None,
-    region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     auth: Optional[httpx.Auth] = None,
     **kwargs: Any,
@@ -198,7 +194,7 @@ def create_sigv4_client(
     Args:
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
-        region: AWS region (optional, defaults to AWS_REGION env var or us-west-2)
+        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         headers: Headers to include in requests
         auth: Auth parameter (ignored as we provide our own)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
@@ -225,7 +221,7 @@ def create_sigv4_client(
     )
 
     # Create SigV4 auth
-    sigv4_auth = create_sigv4_auth(service, profile, region)
+    sigv4_auth = create_sigv4_auth(service, region, profile)
 
     # Create the client with SigV4 auth and error handling event hook
     logger.info("Creating httpx.AsyncClient with SigV4 authentication for service '%s'", service)
