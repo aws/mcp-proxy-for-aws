@@ -16,7 +16,6 @@
 
 import httpx
 import json
-import os
 import pytest
 from aws_mcp_proxy.sigv4_helper import (
     SigV4HTTPXAuth,
@@ -238,34 +237,12 @@ class TestCreateSigv4Auth:
         mock_create_session.return_value = mock_session
 
         # Test auth creation
-        result = create_sigv4_auth('test-service')
+        result = create_sigv4_auth('test-service', 'test-region')
 
         # Verify auth was created correctly
         assert isinstance(result, SigV4HTTPXAuth)
         assert result.service == 'test-service'
-        assert result.region == 'us-west-2'  # default region
-        assert result.credentials == mock_credentials
-
-    @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
-    @patch.dict(os.environ, {'AWS_REGION': 'eu-west-1'})
-    def test_create_sigv4_auth_with_env_region(self, mock_create_session):
-        """Test creating SigV4 auth with region from environment variable."""
-        # Mock session and credentials
-        mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = None
-        mock_session.get_credentials.return_value = mock_credentials
-        mock_create_session.return_value = mock_session
-
-        # Test auth creation
-        result = create_sigv4_auth('test-service', profile='test-profile')
-
-        # Verify auth was created with environment region
-        assert isinstance(result, SigV4HTTPXAuth)
-        assert result.service == 'test-service'
-        assert result.region == 'eu-west-1'  # from environment
+        assert result.region == 'test-region'  # default region
         assert result.credentials == mock_credentials
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
@@ -304,10 +281,10 @@ class TestCreateSigv4Client:
         mock_client_class.return_value = mock_client
 
         # Test client creation
-        result = create_sigv4_client(service='test-service')
+        result = create_sigv4_client(service='test-service', region='test-region')
 
         # Verify client was created correctly
-        mock_create_auth.assert_called_once_with('test-service', None, None)
+        mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -330,7 +307,9 @@ class TestCreateSigv4Client:
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
-        result = create_sigv4_client(service='test-service', headers=custom_headers)
+        result = create_sigv4_client(
+            service='test-service', region='test-region', headers=custom_headers
+        )
 
         # Verify client was created with merged headers
         call_args = mock_client_class.call_args
@@ -359,7 +338,7 @@ class TestCreateSigv4Client:
         )
 
         # Verify auth was created with custom parameters
-        mock_create_auth.assert_called_once_with('custom-service', 'test-profile', 'us-east-1')
+        mock_create_auth.assert_called_once_with('custom-service', 'us-east-1', 'test-profile')
         assert result == mock_client
 
     @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
@@ -374,7 +353,10 @@ class TestCreateSigv4Client:
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
-            service='test-service', verify=False, proxies={'http': 'http://proxy:8080'}
+            service='test-service',
+            region='test-region',
+            verify=False,
+            proxies={'http': 'http://proxy:8080'},
         )
 
         # Verify client was created with additional kwargs
@@ -409,7 +391,7 @@ class TestCreateSigv4Client:
         )
 
         # Verify client was created correctly with prompt context
-        mock_create_auth.assert_called_once_with('test-service', None, 'us-west-2')
+        mock_create_auth.assert_called_once_with('test-service', 'us-west-2', None)
 
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args

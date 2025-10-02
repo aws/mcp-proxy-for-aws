@@ -36,6 +36,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.read_only = True
 
@@ -71,6 +72,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.read_only = True
 
@@ -106,6 +108,7 @@ class TestServer:
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.read_only = True
 
@@ -188,8 +191,7 @@ class TestServer:
         mock_session.return_value = mock_session_instance
 
         # Act
-        with patch.dict('os.environ', {'AWS_REGION': 'us-west-2'}):
-            create_sigv4_client(service='test-service', profile='test-profile')
+        create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
 
         # Assert
         mock_session.assert_called_once_with(profile_name='test-profile')
@@ -206,7 +208,7 @@ class TestServer:
 
         # Act & Assert
         with pytest.raises(ValueError) as exc_info:
-            create_sigv4_client(service='test-service')
+            create_sigv4_client(service='test-service', region='test-region')
         assert 'No AWS credentials found' in str(exc_info.value)
 
     def test_main_module_execution(self):
