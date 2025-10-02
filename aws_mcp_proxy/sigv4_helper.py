@@ -170,10 +170,6 @@ def create_sigv4_auth(
     session = create_aws_session(profile)
     credentials = session.get_credentials()
 
-    # Get region from parameter, environment variable, or default
-    if not region:
-        region = os.environ.get('AWS_REGION', 'us-east-1')
-
     # Create SigV4Auth with explicit credentials
     sigv4_auth = SigV4HTTPXAuth(
         credentials=credentials,
@@ -186,8 +182,8 @@ def create_sigv4_auth(
 
 
 def create_sigv4_client(
-    service: str = 'eks-mcp',
-    region: str = '',
+    service: str,
+    region: str,
     profile: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     auth: Optional[httpx.Auth] = None,

@@ -23,15 +23,15 @@ class McpProxyManager:
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, target_mcp: FastMCP, allow_write: bool = False):
+    def __init__(self, target_mcp: FastMCP, read_only: bool = False):
         """Initialize the MCP Proxy Manager.
 
         Args:
             target_mcp: The target MCP server to add content to
-            allow_write: Whether to allow tools that require write permissions
+            read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
         """
         self.target_mcp = target_mcp
-        self.allow_write = allow_write
+        self.read_only = read_only
 
     async def add_proxy_content(self, proxy: FastMCP) -> None:
         """Add tools, resources, and prompts from proxy to MCP server.
@@ -68,7 +68,7 @@ class McpProxyManager:
         for tool_name, tool in tools.items():
             # Check the tool annotations and disable if needed
             annotations = tool.annotations
-            if not self.allow_write:
+            if self.read_only:
                 # In readOnly mode, skip the tools with no readOnlyHint=True annotation
                 if annotations and not annotations.readOnlyHint or not annotations:
                     self.logger.info(f'Skipping tool {tool_name} needing write permissions')

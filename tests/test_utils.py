@@ -33,8 +33,8 @@ class TestCreateTransportWithSigv4:
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
 
-        url = 'https://eks-mcp.us-west-2.api.aws/mcp'
-        service = 'eks-mcp'
+        url = 'https://test-service.us-west-2.api.aws/mcp'
+        service = 'test-service'
         profile = 'test-profile'
         region = 'us-east-1'
 
@@ -68,9 +68,9 @@ class TestCreateTransportWithSigv4:
     @patch('aws_mcp_proxy.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
-        url = 'https://eks-mcp.us-west-2.api.aws/mcp'
-        service = 'eks-mcp'
-        region = 'us-west-2'
+        url = 'https://test-service.us-west-2.api.aws/mcp'
+        service = 'test-service'
+        region = 'test-region'
 
         result = create_transport_with_sigv4(url, service, region)
 
@@ -93,7 +93,7 @@ class TestValidateRequiredArgs:
 
     def test_validate_service_name_with_service(self):
         """Test validation when service is provided."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws'
+        endpoint = 'https://test-service.us-west-2.api.aws'
         service = 'custom-service'
 
         result = determine_service_name(endpoint, service)
@@ -102,8 +102,8 @@ class TestValidateRequiredArgs:
 
     def test_validate_service_name_without_service_success(self):
         """Test validation when service is not provided but can be parsed."""
-        endpoint = 'https://eks-mcp.us-west-2.api.aws'
-        expected_service = 'eks-mcp'
+        endpoint = 'https://test-service.us-west-2.api.aws'
+        expected_service = 'test-service'
 
         result = determine_service_name(endpoint)
 

@@ -38,7 +38,7 @@ class TestServer:
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -57,7 +57,7 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
+        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
@@ -74,7 +74,7 @@ class TestServer:
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -93,7 +93,7 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, False)
+        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
         mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
@@ -110,7 +110,7 @@ class TestServer:
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
         mock_args.profile = None
-        mock_args.allow_write = False
+        mock_args.read_only = True
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -191,8 +191,7 @@ class TestServer:
         mock_session.return_value = mock_session_instance
 
         # Act
-        with patch.dict('os.environ', {'AWS_REGION': 'us-west-2'}):
-            create_sigv4_client(service='test-service', profile='test-profile')
+        create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
 
         # Assert
         mock_session.assert_called_once_with(profile_name='test-profile')
@@ -209,7 +208,7 @@ class TestServer:
 
         # Act & Assert
         with pytest.raises(ValueError) as exc_info:
-            create_sigv4_client()
+            create_sigv4_client(service='test-service', region='test-region')
         assert 'No AWS credentials found' in str(exc_info.value)
 
     def test_main_module_execution(self):

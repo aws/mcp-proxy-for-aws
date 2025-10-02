@@ -66,7 +66,7 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
 
     # Use McpProxyManager to add proxy content
-    proxy_manager = McpProxyManager(mcp, args.allow_write)
+    proxy_manager = McpProxyManager(mcp, args.read_only)
     await proxy_manager.add_proxy_content(proxy)
 
 
@@ -77,20 +77,20 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with EKS MCP endpoint
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws
+  # Run with your endpoint
+  aws-mcp-proxy <SigV4 MCP endpoint URL>
 
   # Run with custom service and profile
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --service eks-mcp --profile default
+  aws-mcp-proxy <SigV4 MCP endpoint URL> --service <aws-service> --profile default
 
   # Run with write permissions enabled
-  aws-mcp-proxy https://eks-mcp.us-west-2.api.aws --allow-write
+  aws-mcp-proxy <SigV4 MCP endpoint URL> --read-only
         """,
     )
 
     parser.add_argument(
         'endpoint',
-        help='MCP endpoint URL (e.g., https://eks-mcp.us-west-2.api.aws)',
+        help='SigV4 MCP endpoint URL',
     )
 
     parser.add_argument(
@@ -110,9 +110,9 @@ Examples:
     )
 
     parser.add_argument(
-        '--allow-write',
+        '--read-only',
         action='store_true',
-        help='Allow tools that require write permissions to be enabled',
+        help='Disable tools which may require write permissions (readOnlyHint True or unknown)',
     )
 
     parser.add_argument(

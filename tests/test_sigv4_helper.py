@@ -283,10 +283,10 @@ class TestCreateSigv4Client:
         mock_client_class.return_value = mock_client
 
         # Test client creation
-        result = create_sigv4_client()
+        result = create_sigv4_client(service='test-service', region='test-region')
 
         # Verify client was created correctly
-        mock_create_auth.assert_called_once_with('eks-mcp', None, None)
+        mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -309,7 +309,7 @@ class TestCreateSigv4Client:
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
-        result = create_sigv4_client(headers=custom_headers)
+        result = create_sigv4_client(service='test-service', region='test-region', headers=custom_headers)
 
         # Verify client was created with merged headers
         call_args = mock_client_class.call_args
@@ -352,7 +352,9 @@ class TestCreateSigv4Client:
         mock_client_class.return_value = mock_client
 
         # Test client creation with additional kwargs
-        result = create_sigv4_client(verify=False, proxies={'http': 'http://proxy:8080'})
+        result = create_sigv4_client(
+            service='test-service', region='test-region', verify=False, proxies={'http': 'http://proxy:8080'}
+        )
 
         # Verify client was created with additional kwargs
         call_args = mock_client_class.call_args
@@ -382,11 +384,11 @@ class TestCreateSigv4Client:
         }
 
         result = create_sigv4_client(
-            service='eks-mcp', headers=prompt_context_headers, region='us-west-2'
+            service='test-service', headers=prompt_context_headers, region='us-west-2'
         )
 
         # Verify client was created correctly with prompt context
-        mock_create_auth.assert_called_once_with('eks-mcp', 'us-west-2', None)
+        mock_create_auth.assert_called_once_with('test-service', 'us-west-2', None)
 
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args
