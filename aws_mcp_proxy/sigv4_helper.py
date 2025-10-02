@@ -17,7 +17,6 @@
 import boto3
 import httpx
 import logging
-import os
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
@@ -150,9 +149,7 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     return session
 
 
-def create_sigv4_auth(
-    service: str, region: str, profile: Optional[str] = None
-) -> SigV4HTTPXAuth:
+def create_sigv4_auth(service: str, region: str, profile: Optional[str] = None) -> SigV4HTTPXAuth:
     """Create SigV4 authentication for AWS requests.
 
     Args:

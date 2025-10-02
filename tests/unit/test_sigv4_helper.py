@@ -245,7 +245,6 @@ class TestCreateSigv4Auth:
         assert result.region == 'test-region'  # default region
         assert result.credentials == mock_credentials
 
-
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
     def test_create_sigv4_auth_with_explicit_region(self, mock_create_session):
         """Test creating SigV4 auth with explicit region parameter."""
@@ -308,7 +307,9 @@ class TestCreateSigv4Client:
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
-        result = create_sigv4_client(service='test-service', region='test-region', headers=custom_headers)
+        result = create_sigv4_client(
+            service='test-service', region='test-region', headers=custom_headers
+        )
 
         # Verify client was created with merged headers
         call_args = mock_client_class.call_args
@@ -352,7 +353,10 @@ class TestCreateSigv4Client:
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
-            service='test-service', region='test-region', verify=False, proxies={'http': 'http://proxy:8080'}
+            service='test-service',
+            region='test-region',
+            verify=False,
+            proxies={'http': 'http://proxy:8080'},
         )
 
         # Verify client was created with additional kwargs
