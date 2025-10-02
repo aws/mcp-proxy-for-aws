@@ -54,7 +54,7 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run --frozen pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml:${{ matrix.package }}-coverage.xml
+          uv run --frozen pytest -m unit --cov --cov-branch --cov-report=term-missing --cov-report=xml:${{ matrix.package }}-coverage.xml
 
       - name: Check unit test coverage sufficient
         run: |

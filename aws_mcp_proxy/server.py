@@ -40,7 +40,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-async def setup_mcp_mode(mcp: FastMCP, args) -> None:
+async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     """Set up the server in MCP mode."""
     logger.info('Setting up server in MCP mode')
 
@@ -66,7 +66,8 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
 
     # Use McpProxyManager to add proxy content
-    proxy_manager = McpProxyManager(mcp, args.read_only)
+
+    proxy_manager = McpProxyManager(local_mcp, args.read_only)
     await proxy_manager.add_proxy_content(proxy)
 
 

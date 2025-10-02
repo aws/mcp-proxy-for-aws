@@ -17,7 +17,6 @@
 import boto3
 import httpx
 import logging
-import os
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
