@@ -244,10 +244,6 @@ class TestCreateSigv4Auth:
         assert result.service == 'test-service'
         assert result.region == 'test-region'  # default region
         assert result.credentials == mock_credentials
-<<<<<<< HEAD:tests/test_sigv4_helper.py
-
-=======
->>>>>>> upstream/main:tests/unit/test_sigv4_helper.py
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
     def test_create_sigv4_auth_with_explicit_region(self, mock_create_session):
@@ -285,12 +281,11 @@ class TestCreateSigv4Client:
         mock_client_class.return_value = mock_client
 
         # Test client creation
-
         result = create_sigv4_client(service='test-service', region='test-region')
 
         # Verify client was created correctly
         mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
-        
+
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
         assert call_args[1]['auth'] == mock_auth
