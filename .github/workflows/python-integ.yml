@@ -4,9 +4,8 @@ name: Python Integration Tests
 on:
   workflow_call:
   workflow_dispatch:
-  # TODO: enable this back once the workflow runs without issues
-  # push:
-  #   branches: main
+  push:
+    branches: main
 
 jobs:
   integration:
