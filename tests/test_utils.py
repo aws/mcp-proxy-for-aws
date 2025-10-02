@@ -38,7 +38,7 @@ class TestCreateTransportWithSigv4:
         profile = 'test-profile'
         region = 'us-east-1'
 
-        result = create_transport_with_sigv4(url, service, profile, region)
+        result = create_transport_with_sigv4(url, service, region, profile)
 
         # Verify result is StreamableHttpTransport
         assert isinstance(result, StreamableHttpTransport)
@@ -70,8 +70,9 @@ class TestCreateTransportWithSigv4:
         """Test creating transport without profile."""
         url = 'https://eks-mcp.us-west-2.api.aws/mcp'
         service = 'eks-mcp'
+        region = 'us-west-2'
 
-        result = create_transport_with_sigv4(url, service)
+        result = create_transport_with_sigv4(url, service, region)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
@@ -80,7 +81,7 @@ class TestCreateTransportWithSigv4:
             factory(headers=None, timeout=None, auth=None)
 
             mock_create_sigv4_client.assert_called_once_with(
-                service=service, profile=None, region=None, headers=None, timeout=None, auth=None
+                service=service, region=region, profile=None, headers=None, timeout=None, auth=None
             )
         else:
             # If we can't access the factory directly, just verify the transport was created

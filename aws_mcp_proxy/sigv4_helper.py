@@ -151,7 +151,7 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
 
 
 def create_sigv4_auth(
-    service: str, profile: Optional[str] = None, region: Optional[str] = None
+    service: str, region: str, profile: Optional[str] = None
 ) -> SigV4HTTPXAuth:
     """Create SigV4 authentication for AWS requests.
 
@@ -187,8 +187,8 @@ def create_sigv4_auth(
 
 def create_sigv4_client(
     service: str = 'eks-mcp',
+    region: str = '',
     profile: Optional[str] = None,
-    region: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     auth: Optional[httpx.Auth] = None,
     **kwargs: Any,
@@ -225,7 +225,7 @@ def create_sigv4_client(
     )
 
     # Create SigV4 auth
-    sigv4_auth = create_sigv4_auth(service, profile, region)
+    sigv4_auth = create_sigv4_auth(service, region, profile)
 
     # Create the client with SigV4 auth and error handling event hook
     logger.info("Creating httpx.AsyncClient with SigV4 authentication for service '%s'", service)

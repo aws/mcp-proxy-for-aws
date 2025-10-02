@@ -25,8 +25,8 @@ from urllib.parse import urlparse
 def create_transport_with_sigv4(
     url: str,
     service: str,
+    region: str,
     profile: Optional[str] = None,
-    region: Optional[str] = None,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 

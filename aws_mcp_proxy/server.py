@@ -60,7 +60,7 @@ async def setup_mcp_mode(mcp: FastMCP, args) -> None:
     logger.info('Running in MCP mode')
 
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(args.endpoint, service, profile, region)
+    transport = create_transport_with_sigv4(args.endpoint, service, region, profile)
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)

@@ -226,7 +226,6 @@ class TestCreateSigv4Auth:
     """Test cases for the create_sigv4_auth function."""
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
-    @patch.dict(os.environ, {'AWS_REGION': ''})
     def test_create_sigv4_auth_default(self, mock_create_session):
         """Test creating SigV4 auth with default parameters."""
         # Mock session and credentials
@@ -238,39 +237,15 @@ class TestCreateSigv4Auth:
         mock_session.get_credentials.return_value = mock_credentials
         mock_create_session.return_value = mock_session
 
-        # Remove AWS_REGION to check default
-        del os.environ['AWS_REGION']
-
         # Test auth creation
-        result = create_sigv4_auth('test-service')
+        result = create_sigv4_auth('test-service', 'test-region')
 
         # Verify auth was created correctly
         assert isinstance(result, SigV4HTTPXAuth)
         assert result.service == 'test-service'
-        assert result.region == 'us-east-1'  # default region
+        assert result.region == 'test-region'  # default region
         assert result.credentials == mock_credentials
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
-    @patch.dict(os.environ, {'AWS_REGION': 'eu-west-1'})
-    def test_create_sigv4_auth_with_env_region(self, mock_create_session):
-        """Test creating SigV4 auth with region from environment variable."""
-        # Mock session and credentials
-        mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = None
-        mock_session.get_credentials.return_value = mock_credentials
-        mock_create_session.return_value = mock_session
-
-        # Test auth creation
-        result = create_sigv4_auth('test-service', profile='test-profile')
-
-        # Verify auth was created with environment region
-        assert isinstance(result, SigV4HTTPXAuth)
-        assert result.service == 'test-service'
-        assert result.region == 'eu-west-1'  # from environment
-        assert result.credentials == mock_credentials
 
     @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
     def test_create_sigv4_auth_with_explicit_region(self, mock_create_session):
@@ -363,7 +338,7 @@ class TestCreateSigv4Client:
         )
 
         # Verify auth was created with custom parameters
-        mock_create_auth.assert_called_once_with('custom-service', 'test-profile', 'us-east-1')
+        mock_create_auth.assert_called_once_with('custom-service', 'us-east-1', 'test-profile')
         assert result == mock_client
 
     @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
@@ -411,7 +386,7 @@ class TestCreateSigv4Client:
         )
 
         # Verify client was created correctly with prompt context
-        mock_create_auth.assert_called_once_with('eks-mcp', None, 'us-west-2')
+        mock_create_auth.assert_called_once_with('eks-mcp', 'us-west-2', None)
 
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args
