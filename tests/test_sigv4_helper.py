@@ -283,10 +283,17 @@ class TestCreateSigv4Client:
         mock_client_class.return_value = mock_client
 
         # Test client creation
+<<<<<<< HEAD
         result = create_sigv4_client(service='test-service', region='test-region')
 
         # Verify client was created correctly
         mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
+=======
+        result = create_sigv4_client(service='test-service')
+
+        # Verify client was created correctly
+        mock_create_auth.assert_called_once_with('test-service', None, None)
+>>>>>>> origin/main
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -309,7 +316,11 @@ class TestCreateSigv4Client:
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
+<<<<<<< HEAD
         result = create_sigv4_client(service='test-service', region='test-region', headers=custom_headers)
+=======
+        result = create_sigv4_client(service='test-service', headers=custom_headers)
+>>>>>>> origin/main
 
         # Verify client was created with merged headers
         call_args = mock_client_class.call_args
@@ -388,7 +399,11 @@ class TestCreateSigv4Client:
         )
 
         # Verify client was created correctly with prompt context
+<<<<<<< HEAD
         mock_create_auth.assert_called_once_with('test-service', 'us-west-2', None)
+=======
+        mock_create_auth.assert_called_once_with('test-service', None, 'us-west-2')
+>>>>>>> origin/main
 
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args

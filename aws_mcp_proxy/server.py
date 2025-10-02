@@ -107,6 +107,7 @@ Examples:
     parser.add_argument(
         '--region',
         help='AWS region to use (uses AWS_REGION if not provided)',
+        default=os.getenv('AWS_REGION', 'default'),
     )
 
     parser.add_argument(
