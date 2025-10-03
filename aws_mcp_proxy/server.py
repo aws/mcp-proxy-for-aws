@@ -66,9 +66,8 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
 
     # Use McpProxyManager to add proxy content
-
-    proxy_manager = McpProxyManager(local_mcp, args.read_only)
-    await proxy_manager.add_proxy_content(proxy)
+    proxy_manager = McpProxyManager(local_mcp, args.read_only, args.use_rate_limiter)
+    await proxy_manager.add_proxy_content(proxy, args.retries)
 
 
 def parse_args():
@@ -122,6 +121,24 @@ Examples:
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='INFO',
         help='Set the logging level (default: INFO)',
+    )
+
+    parser.add_argument(
+        '--retries',
+        type=int,
+        default=3,
+        choices=range(0, 11),
+        metavar='[0-10]',
+        help='Number of retries when calling endpoint mcp (default: 3) - setting this to 0 disables retries.',
+    )
+
+    parser.add_argument(
+        '--rate-limit',
+        type=int,
+        default=3,
+        choices=range(0, 11),
+        metavar='[0-10]',
+        help='Allowed requests per second before throttling calls to proxy - setting this to 0 disables throttling.',
     )
 
     return parser.parse_args()

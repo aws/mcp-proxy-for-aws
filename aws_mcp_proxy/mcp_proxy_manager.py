@@ -25,27 +25,32 @@ class McpProxyManager:
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, target_mcp: FastMCP, read_only: bool = False):
+    def __init__(self, target_mcp: FastMCP, read_only: bool, rate_limit: int):
         """Initialize the MCP Proxy Manager.
 
         Args:
             target_mcp: The target MCP server to add content to
             read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
+            rate_limit: Maximum requests per second for rate limiting (0 to disable rate limiting)
         """
-        self._add_rate_limiting_middleware(target_mcp)
+        if rate_limit:
+            self._add_rate_limiting_middleware(mcp=target_mcp, rate_limit=rate_limit)
+
         self.target_mcp = target_mcp
         self.read_only = read_only
 
-    async def add_proxy_content(self, proxy: FastMCP) -> None:
+    async def add_proxy_content(self, proxy: FastMCP, retries: int) -> None:
         """Add tools, resources, and prompts from proxy to MCP server.
 
         Args:
             proxy: The proxy FastMCP instance to get content from
+            retries: Number of retry attempts for failed requests (0 to disable retries)
 
         Raises:
             Exception: If tools cannot be retrieved or added
         """
-        self._add_retry_middleware(proxy)
+        if retries:
+            self._add_retry_middleware(proxy)
 
         try:
             await self._add_tools(proxy)
@@ -130,16 +135,12 @@ class McpProxyManager:
         self.logger.info('Adding retry middleware')
         mcp.add_middleware(RetryMiddleware())
 
-    def _add_rate_limiting_middleware(self, mcp):
+    def _add_rate_limiting_middleware(self, mcp, rate_limit: int):
         """Add retry with exponential backoff middleware to target MCP server.
 
         Args:
             mcp: The FastMCP instance to add rate limiting to
+            rate_limit: Maximum requests per second for rate limiting
         """
         self.logger.info('Adding rate limiting middleware')
-        mcp.add_middleware(
-            RateLimitingMiddleware(
-                max_requests_per_second=5,
-                burst_capacity=10,
-            )
-        )
+        mcp.add_middleware(RateLimitingMiddleware(max_requests_per_second=rate_limit))
