@@ -27,7 +27,6 @@ import asyncio
 import logging
 import os
 from aws_mcp_proxy.logging_config import configure_logging
-from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -70,11 +69,6 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     add_rate_limiting_middleware(proxy)
     
     await proxy.run_async()
-
-    # Use McpProxyManager to add proxy content
-
-    # proxy_manager = McpProxyManager(local_mcp, args.read_only)
-    # await proxy_manager.add_proxy_content(proxy)
     
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
@@ -199,8 +193,7 @@ def main():
         try:
             await setup_mcp_mode(mcp, args)
 
-            # logger.info('Server setup complete, starting MCP server')
-            # await mcp.run_async()
+            logger.info('Server setup complete, starting MCP server')
 
         except Exception as e:
             logger.error('Failed to start server: %s', e)
