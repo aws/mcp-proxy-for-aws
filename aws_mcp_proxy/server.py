@@ -35,6 +35,9 @@ from aws_mcp_proxy.utils import (
 )
 from fastmcp.server.server import FastMCP
 from typing import Any
+from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
+from fastmcp.server.middleware.error_handling import RetryMiddleware
+from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 
 
 logger = logging.getLogger(__name__)
@@ -62,13 +65,53 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
+    add_tool_filtering_middleware(proxy, args.read_only)
+    add_retry_middleware(proxy)
+    add_rate_limiting_middleware(proxy)
+    
     await proxy.run_async()
 
     # Use McpProxyManager to add proxy content
 
     # proxy_manager = McpProxyManager(local_mcp, args.read_only)
     # await proxy_manager.add_proxy_content(proxy)
+    
 
+def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
+    """Add tool filtering middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add tool filtering to
+    """
+    logger.info('Adding tool filtering middleware')
+    mcp.add_middleware(
+        ToolFilteringMiddleware(
+            read_only=read_only,
+        )
+    )
+
+def add_retry_middleware(mcp: FastMCP) -> None:
+    """Add retry with exponential backoff middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add exponential backoff to
+    """
+    logger.info('Adding retry middleware')
+    mcp.add_middleware(RetryMiddleware())
+
+def add_rate_limiting_middleware(mcp: FastMCP) -> None:
+    """Add retry with exponential backoff middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add rate limiting to
+    """
+    logger.info('Adding rate limiting middleware')
+    mcp.add_middleware(
+        RateLimitingMiddleware(
+            max_requests_per_second=5,
+            burst_capacity=10,
+        )
+    )
 
 def parse_args():
     """Parse command line arguments."""
