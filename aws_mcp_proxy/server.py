@@ -62,10 +62,12 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
+    await proxy.run_async()
 
     # Use McpProxyManager to add proxy content
-    proxy_manager = McpProxyManager(local_mcp, args.read_only)
-    await proxy_manager.add_proxy_content(proxy, args.retries)
+
+    # proxy_manager = McpProxyManager(local_mcp, args.read_only)
+    # await proxy_manager.add_proxy_content(proxy)
 
 
 def parse_args():
@@ -154,8 +156,8 @@ def main():
         try:
             await setup_mcp_mode(mcp, args)
 
-            logger.info('Server setup complete, starting MCP server')
-            await mcp.run_async()
+            # logger.info('Server setup complete, starting MCP server')
+            # await mcp.run_async()
 
         except Exception as e:
             logger.error('Failed to start server: %s', e)
