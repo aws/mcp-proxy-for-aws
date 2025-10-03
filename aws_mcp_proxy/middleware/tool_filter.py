@@ -31,7 +31,9 @@ class ToolFilteringMiddleware(Middleware):
             annotations = tool.annotations
             if self.read_only:
                 # In readOnly mode, skip the tools with no readOnlyHint=True annotation
-                if annotations and not annotations.readOnlyHint or not annotations:
+                read_only_hint = getattr(annotations, 'readOnlyHint', False)
+                if not read_only_hint:
+                    # Skip tools that don't have readOnlyHint=True
                     self.logger.info(f'Skipping tool {tool.name} needing write permissions')
                     continue
 
