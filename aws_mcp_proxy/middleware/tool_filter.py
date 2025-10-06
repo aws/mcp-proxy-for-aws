@@ -16,13 +16,14 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 import logging
 from fastmcp.server.server import FastMCP
 from fastmcp.tools.tool import Tool
+from collections.abc import Callable, Awaitable
 
 class ToolFilteringMiddleware(Middleware): 
     def __init__(self, read_only: bool, logger: logging.Logger | None = None):
         self.read_only = read_only 
         self.logger = logger or logging.getLogger("fastmcp.errors") 
     
-    async def on_list_tools(self, context: MiddlewareContext, call_next):
+    async def on_list_tools(self, context: MiddlewareContext, call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]]):
         # Get list of FastMCP Components
         tools = await call_next(context)
         filtered_tools = []
