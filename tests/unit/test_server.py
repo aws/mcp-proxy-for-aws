@@ -26,9 +26,7 @@ class TestServer:
 
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode(
-        self, mock_as_proxy, mock_create_transport
-    ):
+    async def test_setup_mcp_mode(self, mock_as_proxy, mock_create_transport):
         """Test that MCP mode is set up correctly."""
         # Arrange
         mock_mcp = Mock()
@@ -56,9 +54,7 @@ class TestServer:
 
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode_with_tools(
-        self, mock_as_proxy, mock_create_transport
-    ):
+    async def test_setup_mcp_mode_with_tools(self, mock_as_proxy, mock_create_transport):
         """Test that MCP mode registers tools correctly."""
         # Arrange
         mock_mcp = Mock()
@@ -83,8 +79,6 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        
-
 
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):

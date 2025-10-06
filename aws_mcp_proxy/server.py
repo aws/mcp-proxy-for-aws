@@ -27,15 +27,15 @@ import asyncio
 import logging
 import os
 from aws_mcp_proxy.logging_config import configure_logging
+from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
 )
+from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.server import FastMCP
 from typing import Any
-from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
-from fastmcp.server.middleware.error_handling import RetryMiddleware
 
 
 logger = logging.getLogger(__name__)
@@ -65,15 +65,16 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
     add_tool_filtering_middleware(proxy, args.read_only)
     add_retry_middleware(proxy)
-        
+
     await proxy.run_async()
-    
+
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
     """Add tool filtering middleware to target MCP server.
 
     Args:
         mcp: The FastMCP instance to add tool filtering to
+        read_only: Whether or not to filter out tools that require write permissions
     """
     logger.info('Adding tool filtering middleware')
     mcp.add_middleware(
@@ -81,6 +82,7 @@ def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None
             read_only=read_only,
         )
     )
+
 
 def add_retry_middleware(mcp: FastMCP) -> None:
     """Add retry with exponential backoff middleware to target MCP server.
@@ -90,6 +92,7 @@ def add_retry_middleware(mcp: FastMCP) -> None:
     """
     logger.info('Adding retry middleware')
     mcp.add_middleware(RetryMiddleware())
+
 
 def parse_args():
     """Parse command line arguments."""

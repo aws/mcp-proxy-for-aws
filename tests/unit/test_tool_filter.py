@@ -15,15 +15,16 @@
 """Tests for the tool filtering middleware."""
 
 import pytest
-from unittest.mock import AsyncMock, Mock
-
 from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from fastmcp.server.middleware import MiddlewareContext
+from unittest.mock import AsyncMock, Mock
+
 
 class MockAnnotationsWithoutReadOnlyHint:
     """Mock annotations object that raises AttributeError for readOnlyHint."""
 
     def __getattr__(self, name):
+        """Mocks get attribute behavior when accessing readOnlyHint by raising an Error."""
         if name == 'readOnlyHint':
             raise AttributeError(f"'{type(self).__name__}' object has no attribute 'readOnlyHint'")
         return Mock()
@@ -63,7 +64,7 @@ class TestOnListTools:
     def read_only_tool(self):
         """Tool with readOnlyHint=True."""
         tool = Mock()
-        tool.name = "read_only_tool"
+        tool.name = 'read_only_tool'
         tool.annotations = Mock()
         tool.annotations.readOnlyHint = True
         return tool
@@ -72,7 +73,7 @@ class TestOnListTools:
     def write_tool(self):
         """Tool with readOnlyHint=False."""
         tool = Mock()
-        tool.name = "write_tool"
+        tool.name = 'write_tool'
         tool.annotations = Mock()
         tool.annotations.readOnlyHint = False
         return tool
@@ -81,7 +82,7 @@ class TestOnListTools:
     def no_hint_tool(self):
         """Tool with annotations but no readOnlyHint."""
         tool = Mock()
-        tool.name = "no_hint_tool"
+        tool.name = 'no_hint_tool'
         tool.annotations = MockAnnotationsWithoutReadOnlyHint()
         return tool
 
@@ -89,7 +90,7 @@ class TestOnListTools:
     def no_annotations_tool(self):
         """Tool with no annotations."""
         tool = Mock()
-        tool.name = "no_annotations_tool"
+        tool.name = 'no_annotations_tool'
         tool.annotations = None
         return tool
 
@@ -165,7 +166,6 @@ class TestOnListTools:
         assert result[0] == read_only_tool
         call_next_mock.assert_called_once_with(mock_context)
 
-
     @pytest.mark.asyncio
     async def test_read_only_true_with_empty_tool_list(self, mock_context):
         """Test that read_only=True handles empty tool list."""
@@ -182,13 +182,11 @@ class TestOnListTools:
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
-    async def test_read_only_true_with_only_read_only_tools(
-        self, mock_context, read_only_tool
-    ):
+    async def test_read_only_true_with_only_read_only_tools(self, mock_context, read_only_tool):
         """Test that read_only=True passes through read-only tools."""
         # Arrange
         read_only_tool2 = Mock()
-        read_only_tool2.name = "read_only_tool2"
+        read_only_tool2.name = 'read_only_tool2'
         read_only_tool2.annotations = Mock()
         read_only_tool2.annotations.readOnlyHint = True
 
@@ -225,24 +223,33 @@ class TestOnListTools:
     async def test_call_next_exception_propagated(self, mock_context):
         """Test that exceptions from call_next are propagated."""
         # Arrange
-        call_next_mock = AsyncMock(side_effect=Exception("call_next failed"))
+        call_next_mock = AsyncMock(side_effect=Exception('call_next failed'))
         middleware = ToolFilteringMiddleware(read_only=True)
 
         # Act & Assert
         with pytest.raises(Exception) as exc_info:
             await middleware.on_list_tools(mock_context, call_next_mock)
 
-        assert "call_next failed" in str(exc_info.value)
+        assert 'call_next failed' in str(exc_info.value)
         call_next_mock.assert_called_once_with(mock_context)
 
-    @pytest.mark.parametrize("read_only,expected_count", [
-        (False, 4),  # All tools pass through
-        (True, 1),   # Only read-only tools pass
-    ])
+    @pytest.mark.parametrize(
+        'read_only,expected_count',
+        [
+            (False, 4),  # All tools pass through
+            (True, 1),  # Only read-only tools pass
+        ],
+    )
     @pytest.mark.asyncio
     async def test_parametrized_filtering_behavior(
-        self, mock_context, read_only_tool, write_tool, no_annotations_tool, no_hint_tool,
-        read_only, expected_count
+        self,
+        mock_context,
+        read_only_tool,
+        write_tool,
+        no_annotations_tool,
+        no_hint_tool,
+        read_only,
+        expected_count,
     ):
         """Test filtering behavior with different read_only settings."""
         # Arrange

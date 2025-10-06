@@ -12,31 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fastmcp.server.middleware import Middleware, MiddlewareContext
 import logging
-from fastmcp.server.server import FastMCP
+from collections.abc import Awaitable, Callable
+from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool
-from collections.abc import Callable, Awaitable
 
-class ToolFilteringMiddleware(Middleware): 
+
+class ToolFilteringMiddleware(Middleware):
+    """Middleware to filter tools based on read only flag."""
+
     def __init__(self, read_only: bool, logger: logging.Logger | None = None):
-        self.read_only = read_only 
-        self.logger = logger or logging.getLogger(__name__) 
-    
-    async def on_list_tools(self, context: MiddlewareContext, call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]]):
+        """Initialize the middleware."""
+        self.read_only = read_only
+        self.logger = logger or logging.getLogger(__name__)
+
+    async def on_list_tools(
+        self,
+        context: MiddlewareContext,
+        call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]],
+    ):
+        """Filter tools based on read only flag."""
         # Get list of FastMCP Components
         tools = await call_next(context)
         self.logger.info(f'Filtering tools for read only: {self.read_only}')
-        
+
         # If not read only, return the list of tools as is
         if not self.read_only:
-            return tools 
-        
+            return tools
+
         filtered_tools = []
         for tool in tools:
             # Check the tool annotations and disable if needed
             annotations = tool.annotations
-        
+
             # Skip the tools with no readOnlyHint=True annotation
             read_only_hint = getattr(annotations, 'readOnlyHint', False)
             if not read_only_hint:
@@ -46,5 +54,4 @@ class ToolFilteringMiddleware(Middleware):
 
             filtered_tools.append(tool)
 
-        
         return filtered_tools
