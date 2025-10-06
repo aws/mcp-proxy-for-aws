@@ -36,7 +36,6 @@ from fastmcp.server.server import FastMCP
 from typing import Any
 from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from fastmcp.server.middleware.error_handling import RetryMiddleware
-from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 
 
 logger = logging.getLogger(__name__)
@@ -66,8 +65,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     proxy = FastMCP.as_proxy(transport)
     add_tool_filtering_middleware(proxy, args.read_only)
     add_retry_middleware(proxy)
-    add_rate_limiting_middleware(proxy)
-    
+        
     await proxy.run_async()
     
 
@@ -92,20 +90,6 @@ def add_retry_middleware(mcp: FastMCP) -> None:
     """
     logger.info('Adding retry middleware')
     mcp.add_middleware(RetryMiddleware())
-
-def add_rate_limiting_middleware(mcp: FastMCP) -> None:
-    """Add retry with exponential backoff middleware to target MCP server.
-
-    Args:
-        mcp: The FastMCP instance to add rate limiting to
-    """
-    logger.info('Adding rate limiting middleware')
-    mcp.add_middleware(
-        RateLimitingMiddleware(
-            max_requests_per_second=5,
-            burst_capacity=10,
-        )
-    )
 
 def parse_args():
     """Parse command line arguments."""
