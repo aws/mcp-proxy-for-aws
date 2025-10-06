@@ -34,7 +34,7 @@ def configure_logging(level: Optional[str] = None) -> None:
     date_format = '%Y-%m-%d %H:%M:%S'
 
     # Create console handler with formatting
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
 
     # Configure root logger
