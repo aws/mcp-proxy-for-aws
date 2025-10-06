@@ -64,7 +64,9 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
     add_tool_filtering_middleware(proxy, args.read_only)
-    add_retry_middleware(proxy)
+
+    if args.retries:
+        add_retry_middleware(proxy, args.retries)
 
     await proxy.run_async()
 
@@ -84,14 +86,15 @@ def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None
     )
 
 
-def add_retry_middleware(mcp: FastMCP) -> None:
+def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
     """Add retry with exponential backoff middleware to target MCP server.
 
     Args:
         mcp: The FastMCP instance to add exponential backoff to
+        retries: number of retries with which to configure the retry middleware
     """
     logger.info('Adding retry middleware')
-    mcp.add_middleware(RetryMiddleware())
+    mcp.add_middleware(RetryMiddleware(retries))
 
 
 def parse_args():
