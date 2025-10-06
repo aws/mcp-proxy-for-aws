@@ -30,7 +30,6 @@ class McpProxyManager:
         Args:
             target_mcp: The target MCP server to add content to
             read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
-            rate_limit: Maximum requests per second for rate limiting (0 to disable rate limiting)
         """
         self.target_mcp = target_mcp
         self.read_only = read_only
