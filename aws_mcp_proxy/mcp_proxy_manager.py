@@ -16,7 +16,6 @@
 
 import logging
 from fastmcp.server.middleware.error_handling import RetryMiddleware
-from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 from fastmcp.server.server import FastMCP
 
 
@@ -25,27 +24,28 @@ class McpProxyManager:
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, target_mcp: FastMCP, read_only: bool = False):
+    def __init__(self, target_mcp: FastMCP, read_only: bool):
         """Initialize the MCP Proxy Manager.
 
         Args:
             target_mcp: The target MCP server to add content to
             read_only: If true, disable tools that require write permissions OR that do not have `readOnlyHint` set.
         """
-        self._add_rate_limiting_middleware(target_mcp)
         self.target_mcp = target_mcp
         self.read_only = read_only
 
-    async def add_proxy_content(self, proxy: FastMCP) -> None:
+    async def add_proxy_content(self, proxy: FastMCP, retries: int) -> None:
         """Add tools, resources, and prompts from proxy to MCP server.
 
         Args:
             proxy: The proxy FastMCP instance to get content from
+            retries: Number of retry attempts for failed requests (0 to disable retries)
 
         Raises:
             Exception: If tools cannot be retrieved or added
         """
-        self._add_retry_middleware(proxy)
+        if retries:
+            self._add_retry_middleware(proxy, retries)
 
         try:
             await self._add_tools(proxy)
@@ -121,25 +121,12 @@ class McpProxyManager:
         except Exception as e:
             self.logger.warning(f'Failed to get prompts from proxy: {e}')
 
-    def _add_retry_middleware(self, mcp: FastMCP) -> None:
+    def _add_retry_middleware(self, mcp: FastMCP, num_retries: int) -> None:
         """Add retry with exponential backoff middleware to target MCP server.
 
         Args:
             mcp: The FastMCP instance to add exponential backoff to
+            num_retries: Number of retry attempts
         """
         self.logger.info('Adding retry middleware')
-        mcp.add_middleware(RetryMiddleware())
-
-    def _add_rate_limiting_middleware(self, mcp):
-        """Add retry with exponential backoff middleware to target MCP server.
-
-        Args:
-            mcp: The FastMCP instance to add rate limiting to
-        """
-        self.logger.info('Adding rate limiting middleware')
-        mcp.add_middleware(
-            RateLimitingMiddleware(
-                max_requests_per_second=5,
-                burst_capacity=10,
-            )
-        )
+        mcp.add_middleware(RetryMiddleware(num_retries))
