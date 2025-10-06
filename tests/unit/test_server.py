@@ -39,6 +39,7 @@ class TestServer:
         mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.read_only = True
+        mock_args.retries = 1
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -58,7 +59,7 @@ class TestServer:
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
-        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
+        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy, 1)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
@@ -75,6 +76,7 @@ class TestServer:
         mock_args.region = 'us-east-1'
         mock_args.profile = None
         mock_args.read_only = True
+        mock_args.retries = 1
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -94,7 +96,7 @@ class TestServer:
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
-        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy)
+        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy, 1)
 
     @patch('aws_mcp_proxy.server.McpProxyManager')
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')

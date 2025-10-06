@@ -17,7 +17,6 @@
 import pytest
 from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
 from fastmcp.server.middleware.error_handling import RetryMiddleware
-from fastmcp.server.middleware.rate_limiting import RateLimitingMiddleware
 from fastmcp.server.server import FastMCP
 from unittest.mock import AsyncMock, MagicMock
 
@@ -75,7 +74,7 @@ class TestMcpProxyManager:
 
     def test_init_default_read_only(self, mock_target_mcp):
         """Test McpProxyManager initialization with default read_only."""
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
 
         assert manager.target_mcp == mock_target_mcp
         assert manager.read_only is False
@@ -98,7 +97,7 @@ class TestMcpProxyManager:
         mock_proxy.get_prompts.return_value = {'test_prompt': mock_prompt}
 
         manager = McpProxyManager(mock_target_mcp, read_only=True)
-        await manager.add_proxy_content(mock_proxy)
+        await manager.add_proxy_content(mock_proxy, 0)
 
         # Verify all methods were called
         mock_proxy.get_tools.assert_called_once()
@@ -115,7 +114,7 @@ class TestMcpProxyManager:
         """Test successful addition of tools."""
         mock_proxy.get_tools.return_value = {'test_tool': mock_tool}
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         await manager._add_tools(mock_proxy)
 
         mock_proxy.get_tools.assert_called_once()
@@ -175,7 +174,7 @@ class TestMcpProxyManager:
         """Test successful addition of resources."""
         mock_proxy.get_resources.return_value = {'test_resource': mock_resource}
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         await manager._add_resources(mock_proxy)
 
         mock_proxy.get_resources.assert_called_once()
@@ -186,7 +185,7 @@ class TestMcpProxyManager:
         """Test handling when proxy doesn't have resources method."""
         mock_proxy.get_resources.side_effect = AttributeError('No resources method')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
         await manager._add_resources(mock_proxy)
 
@@ -197,7 +196,7 @@ class TestMcpProxyManager:
         """Test handling when get_resources raises an exception."""
         mock_proxy.get_resources.side_effect = Exception('Resource error')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
         await manager._add_resources(mock_proxy)
 
@@ -208,7 +207,7 @@ class TestMcpProxyManager:
         """Test successful addition of prompts."""
         mock_proxy.get_prompts.return_value = {'test_prompt': mock_prompt}
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         await manager._add_prompts(mock_proxy)
 
         mock_proxy.get_prompts.assert_called_once()
@@ -219,7 +218,7 @@ class TestMcpProxyManager:
         """Test handling when proxy doesn't have prompts method."""
         mock_proxy.get_prompts.side_effect = AttributeError('No prompts method')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
         await manager._add_prompts(mock_proxy)
 
@@ -230,7 +229,7 @@ class TestMcpProxyManager:
         """Test handling when get_prompts raises an exception."""
         mock_proxy.get_prompts.side_effect = Exception('Prompt error')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
         await manager._add_prompts(mock_proxy)
 
@@ -241,10 +240,10 @@ class TestMcpProxyManager:
         """Test that exceptions from _add_tools are propagated."""
         mock_proxy.get_tools.side_effect = Exception('Tools error')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
 
         with pytest.raises(Exception, match='Tools error'):
-            await manager.add_proxy_content(mock_proxy)
+            await manager.add_proxy_content(mock_proxy, 0)
 
     @pytest.mark.asyncio
     async def test_add_proxy_content_resources_exception_handled(
@@ -255,9 +254,9 @@ class TestMcpProxyManager:
         mock_proxy.get_resources.side_effect = Exception('Resource error')
         mock_proxy.get_prompts.side_effect = AttributeError('No prompts')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
-        await manager.add_proxy_content(mock_proxy)
+        await manager.add_proxy_content(mock_proxy, 0)
 
         # Verify tools were still added
         mock_target_mcp.add_tool.assert_called_once()
@@ -271,9 +270,9 @@ class TestMcpProxyManager:
         mock_proxy.get_resources.side_effect = AttributeError('No resources')
         mock_proxy.get_prompts.side_effect = Exception('Prompt error')
 
-        manager = McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
         # Should not raise an exception
-        await manager.add_proxy_content(mock_proxy)
+        await manager.add_proxy_content(mock_proxy, 0)
 
         # Verify tools were still added
         mock_target_mcp.add_tool.assert_called_once()
@@ -306,20 +305,6 @@ class TestMcpProxyManager:
         # Verify tool was not added (skipped)
         mock_target_mcp.add_tool.assert_not_called()
 
-    def test_init_adds_rate_limiting_middleware(self, mock_target_mcp):
-        """Test that rate limiting middleware is added to target MCP during initialization."""
-        mock_target_mcp.add_middleware = MagicMock()
-
-        McpProxyManager(mock_target_mcp)
-
-        # Verify rate limiting middleware was added to target MCP
-        mock_target_mcp.add_middleware.assert_called_once()
-
-        # Check that RateLimitingMiddleware was added with correct parameters
-        rate_limiting_call = mock_target_mcp.add_middleware.call_args_list[0]
-        rate_limiting_middleware = rate_limiting_call[0][0]
-        assert isinstance(rate_limiting_middleware, RateLimitingMiddleware)
-
     @pytest.mark.asyncio
     async def test_add_retry_middleware_to_proxy(self, mock_target_mcp, mock_proxy, mock_tool):
         """Test that retry middleware is added to proxy during add_proxy_content."""
@@ -329,8 +314,8 @@ class TestMcpProxyManager:
         mock_proxy.get_resources.return_value = {}
         mock_proxy.get_prompts.return_value = {}
 
-        manager = McpProxyManager(mock_target_mcp)
-        await manager.add_proxy_content(mock_proxy)
+        manager = McpProxyManager(mock_target_mcp, False)
+        await manager.add_proxy_content(mock_proxy, 1)
 
         # Verify retry middleware was added to proxy
         mock_proxy.add_middleware.assert_called_once()
@@ -340,30 +325,28 @@ class TestMcpProxyManager:
         retry_middleware = retry_call[0][0]
         assert isinstance(retry_middleware, RetryMiddleware)
 
-    def test_add_rate_limiting_middleware_configuration(self):
-        """Test that RateLimitingMiddleware is configured with correct parameters."""
-        mock_target_mcp = MagicMock()
-        mock_target_mcp.add_middleware = MagicMock()
+    @pytest.mark.asyncio
+    async def test_disable_retry_middleware_to_proxy(self, mock_target_mcp, mock_proxy, mock_tool):
+        """Test that retry middleware is added to proxy during add_proxy_content."""
+        # Setup proxy
+        mock_proxy.add_middleware = MagicMock()
+        mock_proxy.get_tools.return_value = {'test_tool': mock_tool}
+        mock_proxy.get_resources.return_value = {}
+        mock_proxy.get_prompts.return_value = {}
 
-        McpProxyManager(mock_target_mcp)
+        manager = McpProxyManager(mock_target_mcp, False)
+        await manager.add_proxy_content(mock_proxy, 0)
 
-        # Get the RateLimitingMiddleware instance that was added
-        rate_limiting_call = mock_target_mcp.add_middleware.call_args_list[0]
-        rate_limiting_middleware = rate_limiting_call[0][0]
-
-        # Verify it's the correct type and has correct configuration
-        assert isinstance(rate_limiting_middleware, RateLimitingMiddleware)
-        # Check the configuration parameters (these are set in constructor)
-        assert hasattr(rate_limiting_middleware, 'max_requests_per_second')
-        assert hasattr(rate_limiting_middleware, 'burst_capacity')
+        # Verify retry middleware was added to proxy
+        mock_proxy.add_middleware.assert_not_called()
 
     def test_add_retry_middleware_configuration(self, mock_target_mcp):
         """Test that RetryMiddleware is configured correctly."""
         proxy = MagicMock()
         proxy.add_middleware = MagicMock()
 
-        manager = McpProxyManager(mock_target_mcp)
-        manager._add_retry_middleware(proxy)
+        manager = McpProxyManager(mock_target_mcp, False)
+        manager._add_retry_middleware(proxy, 1)
 
         # Get the RetryMiddleware instance that was added
         retry_call = proxy.add_middleware.call_args_list[0]
@@ -371,64 +354,6 @@ class TestMcpProxyManager:
 
         # Verify it's the correct type
         assert isinstance(retry_middleware, RetryMiddleware)
-
-
-class TestRateLimitingBehavior:
-    """Functional tests for rate limiting behavior."""
-
-    @pytest.mark.asyncio
-    async def test_rate_limiting_middleware_blocks_excessive_requests(self):
-        """Test that rate limiting middleware properly blocks excessive requests."""
-        import time
-        from fastmcp.server.middleware.middleware import MiddlewareContext
-        from fastmcp.server.server import FastMCP
-
-        # Create a real FastMCP server with rate limiting
-        server = FastMCP('test-server')
-        McpProxyManager(server)
-
-        # Verify rate limiting middleware was added
-        rate_limiter = None
-        for middleware in server.middleware:
-            if isinstance(middleware, RateLimitingMiddleware):
-                rate_limiter = middleware
-                break
-
-        assert rate_limiter is not None, 'Rate limiting middleware not found'
-
-        # Test rate limiting by calling the middleware directly with proper context
-        mock_request = MagicMock()
-        mock_request.method = 'tools/call'
-
-        context = MiddlewareContext(message=mock_request, type='request', method='tools/call')
-
-        call_count = 0
-
-        async def mock_call_next(context):
-            nonlocal call_count
-            call_count += 1
-            return f'success_{call_count}'
-
-        # Make 15 rapid requests - should exceed both burst (10) and rate (5/sec) limits
-        start_time = time.time()
-        results = []
-        for i in range(15):
-            try:
-                result = await rate_limiter.on_request(context, mock_call_next)
-                results.append(result)
-            except Exception as e:
-                results.append(e)
-
-        end_time = time.time()
-        total_time = end_time - start_time
-
-        successful_requests = len([r for r in results if not isinstance(r, Exception)])
-
-        # With rate limiting (5 req/sec, burst 10), some requests should be throttled or delayed
-        # Either it takes significant time (throttling) OR some requests fail/are rejected
-        assert total_time >= 0.5 or successful_requests <= 10, (
-            f'Expected rate limiting but got {successful_requests} successes in {total_time:.3f}s'
-        )
 
 
 class TestRetryBehavior:
@@ -441,13 +366,13 @@ class TestRetryBehavior:
 
         # Create target server and proxy manager
         target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
+        manager = McpProxyManager(target_server, False)
 
         # Create a simple proxy server
         proxy_server = FastMCP('proxy-server')
 
         # Add proxy content - this should add retry middleware to the proxy
-        await manager.add_proxy_content(proxy_server)
+        await manager.add_proxy_content(proxy_server, 1)
 
         # Verify retry middleware was added to the proxy
         retry_middleware_found = False
@@ -473,13 +398,13 @@ class TestRetryBehavior:
         from fastmcp.server.server import FastMCP
 
         target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
+        manager = McpProxyManager(target_server, False)
 
         # Create a simple proxy server
         proxy_server = FastMCP('proxy-server')
 
         # Add proxy content to get retry middleware added
-        await manager.add_proxy_content(proxy_server)
+        await manager.add_proxy_content(proxy_server, 3)
 
         # Get the retry middleware
         retry_middleware = None
@@ -518,13 +443,13 @@ class TestRetryBehavior:
         from fastmcp.server.server import FastMCP
 
         target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
+        manager = McpProxyManager(target_server, False)
 
         # Create a simple proxy server
         proxy_server = FastMCP('proxy-server')
 
         # Add proxy content to get retry middleware added
-        await manager.add_proxy_content(proxy_server)
+        await manager.add_proxy_content(proxy_server, 1)
 
         # Get the retry middleware
         retry_middleware = None
@@ -560,13 +485,13 @@ class TestRetryBehavior:
         from fastmcp.server.server import FastMCP
 
         target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
+        manager = McpProxyManager(target_server, False)
 
         # Create a simple proxy server
         proxy_server = FastMCP('proxy-server')
 
         # Add proxy content to get retry middleware added
-        await manager.add_proxy_content(proxy_server)
+        await manager.add_proxy_content(proxy_server, 1)
 
         # Get the retry middleware
         retry_middleware = None
@@ -599,13 +524,13 @@ class TestRetryBehavior:
         from fastmcp.server.server import FastMCP
 
         target_server = FastMCP('target-server')
-        manager = McpProxyManager(target_server)
+        manager = McpProxyManager(target_server, False)
 
         # Create a simple proxy server
         proxy_server = FastMCP('proxy-server')
 
         # Add proxy content to get retry middleware added
-        await manager.add_proxy_content(proxy_server)
+        await manager.add_proxy_content(proxy_server, 1)
 
         # Get the retry middleware
         retry_middleware = None
