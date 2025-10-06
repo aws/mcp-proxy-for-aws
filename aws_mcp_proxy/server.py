@@ -54,9 +54,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     profile = args.profile
 
     # Log server configuration
-    logger.info(
-        'Using service: %s, region: %s, profile: %s', service, region, profile or 'default'
-    )
+    logger.info('Using service: %s, region: %s, profile: %s', service, region, profile)
     logger.info('Running in MCP mode')
 
     # Create transport with SigV4 authentication
@@ -101,13 +99,13 @@ Examples:
     parser.add_argument(
         '--profile',
         help='AWS profile to use (uses AWS_PROFILE environment variable if not provided)',
-        default=os.getenv('AWS_PROFILE', 'default'),
+        default=os.getenv('AWS_PROFILE'),
     )
 
     parser.add_argument(
         '--region',
-        help='AWS region to use (uses AWS_REGION if not provided)',
-        default=os.getenv('AWS_REGION', 'default'),
+        help='AWS region to use (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
+        default=os.getenv('AWS_REGION', 'us-east-1'),
     )
 
     parser.add_argument(
