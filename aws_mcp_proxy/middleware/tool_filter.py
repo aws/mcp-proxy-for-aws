@@ -26,17 +26,23 @@ class ToolFilteringMiddleware(Middleware):
     async def on_list_tools(self, context: MiddlewareContext, call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]]):
         # Get list of FastMCP Components
         tools = await call_next(context)
+        self.logger.info(f'Filtering tools for read only: {self.read_only}')
+        
+        # If not read only, return the list of tools as is
+        if not self.read_only:
+            return tools 
+        
         filtered_tools = []
         for tool in tools:
             # Check the tool annotations and disable if needed
             annotations = tool.annotations
-            if self.read_only:
-                # In readOnly mode, skip the tools with no readOnlyHint=True annotation
-                read_only_hint = getattr(annotations, 'readOnlyHint', False)
-                if not read_only_hint:
-                    # Skip tools that don't have readOnlyHint=True
-                    self.logger.info(f'Skipping tool {tool.name} needing write permissions')
-                    continue
+        
+            # Skip the tools with no readOnlyHint=True annotation
+            read_only_hint = getattr(annotations, 'readOnlyHint', False)
+            if not read_only_hint:
+                # Skip tools that don't have readOnlyHint=True
+                self.logger.info(f'Skipping tool {tool.name} needing write permissions')
+                continue
 
             filtered_tools.append(tool)
 
