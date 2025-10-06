@@ -1,12 +1,10 @@
-# AWS  aws-mcp-proxy MCP Server
+# README: AWS MCP Proxy
 
-AWS  MCP Proxy Server
+AWS MCP Proxy Server
 
 ## Overview
 
-The AWS MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS services.
-
-- **MCP Mode (Default)**: Direct connection to a single MCP backend server using JSON-RPC protocol
+The AWS MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers. 
 
 The proxy handles SigV4 authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want direct service access without complex gateway setups.
 
@@ -15,36 +13,67 @@ The proxy handles SigV4 authentication using local AWS credentials and provides 
 * [Install Python 3.10+](https://www.python.org/downloads/release/python-3100/)
 * [Install the `uv` package manager](https://docs.astral.sh/uv/getting-started/installation/)
 * [Install and configure the AWS CLI with credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+* [Install Docker Desktop](https://www.docker.com/products/docker-desktop) (optional, for Docker usage)
 
-## Getting Started
+## Installation
 
-### Quick start
+### Using PyPi
 
-```bash
-uv run aws_mcp_proxy/server.py <a sigv4 mcp>
+*Note: will work after publishing to PyPi*
+
+```
+# Run the server 
+aws-mcp-proxy <SigV4 MCP endpoint URL>
 ```
 
-#### Details
+### Using Local Repository
 
-MCP mode provides a streamlined connection to a single backend MCP server.
+```
+git clone https://github.com/aws/aws-mcp-proxy.git
+cd aws-mcp-proxy
+uv run aws_mcp_proxy/server.py <SigV4 MCP endpoint URL>
+```
 
-#### 1. Configure MCP Client
+### Using Docker
 
-Add this to your MCP client configuration, replacing env variables to match the AWS credentials and region you want to use:
+```
+# Build the Docker image
+docker build -t aws-mcp-proxy .
+```
 
-Optional arguments you can add:
-- `--service`: AWS service name for SigV4 signing (inferred from endpoint if not provided)
-- `--profile`: AWS profile to use (uses AWS_PROFILE environment variable if not provided)
-- `--read-only`: Disable tools which require write permissions. (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))
-- `--retries`: Configures number of retries done when calling upstream services, setting this to 0 disables retries.
+## Configuration Parameters
 
-NOTE: `remote-server-url` should be your remote mcp server's URL (including the `/mcp` part). `service-code` should be the service code for the MCP to be connected.
+|Parameter	|Description	|Default	|Required	|
+|---	|---	|---	|---	|
+|`endpoint`	|MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	|N/A	|Yes	|
+|---	|---	|---	|---	|
+|`--service`	|AWS service name for SigV4 signing	|Inferred from endpoint if not provided	|No	|
+|`--profile`	|AWS profile for AWS credentials to use	|Uses `AWS_PROFILE` environment variable if not set, defaults to `default`	|No	|
+|`--region`	|AWS region to use	|Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	|No	|
+|`--read-only`	|Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))|`True`	|No	|
+| `--retries` |Configures number of retries done when calling upstream services, setting this to 0 disables retries. | 0 |No |
+|`--log-level`	|Set the logging level (`DEBUG/INFO/WARNING/ERROR/CRITICAL`)	|`INFO`	|No	|
 
-Example with all options
-```json
+## Optional Environment Variables
+
+Set the environment variables for the AWS MCP Proxy:
+
+```
+export AWS_PROFILE=<YOUR AWS PROFILE>
+export AWS_REGION=<AWS-REGION>
+```
+
+## Setup Examples
+
+Add the following configuration to your MCP client config file (e.g., for Amazon Q Developer CLI, edit `~/.aws/amazonq/mcp.json`):
+**Note** Add your own endpoint by replacing  `<SigV4 MCP endpoint URL>`
+
+### Running from local - using uv
+
+```
 {
   "mcpServers": {
-    "aws.aws-mcp-proxy": {
+    "aws-mcp-proxy": {
       "disabled": false,
       "type": "stdio",
       "command": "uv",
@@ -52,71 +81,56 @@ Example with all options
         "--directory",
         "/path/to/aws_mcp_proxy",
         "run",
-        "aws_mcp_proxy/server.py",
-        "<remote-server-url>",
+        "server.py",
+        "<SigV4 MCP endpoint URL>",
         "--service",
-        "<service-code>",
+        "<your service code>",
         "--profile",
         "default",
-        "--read-only"
+        "--region",
+        "us-east-1",
+        "--read-only",
+        "--log-level",
+        "INFO",
       ]
     }
   }
 }
 ```
 
-#### 2. Backend Server Configuration
+### Using Docker
 
-In MCP mode, the backend server is configured directly through command-line arguments:
+```
+{
+  "mcpServers": {
+    "aws-mcp-proxy": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--volume",
+        "/full/path/to/.aws:/app/.aws:ro",
+        "aws-mcp-proxy",
+        "<SigV4 MCP endpoint URL>"
+      ],
+      "env": {}
+    }
+  }
+}
+```
 
-* `endpoint`: The MCP endpoint URL (required, first positional argument)
-* `--service`: AWS service name for SigV4 signing (optional, inferred from endpoint if not provided)
-* `--profile`: AWS profile to use (optional, uses AWS_PROFILE environment variable if not provided)
+## Development & Contributing
 
-The proxy will automatically connect to the specified backend MCP server and discover available tools.
+For development setup, testing, and contribution guidelines, see:
 
-### Tool Discovery and Updates
+* [DEVELOPMENT.md](DEVELOPMENT.md) - Development environment setup and testing
+* [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute to this project
 
-The proxy automatically manages tool discovery and updates:
+## License
 
-1. **MCP Mode**: Connects directly to the backend MCP server and discovers available tools
-3. **Dynamic Updates**: Automatically checks for tool updates when tools are called - Currently not implemented for MCP (default) mode.
-4. **Validation**: Ensures tool parameters match the current specification
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License").
 
-**Note**: Currently, a limited number of MCP clients (such as Amazon Q CLI) support automatic refresh of tool lists. In most cases, clients do not handle the `notifications/tools/list_changed` message by making a new `tools/list` call to refresh the tool list. The server needs to be refreshed manually in order for them to pick up changes.
+## Disclaimer
 
-## TODO (REMOVE AFTER COMPLETING)
-
-* [ ] Add your own tool(s) following the [DESIGN_GUIDELINES.md](https://github.com/aws/mcp/blob/main/DESIGN_GUIDELINES.md)
-* [ ] Keep test coverage at or above the `main` branch - NOTE: GitHub Actions run this command for CodeCov metrics `uv run --frozen pytest --cov --cov-branch --cov-report=term-missing`
-* [ ] Document the MCP Server in this "README.md"
-* [ ] Add a section for this aws-mcp-proxy MCP Server at the top level of this repository "../../README.md"
-* [ ] Create the "../../doc/servers/aws-mcp-proxy.md" file with these contents:
-
-    ```markdown
-    ---
-    title: aws-mcp-proxy MCP Server
-    ---
-
-    {% include "../../src/aws-mcp-proxy/README.md" %}
-    ```
-
-* [ ] Reference within the "../../doc/index.md" like this:
-
-    ```markdown
-    ### aws-mcp-proxy MCP Server
-
-    AWS MCP Proxy Server
-
-    **Features:**
-
-    - Feature one
-    - Feature two
-    - ...
-
-    Instructions for using this aws-mcp-proxy MCP server. This can be used by clients to improve the LLM's understanding of available tools, resources, etc. It can be thought of like a 'hint' to the model. For example, this information MAY be added to the system prompt. Important to be clear, direct, and detailed.
-
-    [Learn more about the aws-mcp-proxy MCP Server](servers/aws-mcp-proxy.md)
-    ```
-
-* [ ] Submit a PR and pass all the checks
+This aws-mcp-proxy package is provided "as is" without warranty of any kind, express or implied, and is intended for development, testing, and evaluation purposes only. We do not provide any guarantee on the quality, performance, or reliability of this package. LLMs are non-deterministic and they make mistakes, we advise you to always thoroughly test and follow the best practices of your organization before using these tools on customer facing accounts. Users of this package are solely responsible for implementing proper security controls and MUST use AWS Identity and Access Management (IAM) to manage access to AWS resources. You are responsible for configuring appropriate IAM policies, roles, and permissions, and any security vulnerabilities resulting from improper IAM configuration are your sole responsibility. By using this package, you acknowledge that you have read and understood this disclaimer and agree to use the package at your own risk.
