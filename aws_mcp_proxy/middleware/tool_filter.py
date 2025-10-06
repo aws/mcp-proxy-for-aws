@@ -21,7 +21,7 @@ from collections.abc import Callable, Awaitable
 class ToolFilteringMiddleware(Middleware): 
     def __init__(self, read_only: bool, logger: logging.Logger | None = None):
         self.read_only = read_only 
-        self.logger = logger or logging.getLogger("fastmcp.errors") 
+        self.logger = logger or logging.getLogger(__name__) 
     
     async def on_list_tools(self, context: MiddlewareContext, call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]]):
         # Get list of FastMCP Components
