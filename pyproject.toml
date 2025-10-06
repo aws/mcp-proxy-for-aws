@@ -138,6 +138,8 @@ packages = ["aws_mcp_proxy"]
 exclude_dirs = ["venv", ".venv", "tests"]
 
 [tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"

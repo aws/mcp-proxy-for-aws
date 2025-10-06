@@ -69,3 +69,6 @@ build
 
 # Documentation
 /doc/_apidoc/
+
+# Ignoring AgentCore config files for Simple MCP Server
+/tests/integ/mcp/simple_mcp_server/*
