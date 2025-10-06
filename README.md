@@ -36,6 +36,7 @@ Optional arguments you can add:
 - `--service`: AWS service name for SigV4 signing (inferred from endpoint if not provided)
 - `--profile`: AWS profile to use (uses AWS_PROFILE environment variable if not provided)
 - `--read-only`: Disable tools which require write permissions. (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))
+- `--retries`: Configures number of retries done when calling upstream services, setting this to 0 disables retries.
 
 NOTE: `remote-server-url` should be your remote mcp server's URL (including the `/mcp` part). `service-code` should be the service code for the MCP to be connected.
 
