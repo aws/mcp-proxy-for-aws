@@ -18,8 +18,15 @@ If your change doesn't seem to apply, please leave them unchecked.
 * [ ] Changes are documented
 
 Is this a breaking change? (Y/N)
+
 * [ ] Yes
 * [ ] No
+
+Please add details about how this change was tested.
+
+- [ ] Did integration tests succeed?
+- [ ] If the feature is a new use case, is it necessary to add a new integration test case?
+
 
 ## Acknowledgment
 
