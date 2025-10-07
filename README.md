@@ -13,7 +13,7 @@ The proxy handles SigV4 authentication using local AWS credentials and provides 
 * [Install Python 3.10+](https://www.python.org/downloads/release/python-3100/)
 * [Install the `uv` package manager](https://docs.astral.sh/uv/getting-started/installation/)
 * [Install and configure the AWS CLI with credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
-* [Install Docker Desktop](https://www.docker.com/products/docker-desktop) (optional, for Docker usage)
+* (Optional, for docker users) [Install Docker Desktop](https://www.docker.com/products/docker-desktop)
 
 ## Installation
 
@@ -23,7 +23,7 @@ The proxy handles SigV4 authentication using local AWS credentials and provides 
 
 ```
 # Run the server
-aws-mcp-proxy <SigV4 MCP endpoint URL>
+uvx aws-mcp-proxy <SigV4 MCP endpoint URL>
 ```
 
 ### Using Local Repository
@@ -48,9 +48,9 @@ docker build -t aws-mcp-proxy .
 |`endpoint`	|MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	|N/A	|Yes	|
 |---	|---	|---	|---	|
 |`--service`	|AWS service name for SigV4 signing	|Inferred from endpoint if not provided	|No	|
-|`--profile`	|AWS profile for AWS credentials to use	|Uses `AWS_PROFILE` environment variable if not set, defaults to `default`	|No	|
+|`--profile`	|AWS profile for AWS credentials to use	|Uses `AWS_PROFILE` environment variable if not set|No	|
 |`--region`	|AWS region to use	|Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	|No	|
-|`--read-only`	|Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))|`True`	|No	|
+|`--read-only`	|Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))|`False`	|No	|
 | `--retries` |Configures number of retries done when calling upstream services, setting this to 0 disables retries. | 0 |No |
 |`--log-level`	|Set the logging level (`DEBUG/INFO/WARNING/ERROR/CRITICAL`)	|`INFO`	|No	|
 
@@ -59,8 +59,16 @@ docker build -t aws-mcp-proxy .
 Set the environment variables for the AWS MCP Proxy:
 
 ```
-export AWS_PROFILE=<YOUR AWS PROFILE>
-export AWS_REGION=<AWS-REGION>
+# Credentials through profile
+export AWS_PROFILE=<aws_profile>
+
+# Credentials through parameters
+export AWS_ACCESS_KEY_ID=<access_key_id>
+export AWS_SECRET_ACCESS_KEY=<secret_access_key>
+export AWS_SESSION_TOKEN=<session_token>
+
+# AWS Region
+export AWS_REGION=<aws_region>
 ```
 
 ## Setup Examples
