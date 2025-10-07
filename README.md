@@ -1,4 +1,4 @@
-# README: AWS MCP Proxy
+# AWS MCP Proxy
 
 AWS MCP Proxy Server
 
@@ -6,7 +6,7 @@ AWS MCP Proxy Server
 
 The AWS MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers.
 
-The proxy handles SigV4 authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want direct service access without complex gateway setups.
+The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want direct service access without complex gateway setups.
 
 ## Prerequisites
 
@@ -81,7 +81,7 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 ```
 {
   "mcpServers": {
-    "aws-mcp-proxy": {
+    "<mcp server name>": {
       "disabled": false,
       "type": "stdio",
       "command": "uv",
@@ -111,7 +111,7 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 ```
 {
   "mcpServers": {
-    "aws-mcp-proxy": {
+    "<mcp server name>": {
       "command": "docker",
       "args": [
         "run",
@@ -133,6 +133,12 @@ For development setup, testing, and contribution guidelines, see:
 
 * [DEVELOPMENT.md](DEVELOPMENT.md) - Development environment setup and testing
 * [CONTRIBUTING.md](CONTRIBUTING.md) - How to contribute to this project
+
+Resources to understand SigV4:
+
+- <https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html>
+- SigV4: <https://github.com/boto/botocore/blob/develop/botocore/signers.py>
+- SigV4a: <https://github.com/aws-samples/sigv4a-signing-examples/blob/main/python/sigv4a_sign.py>
 
 ## License
 
