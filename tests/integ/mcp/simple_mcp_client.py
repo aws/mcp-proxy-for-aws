@@ -51,6 +51,12 @@ def _build_mcp_config(endpoint: str, region_name: str):
 
     return {
         'command': 'aws-mcp-proxy',
-        'args': [endpoint, '--log-level', 'DEBUG'],
+        'args': [
+            endpoint,
+            '--log-level',
+            'DEBUG',
+            '--region',
+            region_name,
+        ],
         'env': environment_variables,
     }
