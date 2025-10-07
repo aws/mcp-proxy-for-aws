@@ -15,9 +15,16 @@
 """Tests for the aws-mcp-proxy Server."""
 
 import pytest
-from aws_mcp_proxy.server import main, parse_args, setup_mcp_mode
+from aws_mcp_proxy.server import (
+    add_retry_middleware,
+    add_tool_filtering_middleware,
+    main,
+    parse_args,
+    setup_mcp_mode,
+)
 from aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from aws_mcp_proxy.utils import determine_service_name
+from fastmcp.server.server import FastMCP
 from unittest.mock import AsyncMock, Mock, patch
 
 
@@ -26,10 +33,22 @@ class TestServer:
 
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode(self, mock_as_proxy, mock_create_transport):
+    @patch('aws_mcp_proxy.server.determine_aws_region')
+    @patch('aws_mcp_proxy.server.determine_service_name')
+    @patch('aws_mcp_proxy.server.add_tool_filtering_middleware')
+    @patch('aws_mcp_proxy.server.add_retry_middleware')
+    async def test_setup_mcp_mode(
+        self,
+        mock_add_retry,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
         """Test that MCP mode is set up correctly."""
         # Arrange
-        mock_mcp = Mock()
+        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
@@ -37,6 +56,10 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
+
+        # Mock return values
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-east-1'
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -46,25 +69,46 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(mock_mcp, mock_args)
+        await setup_mcp_mode(local_mcp, mock_args)
 
         # Assert
-        mock_create_transport.assert_called_once()
+        mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
+        mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
+        mock_create_transport.assert_called_once_with(
+            'https://test.example.com', 'test-service', 'us-east-1', None
+        )
         mock_as_proxy.assert_called_once_with(mock_transport)
+        mock_add_filtering.assert_called_once_with(mock_proxy, True)
+        mock_add_retry.assert_called_once_with(mock_proxy, 1)
+        mock_proxy.run_async.assert_called_once()
 
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode_with_tools(self, mock_as_proxy, mock_create_transport):
-        """Test that MCP mode registers tools correctly."""
+    @patch('aws_mcp_proxy.server.determine_aws_region')
+    @patch('aws_mcp_proxy.server.determine_service_name')
+    @patch('aws_mcp_proxy.server.add_tool_filtering_middleware')
+    async def test_setup_mcp_mode_no_retries(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
+        """Test that MCP mode setup without retries doesn't add retry middleware."""
         # Arrange
-        mock_mcp = Mock()
+        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
-        mock_args.profile = None
-        mock_args.read_only = True
-        mock_args.retries = 1
+        mock_args.profile = 'test-profile'
+        mock_args.read_only = False
+        mock_args.retries = 0  # No retries
+
+        # Mock return values
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-east-1'
 
         # Mock the transport and proxy
         mock_transport = Mock()
@@ -74,17 +118,88 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(mock_mcp, mock_args)
+        await setup_mcp_mode(local_mcp, mock_args)
 
         # Assert
-        mock_create_transport.assert_called_once()
+        mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
+        mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
+        mock_create_transport.assert_called_once_with(
+            'https://test.example.com', 'test-service', 'us-east-1', 'test-profile'
+        )
         mock_as_proxy.assert_called_once_with(mock_transport)
+        mock_add_filtering.assert_called_once_with(mock_proxy, False)
+        mock_proxy.run_async.assert_called_once()
+
+    def test_add_tool_filtering_middleware(self):
+        """Test that tool filtering middleware is added correctly."""
+        # Arrange
+        mock_mcp = Mock()
+
+        # Act
+        add_tool_filtering_middleware(mock_mcp, read_only=True)
+
+        # Assert
+        mock_mcp.add_middleware.assert_called_once()
+        # Verify that the middleware added is a ToolFilteringMiddleware
+        call_args = mock_mcp.add_middleware.call_args[0][0]
+        from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
+
+        assert isinstance(call_args, ToolFilteringMiddleware)
+        assert call_args.read_only is True
+
+    def test_add_retry_middleware(self):
+        """Test that retry middleware is added correctly."""
+        # Arrange
+        mock_mcp = Mock()
+
+        # Act
+        add_retry_middleware(mock_mcp, retries=5)
+
+        # Assert
+        mock_mcp.add_middleware.assert_called_once()
+        # Verify that the middleware added is a RetryMiddleware
+        call_args = mock_mcp.add_middleware.call_args[0][0]
+        from fastmcp.server.middleware.error_handling import RetryMiddleware
+
+        assert isinstance(call_args, RetryMiddleware)
 
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):
         """Test parse_args with default arguments."""
         args = parse_args()
         assert args.endpoint == 'https://test.example.com'
+        assert args.service is None
+        assert args.region is None
+        assert args.profile is None
+        assert args.read_only is False
+        assert args.log_level == 'INFO'
+        assert args.retries == 0
+
+    @patch(
+        'sys.argv',
+        [
+            'test',
+            'https://test.example.com',
+            '--service',
+            'custom-service',
+            '--region',
+            'us-west-2',
+            '--read-only',
+            '--log-level',
+            'DEBUG',
+            '--retries',
+            '5',
+        ],
+    )
+    def test_parse_args_custom(self):
+        """Test parse_args with custom arguments."""
+        args = parse_args()
+        assert args.endpoint == 'https://test.example.com'
+        assert args.service == 'custom-service'
+        assert args.region == 'us-west-2'
+        assert args.read_only is True
+        assert args.log_level == 'DEBUG'
+        assert args.retries == 5
 
     @patch('aws_mcp_proxy.server.asyncio.run')
     @patch('sys.argv', ['test', 'https://test.example.com'])

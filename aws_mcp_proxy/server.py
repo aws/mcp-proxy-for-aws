@@ -47,9 +47,11 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Validate and determine service
     service = determine_service_name(args.endpoint, args.service)
+    logger.debug('Using service: %s', service)
 
     # Validate and determine region
     region = determine_aws_region(args.endpoint, args.region)
+    logger.debug('Using region: %s', region)
 
     # Get profile
     profile = args.profile
@@ -134,7 +136,7 @@ Examples:
     parser.add_argument(
         '--region',
         help='AWS region to use (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
-        default=os.getenv('AWS_REGION', 'us-east-1'),
+        default=None,
     )
 
     parser.add_argument(

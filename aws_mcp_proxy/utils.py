@@ -15,11 +15,16 @@
 """Utility functions for the AWS MCP Proxy."""
 
 import httpx
+import logging
+import os
 import re
 from aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from fastmcp.client.transports import StreamableHttpTransport
 from typing import Dict, Optional
 from urllib.parse import urlparse
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_transport_with_sigv4(
@@ -92,7 +97,7 @@ def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
     return determined_service
 
 
-def determine_aws_region(endpoint: str, region: Optional[str] = None) -> str:
+def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
     """Validate and determine the AWS region.
 
     Args:
@@ -106,6 +111,7 @@ def determine_aws_region(endpoint: str, region: Optional[str] = None) -> str:
         ValueError: If region cannot be determined
     """
     if region:
+        logger.debug('Region determined through explicit parameter')
         return region
 
     # Parse AWS region from endpoint URL
@@ -114,11 +120,16 @@ def determine_aws_region(endpoint: str, region: Optional[str] = None) -> str:
 
     # Extract region name (pattern: service.region.api.aws or service-name.region.api.aws)
     region_match = re.search(r'\.([a-z0-9-]+)\.api\.aws', hostname)
-    determined_region = region_match.group(1) if region_match else None
+    if region_match:
+        logger.debug('Region determined through endpoint URL')
+        return region_match.group(1)
 
-    if not determined_region:
-        raise ValueError(
-            f"Could not determine AWS region from endpoint '{endpoint}'. "
-            'Please provide the region explicitly using --region argument.'
-        )
-    return determined_region
+    environment_region = os.getenv('AWS_REGION')
+    if environment_region:
+        logger.debug('Region determined through environment variable')
+        return environment_region
+
+    raise ValueError(
+        f"Could not determine AWS region from endpoint '{endpoint}' or from environment variable AWS_REGION. "
+        'Please provide the region explicitly using --region argument.'
+    )
