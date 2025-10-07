@@ -153,7 +153,8 @@ class TestValidateRequiredArgs:
 class TestDetermineRegion:
     """Test cases for determine_aws_region function."""
 
-    def test_determine_region_with_region(self):
+    @patch('os.getenv')
+    def test_determine_region_with_region(self, mock_getenv):
         """Test determination when region is provided."""
         endpoint = 'https://mcp.us-east-1.api.aws/mcp'
         region = 'custom-region'
@@ -161,32 +162,57 @@ class TestDetermineRegion:
         result = determine_aws_region(endpoint, region)
 
         assert result == region
+        # Environment variable should not be checked when region is provided
+        mock_getenv.assert_not_called()
 
-    def test_determine_region_without_region_success(self):
+    @patch('os.getenv')
+    def test_determine_region_without_region_success(self, mock_getenv):
         """Test determination when region is not provided but can be parsed."""
         endpoint = 'https://mcp.us-east-1.api.aws/mcp'
         expected_region = 'us-east-1'
+        mock_getenv.return_value = None
 
-        result = determine_aws_region(endpoint)
+        result = determine_aws_region(endpoint, None)
 
         assert result == expected_region
+        # Environment variable should not be checked when region can be parsed from endpoint
 
-    def test_determine_region_with_complex_service_name(self):
+    @patch('os.getenv')
+    def test_determine_region_with_complex_service_name(self, mock_getenv):
         """Test parsing region from endpoint with complex service name."""
         endpoint = 'https://eks-mcp-beta.us-west-2.api.aws/mcp'
         expected_region = 'us-west-2'
+        mock_getenv.return_value = None
 
-        result = determine_aws_region(endpoint)
+        result = determine_aws_region(endpoint, None)
 
         assert result == expected_region
+        # Environment variable should not be checked when region can be parsed from endpoint
 
-    def test_determine_region_without_region_failure(self):
+    @patch('os.getenv')
+    def test_determine_region_without_region_failure(self, mock_getenv):
         """Test determination when region cannot be determined."""
         endpoint = 'https://service.example.com'
+        mock_getenv.return_value = None
 
         with pytest.raises(ValueError) as exc_info:
-            determine_aws_region(endpoint)
+            determine_aws_region(endpoint, None)
 
         assert 'Could not determine AWS region' in str(exc_info.value)
         assert endpoint in str(exc_info.value)
         assert '--region argument' in str(exc_info.value)
+        mock_getenv.assert_called_once_with('AWS_REGION')
+
+    @patch('os.getenv')
+    def test_determine_region_from_environment(self, mock_getenv):
+        """Test determination from environment variable when endpoint doesn't contain region."""
+        # Arrange
+        endpoint = 'https://test-service.example.com'
+        mock_getenv.return_value = 'us-west-1'
+
+        # Act
+        result = determine_aws_region(endpoint, None)
+
+        # Assert
+        assert result == 'us-west-1'
+        mock_getenv.assert_called_once_with('AWS_REGION')
