@@ -27,12 +27,13 @@ import asyncio
 import logging
 import os
 from aws_mcp_proxy.logging_config import configure_logging
-from aws_mcp_proxy.mcp_proxy_manager import McpProxyManager
+from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from aws_mcp_proxy.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
 )
+from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.server import FastMCP
 from typing import Any
 
@@ -62,10 +63,38 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
+    add_tool_filtering_middleware(proxy, args.read_only)
 
-    # Use McpProxyManager to add proxy content
-    proxy_manager = McpProxyManager(local_mcp, args.read_only)
-    await proxy_manager.add_proxy_content(proxy, args.retries)
+    if args.retries:
+        add_retry_middleware(proxy, args.retries)
+
+    await proxy.run_async()
+
+
+def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
+    """Add tool filtering middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add tool filtering to
+        read_only: Whether or not to filter out tools that require write permissions
+    """
+    logger.info('Adding tool filtering middleware')
+    mcp.add_middleware(
+        ToolFilteringMiddleware(
+            read_only=read_only,
+        )
+    )
+
+
+def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
+    """Add retry with exponential backoff middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add exponential backoff to
+        retries: number of retries with which to configure the retry middleware
+    """
+    logger.info('Adding retry middleware')
+    mcp.add_middleware(RetryMiddleware(retries))
 
 
 def parse_args():
@@ -155,7 +184,6 @@ def main():
             await setup_mcp_mode(mcp, args)
 
             logger.info('Server setup complete, starting MCP server')
-            await mcp.run_async()
 
         except Exception as e:
             logger.error('Failed to start server: %s', e)

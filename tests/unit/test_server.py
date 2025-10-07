@@ -24,12 +24,9 @@ from unittest.mock import AsyncMock, Mock, patch
 class TestServer:
     """Tests for the server module."""
 
-    @patch('aws_mcp_proxy.server.McpProxyManager')
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode(
-        self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
-    ):
+    async def test_setup_mcp_mode(self, mock_as_proxy, mock_create_transport):
         """Test that MCP mode is set up correctly."""
         # Arrange
         mock_mcp = Mock()
@@ -45,12 +42,8 @@ class TestServer:
         mock_transport = Mock()
         mock_create_transport.return_value = mock_transport
         mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
         mock_as_proxy.return_value = mock_proxy
-
-        # Mock the proxy manager
-        mock_proxy_manager = Mock()
-        mock_proxy_manager.add_proxy_content = AsyncMock()
-        mock_proxy_manager_class.return_value = mock_proxy_manager
 
         # Act
         await setup_mcp_mode(mock_mcp, mock_args)
@@ -58,15 +51,10 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
-        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy, 1)
 
-    @patch('aws_mcp_proxy.server.McpProxyManager')
     @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
     @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode_with_tools(
-        self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
-    ):
+    async def test_setup_mcp_mode_with_tools(self, mock_as_proxy, mock_create_transport):
         """Test that MCP mode registers tools correctly."""
         # Arrange
         mock_mcp = Mock()
@@ -82,12 +70,8 @@ class TestServer:
         mock_transport = Mock()
         mock_create_transport.return_value = mock_transport
         mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
         mock_as_proxy.return_value = mock_proxy
-
-        # Mock the proxy manager
-        mock_proxy_manager = Mock()
-        mock_proxy_manager.add_proxy_content = AsyncMock()
-        mock_proxy_manager_class.return_value = mock_proxy_manager
 
         # Act
         await setup_mcp_mode(mock_mcp, mock_args)
@@ -95,42 +79,6 @@ class TestServer:
         # Assert
         mock_create_transport.assert_called_once()
         mock_as_proxy.assert_called_once_with(mock_transport)
-        mock_proxy_manager_class.assert_called_once_with(mock_mcp, True)
-        mock_proxy_manager.add_proxy_content.assert_called_once_with(mock_proxy, 1)
-
-    @patch('aws_mcp_proxy.server.McpProxyManager')
-    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    async def test_setup_mcp_mode_tool_registration_error(
-        self, mock_as_proxy, mock_create_transport, mock_proxy_manager_class
-    ):
-        """Test that MCP mode handles tool registration errors."""
-        # Arrange
-        mock_mcp = Mock()
-        mock_args = Mock()
-        mock_args.endpoint = 'https://test.example.com'
-        mock_args.service = 'test-service'
-        mock_args.region = 'us-east-1'
-        mock_args.profile = None
-        mock_args.read_only = True
-
-        # Mock the transport and proxy
-        mock_transport = Mock()
-        mock_create_transport.return_value = mock_transport
-        mock_proxy = Mock()
-        mock_as_proxy.return_value = mock_proxy
-
-        # Mock the proxy manager to raise an exception
-        mock_proxy_manager = Mock()
-        mock_proxy_manager.add_proxy_content = AsyncMock(
-            side_effect=Exception('Tool registration failed')
-        )
-        mock_proxy_manager_class.return_value = mock_proxy_manager
-
-        # Act & Assert - should raise exception
-        with pytest.raises(Exception) as exc_info:
-            await setup_mcp_mode(mock_mcp, mock_args)
-        assert 'Tool registration failed' in str(exc_info.value)
 
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):
