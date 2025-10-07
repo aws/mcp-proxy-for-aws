@@ -34,6 +34,7 @@ from aws_mcp_proxy.utils import (
     determine_service_name,
 )
 from fastmcp.server.middleware.error_handling import RetryMiddleware
+from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
 from typing import Any
 
@@ -65,6 +66,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
+    add_logging_middleware(proxy, args.log_level)
     add_tool_filtering_middleware(proxy, args.read_only)
 
     if args.retries:
@@ -97,6 +99,22 @@ def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
     """
     logger.info('Adding retry middleware')
     mcp.add_middleware(RetryMiddleware(retries))
+
+
+def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
+    """Add logging middleware."""
+    if log_level != 'DEBUG':
+        return
+    middleware_logger = logging.getLogger('aws-mcp-proxy-middleware-logger')
+    middleware_logger.setLevel(log_level)
+    mcp.add_middleware(
+        LoggingMiddleware(
+            logger=middleware_logger,
+            log_level=middleware_logger.level,
+            include_payloads=True,
+            include_payload_length=True,
+        )
+    )
 
 
 def parse_args():
