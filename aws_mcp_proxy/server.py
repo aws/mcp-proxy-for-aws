@@ -103,6 +103,8 @@ def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
 
 def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
     """Add logging middleware."""
+    if log_level != 'DEBUG':
+        return
     middleware_logger = logging.getLogger('aws-mcp-proxy-middleware-logger')
     middleware_logger.setLevel(log_level)
     mcp.add_middleware(
