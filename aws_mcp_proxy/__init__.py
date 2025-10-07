@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""src.aws-mcp-proxy"""
+"""aws-mcp-proxy"""
 
-__version__ = '0.1.0'
+from importlib.metadata import version as _metadata_version
+
+
+__all__ = ['__version__']
+__version__ = _metadata_version('aws-mcp-proxy')
