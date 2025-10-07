@@ -26,6 +26,7 @@ import argparse
 import asyncio
 import logging
 import os
+from aws_mcp_proxy import __version__
 from aws_mcp_proxy.logging_config import configure_logging
 from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from aws_mcp_proxy.utils import (
@@ -120,7 +121,7 @@ def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='AWS MCP Proxy Server',
+        description=f'AWS MCP Proxy v{__version__}',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
