@@ -8,7 +8,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: Describe the bug
+      label: Describe the bug (Security related? please follow <https://github.com/aws/aws-mcp-proxy/security/policy> to report them to AWS Security directly.)
       description: What is the problem? A clear and concise description of the bug.
     validations:
       required: true
