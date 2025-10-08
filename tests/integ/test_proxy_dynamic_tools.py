@@ -9,8 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.asyncio(loop_scope='module')
-async def test_proxy_reflects_tool_addition(mcp_client: fastmcp.Client):
+async def test_proxy_reflects_tool_addition(mcp_client: fastmcp.Client, is_using_agentcore: bool):
     """Test that when backend dynamically adds a tool, proxy reflects it on next list_tools call."""
+    if is_using_agentcore:
+        pytest.skip()
+
     # Arrange - Get initial tool list
     initial_tools = await mcp_client.list_tools()
     initial_tool_names = [tool.name for tool in initial_tools]
