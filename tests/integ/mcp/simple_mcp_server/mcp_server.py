@@ -22,22 +22,18 @@ def greet(name: str):
 
 ##### Dynamic Tool Testing
 
-_multiply_registered = False
-
 
 @mcp.tool
-def add_tool_multiply():
+def add_tool_multiply(ctx: Context):
     """MCP Tool used for testing dynamic tool behavior through the proxy."""
-    global _multiply_registered
-
-    if not _multiply_registered:
+    if not ctx.get_state('multiply_registered'):
 
         @mcp.tool
         def multiply(x: int, y: int):
             """Multiply two numbers."""
             return x * y
 
-        _multiply_registered = True
+        ctx.set_state('multiply_registered', True)
         return 'Tool "multiply" added successfully'
     return 'Tool "multiply" already exists'
 
