@@ -39,6 +39,7 @@ For detailed technical information, development workflow, and troubleshooting, s
 - Fix typos or broken links
 
 ## Code of Conduct
+> See [CODE_OF_CONDUCT.md](https://github.com/aws/aws-mcp-proxy/blob/main/CODE_OF_CONDUCT.md)
 
 - **Be respectful and inclusive** in all interactions
 - **Focus on constructive feedback** during code reviews
