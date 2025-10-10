@@ -23,7 +23,7 @@ The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/refer
 
 ```
 # Run the server
-uvx aws-mcp-proxy <SigV4 MCP endpoint URL>
+uvx aws-mcp-proxy@latest <SigV4 MCP endpoint URL>
 ```
 
 ### Using Local Repository
