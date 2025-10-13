@@ -13,7 +13,7 @@ These tests can be run against two types of Remote MCP Servers
 1. Hosted in Bedrock AgentCore Runtime
 1. Against a Remote URL endpoint
 
-#### Hosted in Bedrock AgentCore Runtime
+### Hosted in Bedrock AgentCore Runtime
 
 The Simple MCP Server is ready to easily install on AgentCore Bedrock. It is recommended to follow this testing path to ensure sigv4 is working correctly.
 
@@ -47,8 +47,7 @@ Run test against the AgentCore hosted MCP Server
 uv run pytest -m integ
 ```
 
-
-#### Against a Remote URL endpoint
+### Against a Remote URL endpoint
 
 To make testing locally faster, you can also run tests against a remote URL. Since this endpoint might not be hosted on AWS, the sigv4 code path might not be fully tested.
 
@@ -64,4 +63,45 @@ export REMOTE_ENDPOINT_URL=http://127.0.0.1:8000/mcp
 
 ```bash
 uv run pytest -m integ
+```
+
+## Manual CLI Testing Tool
+
+For manual testing and debugging of MCP client connectivity, a dedicated CLI tool is available at `tests/integ/manual_test.py`. This tool allows you to manually test MCP server connections outside of the automated test suite.
+
+### Purpose
+
+The manual test tool is useful for:
+- Manual testing during development
+- Debugging connection issues with specific MCP endpoints
+- Testing custom service configurations
+
+### Usage
+
+The tool supports the following command structure:
+
+```bash
+uv run python -m tests.integ.manual_test --endpoint <url> [--service <service>] [--region <region>] --list-tools
+```
+
+#### Examples
+
+**Basic usage (service inferred from endpoint):**
+```bash
+uv run python -m tests.integ.manual_test --endpoint https://my-mcp-server.amazonaws.com --list-tools
+```
+
+**With explicit service and region:**
+```bash
+uv run python -m tests.integ.manual_test --endpoint https://my-endpoint.com --service bedrock --region us-west-2 --list-tools
+```
+
+**Service override example:**
+```bash
+uv run python -m tests.integ.manual_test --endpoint https://custom-endpoint.com --service lambda --list-tools
+```
+
+**With debug logging:**
+```bash
+uv run python -m tests.integ.manual_test --endpoint https://my-endpoint.com --log-level DEBUG --list-tools
 ```

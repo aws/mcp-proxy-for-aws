@@ -3,18 +3,22 @@ import fastmcp
 import logging
 from fastmcp.client import StdioTransport
 from fastmcp.client.elicitation import ElicitResult
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
 
 
-def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
+def build_mcp_client(
+    endpoint: str, region_name: str, service: Optional[str] = None
+) -> fastmcp.Client:
     """Create a MCP Client using the aws-mcp-proxy against a remote MCP Server."""
     return fastmcp.Client(
         StdioTransport(
             **_build_mcp_config(
                 endpoint=endpoint,
                 region_name=region_name,
+                service=service,
             )
         ),
         elicitation_handler=_basic_elicitation_handler,
@@ -39,7 +43,7 @@ async def _basic_elicitation_handler(message: str, response_type: type, params, 
     raise RuntimeError(f'Unknown Response-type, rather failing - {response_type}')
 
 
-def _build_mcp_config(endpoint: str, region_name: str):
+def _build_mcp_config(endpoint: str, region_name: str, service: Optional[str] = None):
     credentials = boto3.Session().get_credentials()
 
     environment_variables = {
@@ -49,14 +53,20 @@ def _build_mcp_config(endpoint: str, region_name: str):
         'AWS_SESSION_TOKEN': credentials.token,
     }
 
+    args = [
+        endpoint,
+        '--log-level',
+        'DEBUG',
+        '--region',
+        region_name,
+    ]
+
+    # Add service parameter if provided
+    if service:
+        args.extend(['--service', service])
+
     return {
         'command': 'aws-mcp-proxy',
-        'args': [
-            endpoint,
-            '--log-level',
-            'DEBUG',
-            '--region',
-            region_name,
-        ],
+        'args': args,
         'env': environment_variables,
     }
