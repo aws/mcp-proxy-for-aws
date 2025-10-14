@@ -1,6 +1,6 @@
 # AWS MCP Proxy
 
-AWS MCP Proxy Server
+This README provides an overview and configuration information for the AWS MCP Proxy Server. You can use this project to set up and deploy to a configured AWS MCP Proxy Server.
 
 ## Overview
 
@@ -19,7 +19,7 @@ The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/refer
 
 ### Using PyPi
 
-*Note: will work after publishing to PyPi*
+*Note: The following command should run successfully after first publishing to PyPi.*
 
 ```
 # Run the server
