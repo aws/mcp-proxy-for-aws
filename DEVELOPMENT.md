@@ -106,7 +106,7 @@ npx @modelcontextprotocol/inspector uv run \
   aws_mcp_proxy/server.py \
   --endpoint <your-endpoint>
 ```
-Then click "Connect" in the opened browser window to interact with the server.
+A browser window will open automatically outside of your terminal window. Navigate to the browser window. Then click "Connect" in the opened browser window to interact with the server.
 
 #### Advanced Options
 ```bash
@@ -391,6 +391,6 @@ uv run aws_mcp_proxy/server.py --endpoint <endpoint>
 ---
 
 For questions or issues not covered in this guide, please:
-1. Check existing [GitHub Issues](../../issues)
+1. Check existing [GitHub Issues](https://github.com/aws/aws-mcp-proxy/issues)
 2. Review the [MCP Specification](https://spec.modelcontextprotocol.io/)
 3. Create a new issue with detailed information about your problem

@@ -52,7 +52,7 @@ For detailed technical information, development workflow, and troubleshooting, s
 - [ ] Read [DEVELOPMENT.md](DEVELOPMENT.md) and set up your environment
 - [ ] Create tests for new functionality
 - [ ] Ensure all tests pass locally
-- [ ] Follow [integ/README.md](/tests/integ/README.md) to run integration tests
+- [ ] Follow [integ/README.md](https://github.com/aws/aws-mcp-proxy/blob/main/tests/integ/README.md) to run integration tests
 - [ ] Run code quality tools (`ruff`, `pyright`, `pre-commit`)
 - [ ] Update documentation if needed
 
