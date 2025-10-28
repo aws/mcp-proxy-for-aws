@@ -6,7 +6,7 @@ This README provides an overview and configuration information for the AWS MCP P
 
 The AWS MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers.
 
-The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want direct service access without complex gateway setups.
+The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want access to AWS Hosted SigV4 secured MCP Servers without complex gateway setups.
 
 ## Prerequisites
 
