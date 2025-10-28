@@ -15,8 +15,8 @@
 """Tests for the tool filtering middleware."""
 
 import pytest
-from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
 from fastmcp.server.middleware import MiddlewareContext
+from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from unittest.mock import AsyncMock, Mock
 
 

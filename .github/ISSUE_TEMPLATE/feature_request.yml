@@ -8,7 +8,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: Describe the feature (Security related? please follow <https://github.com/aws/aws-mcp-proxy/security/policy> to report them to AWS Security directly.)
+      label: Describe the feature (Security related? please follow <https://github.com/aws/mcp-proxy-for-aws/security/policy> to report them to AWS Security directly.)
       description: A clear and concise description of the feature you are proposing.
     validations:
       required: true

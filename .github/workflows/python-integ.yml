@@ -41,7 +41,7 @@ jobs:
         with:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.IntegTestRoleArn }}
-          role-session-name: aws-mcp-proxy-integ-tests
+          role-session-name: mcp-proxy-for-aws-integ-tests
 
       - name: Run integration tests
         run: |

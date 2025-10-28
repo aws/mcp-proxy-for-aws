@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Logging configuration for AWS MCP Proxy."""
+"""Logging configuration for MCP Proxy for AWS."""
 
 import logging
 import sys

@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for the AWS MCP Proxy."""
+"""Utility functions for the MCP Proxy for AWS."""
 
 import httpx
 import logging
 import os
 import re
-from aws_mcp_proxy.sigv4_helper import create_sigv4_client
 from fastmcp.client.transports import StreamableHttpTransport
+from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
 from typing import Dict, Optional
 from urllib.parse import urlparse
 

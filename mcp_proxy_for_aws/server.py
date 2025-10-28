@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""AWS MCP Proxy Server entry point.
+"""MCP Proxy for AWS Server entry point.
 
 This server provides a unified interface to backend servers by:
 1. Using JSON-RPC calls to MCP endpoints for a single backend server
@@ -26,17 +26,17 @@ import argparse
 import asyncio
 import logging
 import os
-from aws_mcp_proxy import __version__
-from aws_mcp_proxy.logging_config import configure_logging
-from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
-from aws_mcp_proxy.utils import (
+from fastmcp.server.middleware.error_handling import RetryMiddleware
+from fastmcp.server.middleware.logging import LoggingMiddleware
+from fastmcp.server.server import FastMCP
+from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.logging_config import configure_logging
+from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
+from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
 )
-from fastmcp.server.middleware.error_handling import RetryMiddleware
-from fastmcp.server.middleware.logging import LoggingMiddleware
-from fastmcp.server.server import FastMCP
 from typing import Any
 
 
@@ -106,7 +106,7 @@ def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
     """Add logging middleware."""
     if log_level != 'DEBUG':
         return
-    middleware_logger = logging.getLogger('aws-mcp-proxy-middleware-logger')
+    middleware_logger = logging.getLogger('mcp-proxy-for-aws-middleware-logger')
     middleware_logger.setLevel(log_level)
     mcp.add_middleware(
         LoggingMiddleware(
@@ -121,18 +121,18 @@ def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description=f'AWS MCP Proxy v{__version__}',
+        description=f'MCP Proxy for AWS v{__version__}',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Run with your endpoint
-  aws-mcp-proxy <SigV4 MCP endpoint URL>
+  mcp-proxy-for-aws <SigV4 MCP endpoint URL>
 
   # Run with custom service and profile
-  aws-mcp-proxy <SigV4 MCP endpoint URL> --service <aws-service> --profile default
+  mcp-proxy-for-aws <SigV4 MCP endpoint URL> --service <aws-service> --profile default
 
   # Run with write permissions enabled
-  aws-mcp-proxy <SigV4 MCP endpoint URL> --read-only
+  mcp-proxy-for-aws <SigV4 MCP endpoint URL> --read-only
         """,
     )
 
@@ -189,13 +189,13 @@ def main():
 
     # Configure logging
     configure_logging(args.log_level)
-    logger.info('Starting AWS MCP Proxy Server')
+    logger.info('Starting MCP Proxy for AWS Server')
 
     # Create FastMCP instance
     mcp = FastMCP[Any](
         name='MCP Proxy',
         instructions=(
-            'AWS MCP Proxy Server that provides access to backend servers through a single interface. '
+            'MCP Proxy for AWS Server that provides access to backend servers through a single interface. '
             'This proxy handles authentication and request routing to the appropriate backend services.'
         ),
     )

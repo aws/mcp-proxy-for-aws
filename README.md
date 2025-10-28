@@ -1,10 +1,8 @@
-# AWS MCP Proxy
-
-This README provides an overview and configuration information for the AWS MCP Proxy Server. You can use this project to set up and deploy to a configured AWS MCP Proxy Server.
+# MCP Proxy for AWS
 
 ## Overview
 
-The AWS MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers.
+The MCP Proxy for AWS serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers.
 
 The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want access to AWS Hosted SigV4 secured MCP Servers without complex gateway setups.
 
@@ -19,26 +17,25 @@ The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/refer
 
 ### Using PyPi
 
-*Note: The following command should run successfully after first publishing to PyPi.*
 
 ```
 # Run the server
-uvx aws-mcp-proxy@latest <SigV4 MCP endpoint URL>
+uvx mcp-proxy-for-aws@latest <SigV4 MCP endpoint URL>
 ```
 
 ### Using Local Repository
 
 ```
-git clone https://github.com/aws/aws-mcp-proxy.git
-cd aws-mcp-proxy
-uv run aws_mcp_proxy/server.py <SigV4 MCP endpoint URL>
+git clone https://github.com/aws/mcp-proxy-for-aws.git
+cd mcp-proxy-for-aws
+uv run mcp_proxy_for_aws/server.py <SigV4 MCP endpoint URL>
 ```
 
 ### Using Docker
 
 ```
 # Build the Docker image
-docker build -t aws-mcp-proxy .
+docker build -t mcp-proxy-for-aws .
 ```
 
 ## Configuration Parameters
@@ -56,7 +53,7 @@ docker build -t aws-mcp-proxy .
 
 ## Optional Environment Variables
 
-Set the environment variables for the AWS MCP Proxy:
+Set the environment variables for the MCP Proxy for AWS:
 
 ```
 # Credentials through profile
@@ -87,7 +84,7 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/aws_mcp_proxy",
+        "/path/to/mcp_proxy_for_aws",
         "run",
         "server.py",
         "<SigV4 MCP endpoint URL>",
@@ -118,7 +115,7 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
         "--rm",
         "--volume",
         "/full/path/to/.aws:/app/.aws:ro",
-        "aws-mcp-proxy",
+        "mcp-proxy-for-aws",
         "<SigV4 MCP endpoint URL>"
       ],
       "env": {}
@@ -147,4 +144,4 @@ Licensed under the Apache License, Version 2.0 (the "License").
 
 ## Disclaimer
 
-This aws-mcp-proxy package is provided "as is" without warranty of any kind, express or implied, and is intended for development, testing, and evaluation purposes only. We do not provide any guarantee on the quality, performance, or reliability of this package. LLMs are non-deterministic and they make mistakes, we advise you to always thoroughly test and follow the best practices of your organization before using these tools on customer facing accounts. Users of this package are solely responsible for implementing proper security controls and MUST use AWS Identity and Access Management (IAM) to manage access to AWS resources. You are responsible for configuring appropriate IAM policies, roles, and permissions, and any security vulnerabilities resulting from improper IAM configuration are your sole responsibility. By using this package, you acknowledge that you have read and understood this disclaimer and agree to use the package at your own risk.
+This mcp-proxy-for-aws package is provided "as is" without warranty of any kind, express or implied, and is intended for development, testing, and evaluation purposes only. We do not provide any guarantee on the quality, performance, or reliability of this package. LLMs are non-deterministic and they make mistakes, we advise you to always thoroughly test and follow the best practices of your organization before using these tools on customer facing accounts. Users of this package are solely responsible for implementing proper security controls and MUST use AWS Identity and Access Management (IAM) to manage access to AWS resources. You are responsible for configuring appropriate IAM policies, roles, and permissions, and any security vulnerabilities resulting from improper IAM configuration are your sole responsibility. By using this package, you acknowledge that you have read and understood this disclaimer and agree to use the package at your own risk.

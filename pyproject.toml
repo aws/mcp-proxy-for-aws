@@ -1,10 +1,10 @@
 [project]
-name = "aws-mcp-proxy"
+name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
 version = "0.0.0"
 
-description = "AWS MCP Proxy Server"
+description = "MCP Proxy for AWS"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -16,7 +16,7 @@ license = {text = "Apache-2.0"}
 license-files = ["LICENSE", "NOTICE" ]
 authors = [
     {name = "Amazon Web Services"},
-    {name = "AWS MCP Proxy", email="203918161+aws-mcp@users.noreply.github.com"},# TODO
+    {name = "MCP Proxy for AWS"},
 ]
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
@@ -37,14 +37,12 @@ dev = [
 ]
 
 [project.urls]
-homepage = "https://aws.github.io/aws/"
-docs = "https://aws.github.io/aws/aws-mcp-proxy/"
-documentation = "https://aws.github.io/aws-mcp-proxy/"
-repository = "https://github.com/aws/aws-mcp-proxy.git"
-changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/src/aws-mcp-proxy/CHANGELOG.md"
+documentation = "https://github.com/aws/aws-mcp-proxy/blob/main/README.md"
+repository = "https://github.com/aws/mcp-proxy-for-aws.git"
+changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/CHANGELOG.md"
 
 [project.scripts]
-"aws-mcp-proxy" = "aws_mcp_proxy.server:main"
+"mcp-proxy-for-aws" = "mcp_proxy_for_aws.server:main"
 
 [dependency-groups]
 dev = [
@@ -118,7 +116,7 @@ line-ending = "auto"
 docstring-code-format = true
 
 [tool.pyright]
-include = ["aws_mcp_proxy", "tests"]
+include = ["mcp_proxy_for_aws", "tests"]
 exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build"]
 
 [tool.commitizen]
@@ -127,12 +125,12 @@ version = "0.1.0"
 tag_format = "v$version"
 version_files = [
     "pyproject.toml:version",
-    "aws_mcp_proxy/__init__.py:__version__"
+    "mcp_proxy_for_aws/__init__.py:__version__"
 ]
 update_changelog_on_bump = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["aws_mcp_proxy"]
+packages = ["mcp_proxy_for_aws"]
 
 [tool.bandit]
 exclude_dirs = ["venv", ".venv", "tests"]
@@ -159,4 +157,4 @@ exclude_also = [
 ]
 
 [tool.coverage.run]
-source = ["aws_mcp_proxy"]
+source = ["mcp_proxy_for_aws"]
