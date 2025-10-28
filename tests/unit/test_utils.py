@@ -30,6 +30,8 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
+        from httpx import Timeout
+
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
 
@@ -37,8 +39,9 @@ class TestCreateTransportWithSigv4:
         service = 'test-service'
         profile = 'test-profile'
         region = 'us-east-1'
+        custom_timeout = Timeout(30.0)
 
-        result = create_transport_with_sigv4(url, service, region, profile)
+        result = create_transport_with_sigv4(url, service, region, custom_timeout, profile)
 
         # Verify result is StreamableHttpTransport
         assert isinstance(result, StreamableHttpTransport)
@@ -47,8 +50,6 @@ class TestCreateTransportWithSigv4:
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
         if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
-            from httpx import Timeout
-
             factory = result.httpx_client_factory
             test_kwargs = {'headers': {'test': 'header'}, 'timeout': Timeout(30.0), 'auth': None}
             factory(**test_kwargs)
@@ -58,7 +59,7 @@ class TestCreateTransportWithSigv4:
                 profile=profile,
                 region=region,
                 headers={'test': 'header'},
-                timeout=Timeout(30.0),
+                timeout=custom_timeout,
                 auth=None,
             )
         else:
@@ -68,11 +69,14 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
+        from httpx import Timeout
+
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
         region = 'test-region'
+        custom_timeout = Timeout(60.0)
 
-        result = create_transport_with_sigv4(url, service, region)
+        result = create_transport_with_sigv4(url, service, region, custom_timeout)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
@@ -81,7 +85,12 @@ class TestCreateTransportWithSigv4:
             factory(headers=None, timeout=None, auth=None)
 
             mock_create_sigv4_client.assert_called_once_with(
-                service=service, region=region, profile=None, headers=None, timeout=None, auth=None
+                service=service,
+                region=region,
+                profile=None,
+                headers=None,
+                timeout=custom_timeout,
+                auth=None,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created

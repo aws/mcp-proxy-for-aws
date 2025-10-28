@@ -181,6 +181,7 @@ def create_sigv4_auth(service: str, region: str, profile: Optional[str] = None) 
 def create_sigv4_client(
     service: str,
     region: str,
+    timeout: Optional[httpx.Timeout] = None,
     profile: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     auth: Optional[httpx.Auth] = None,
@@ -192,6 +193,7 @@ def create_sigv4_client(
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
         region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
+        timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         auth: Auth parameter (ignored as we provide our own)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
@@ -202,7 +204,7 @@ def create_sigv4_client(
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': True,
-        'timeout': httpx.Timeout(180.0, connect=60.0, read=120.0, write=180.0),
+        'timeout': timeout,
         'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
         **kwargs,
     }
