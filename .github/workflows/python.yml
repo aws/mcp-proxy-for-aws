@@ -16,7 +16,7 @@ jobs:
     defaults:
       run:
         working-directory: .
-    name: Build AWS MCP Proxy
+    name: Build MCP Proxy for AWS
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -185,5 +185,5 @@ jobs:
       - name: Upload Software Bill of Materials
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: sbom-aws-mcp-proxy
+          name: sbom-mcp-proxy-for-aws
           path: sbom.json

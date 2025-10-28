@@ -15,19 +15,19 @@
 """Tests for utils module."""
 
 import pytest
-from aws_mcp_proxy.utils import (
+from fastmcp.client.transports import StreamableHttpTransport
+from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
 )
-from fastmcp.client.transports import StreamableHttpTransport
 from unittest.mock import MagicMock, patch
 
 
 class TestCreateTransportWithSigv4:
     """Test cases for create_transport_with_sigv4 function (line 129)."""
 
-    @patch('aws_mcp_proxy.utils.create_sigv4_client')
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
         mock_client = MagicMock()
@@ -65,7 +65,7 @@ class TestCreateTransportWithSigv4:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
 
-    @patch('aws_mcp_proxy.utils.create_sigv4_client')
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
         url = 'https://test-service.us-west-2.api.aws/mcp'

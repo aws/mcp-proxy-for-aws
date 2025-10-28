@@ -1,6 +1,6 @@
-# Contributing to AWS MCP Proxy
+# Contributing to MCP Proxy for AWS
 
-Thank you for your interest in contributing to the AWS MCP Proxy Server! We welcome contributions from the community.
+Thank you for your interest in contributing to the MCP Proxy for AWS! We welcome contributions from the community.
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ For detailed technical information, development workflow, and troubleshooting, s
 - Fix typos or broken links
 
 ## Code of Conduct
-> See [CODE_OF_CONDUCT.md](https://github.com/aws/aws-mcp-proxy/blob/main/CODE_OF_CONDUCT.md)
+> See [CODE_OF_CONDUCT.md](https://github.com/aws/mcp-proxy-for-aws/blob/main/CODE_OF_CONDUCT.md)
 
 - **Be respectful and inclusive** in all interactions
 - **Focus on constructive feedback** during code reviews
@@ -52,7 +52,7 @@ For detailed technical information, development workflow, and troubleshooting, s
 - [ ] Read [DEVELOPMENT.md](DEVELOPMENT.md) and set up your environment
 - [ ] Create tests for new functionality
 - [ ] Ensure all tests pass locally
-- [ ] Follow [integ/README.md](https://github.com/aws/aws-mcp-proxy/blob/main/tests/integ/README.md) to run integration tests
+- [ ] Follow [integ/README.md](https://github.com/aws/mcp-proxy-for-aws/blob/main/tests/integ/README.md) to run integration tests
 - [ ] Run code quality tools (`ruff`, `pyright`, `pre-commit`)
 - [ ] Update documentation if needed
 

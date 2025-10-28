@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
-    """Create a MCP Client using the aws-mcp-proxy against a remote MCP Server."""
+    """Create a MCP Client using the mcp-proxy-for-aws against a remote MCP Server."""
     return fastmcp.Client(
         StdioTransport(
             **_build_mcp_config(
@@ -50,7 +50,7 @@ def _build_mcp_config(endpoint: str, region_name: str):
     }
 
     return {
-        'command': 'aws-mcp-proxy',
+        'command': 'mcp-proxy-for-aws',
         'args': [
             endpoint,
             '--log-level',
