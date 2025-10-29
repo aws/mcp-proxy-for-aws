@@ -24,6 +24,7 @@ This server provides a unified interface to backend servers by:
 
 import argparse
 import asyncio
+import httpx
 import logging
 import os
 from fastmcp.server.middleware.error_handling import RetryMiddleware
@@ -36,6 +37,7 @@ from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
+    within_range,
 )
 from typing import Any
 
@@ -62,8 +64,15 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     logger.info('Using service: %s, region: %s, profile: %s', service, region, profile)
     logger.info('Running in MCP mode')
 
+    timeout = httpx.Timeout(
+        args.timeout,
+        connect=args.connect_timeout,
+        read=args.read_timeout,
+        write=args.write_timeout,
+    )
+
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(args.endpoint, service, region, profile)
+    transport = create_transport_with_sigv4(args.endpoint, service, region, timeout, profile)
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
@@ -178,6 +187,34 @@ Examples:
         choices=range(0, 11),
         metavar='[0-10]',
         help='Number of retries when calling endpoint mcp (default: 0) - setting this to 0 disables retries.',
+    )
+
+    parser.add_argument(
+        '--timeout',
+        type=within_range(0),
+        default=180.0,
+        help='Timeout (seconds) when connecting to endpoint (default: 180)',
+    )
+
+    parser.add_argument(
+        '--connect-timeout',
+        type=within_range(0),
+        default=60.0,
+        help='Connection timeout (seconds) when connecting to endpoint (default: 60)',
+    )
+
+    parser.add_argument(
+        '--read-timeout',
+        type=within_range(0),
+        default=120.0,
+        help='Read timeout (seconds) when connecting to endpoint (default: 120)',
+    )
+
+    parser.add_argument(
+        '--write-timeout',
+        type=within_range(0),
+        default=180.0,
+        help='Write timeout (seconds) when connecting to endpoint (default: 180)',
     )
 
     return parser.parse_args()

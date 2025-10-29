@@ -56,6 +56,12 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
+        # Add timeout parameters
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
@@ -74,9 +80,14 @@ class TestServer:
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
         mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
-        mock_create_transport.assert_called_once_with(
-            'https://test.example.com', 'test-service', 'us-east-1', None
-        )
+        # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        assert call_args[0][0] == 'https://test.example.com'
+        assert call_args[0][1] == 'test-service'
+        assert call_args[0][2] == 'us-east-1'
+        # call_args[0][3] is the Timeout object
+        assert call_args[0][4] is None  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
@@ -105,6 +116,12 @@ class TestServer:
         mock_args.profile = 'test-profile'
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
+        # Add timeout parameters
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
@@ -123,9 +140,14 @@ class TestServer:
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
         mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
-        mock_create_transport.assert_called_once_with(
-            'https://test.example.com', 'test-service', 'us-east-1', 'test-profile'
-        )
+        # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        assert call_args[0][0] == 'https://test.example.com'
+        assert call_args[0][1] == 'test-service'
+        assert call_args[0][2] == 'us-east-1'
+        # call_args[0][3] is the Timeout object
+        assert call_args[0][4] == 'test-profile'  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()

@@ -14,6 +14,7 @@
 
 """Utility functions for the MCP Proxy for AWS."""
 
+import argparse
 import httpx
 import logging
 import os
@@ -31,6 +32,7 @@ def create_transport_with_sigv4(
     url: str,
     service: str,
     region: str,
+    custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
@@ -38,8 +40,10 @@ def create_transport_with_sigv4(
     Args:
         url: The endpoint URL
         service: AWS service name for SigV4 signing
+        region: AWS region to use
+        custom_timeout: httpx.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
-        region: AWS region to use (Optional)
+
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
@@ -55,7 +59,7 @@ def create_transport_with_sigv4(
             profile=profile,
             region=region,
             headers=headers,
-            timeout=timeout,
+            timeout=custom_timeout,
             auth=auth,
         )
 
@@ -133,3 +137,35 @@ def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
         f"Could not determine AWS region from endpoint '{endpoint}' or from environment variable AWS_REGION. "
         'Please provide the region explicitly using --region argument.'
     )
+
+
+def within_range(min_value: float, max_value: Optional[float] = None):
+    """Factory function to create range validators.
+
+    Args:
+        min_value: Minimum value
+        max_value: Maximum value
+
+
+    Returns:
+        The argparse validator function
+
+    Raises:
+        argparse.ArgumentTypeError: If min and max are not within range
+    """
+
+    def validator(value):
+        try:
+            fvalue = float(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"'{value}' is not a valid integer")
+
+        if min_value is not None and fvalue < min_value:
+            raise argparse.ArgumentTypeError(f"'{value}' must be >= {min_value}")
+
+        if max_value is not None and fvalue > max_value:
+            raise argparse.ArgumentTypeError(f"'{value}' must be <= {max_value}")
+
+        return fvalue
+
+    return validator
