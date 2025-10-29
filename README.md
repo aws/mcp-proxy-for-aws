@@ -40,16 +40,21 @@ docker build -t mcp-proxy-for-aws .
 
 ## Configuration Parameters
 
-|Parameter	|Description	|Default	|Required	|
-|---	|---	|---	|---	|
-|`endpoint`	|MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	|N/A	|Yes	|
-|---	|---	|---	|---	|
-|`--service`	|AWS service name for SigV4 signing	|Inferred from endpoint if not provided	|No	|
-|`--profile`	|AWS profile for AWS credentials to use	|Uses `AWS_PROFILE` environment variable if not set|No	|
-|`--region`	|AWS region to use	|Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	|No	|
-|`--read-only`	|Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint))|`False`	|No	|
-| `--retries` |Configures number of retries done when calling upstream services, setting this to 0 disables retries. | 0 |No |
-|`--log-level`	|Set the logging level (`DEBUG/INFO/WARNING/ERROR/CRITICAL`)	|`INFO`	|No	|
+| Parameter	           | Description	                                                                                                                                                                                                                            | Default	                                                                    |Required	|
+|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|---	|
+| `endpoint`	          | MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	                                                                                                                                                            | N/A	                                                                        |Yes	|
+| ---	                 | ---	                                                                                                                                                                                                                                    | ---	                                                                        |---	|
+| `--service`	         | AWS service name for SigV4 signing	                                                                                                                                                                                                     | Inferred from endpoint if not provided	                                     |No	|
+| `--profile`	         | AWS profile for AWS credentials to use	                                                                                                                                                                                                 | Uses `AWS_PROFILE` environment variable if not set                          |No	|
+| `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	 |No	|
+| `--read-only`	       | Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint)) | `False`	                                                                    |No	|
+| `--retries`          | Configures number of retries done when calling upstream services, setting this to 0 disables retries.                                                                                                                                   | 0                                                                           |No |
+| `--log-level`	       | Set the logging level (`DEBUG/INFO/WARNING/ERROR/CRITICAL`)	                                                                                                                                                                            | `INFO`	                                                                     |No	|
+| `--timeout`	         | Set desired timeout in seconds across all operations	                                                                                                                                                                                   | 180	                                                                        |No	|
+| `--connect-timeout`	 | Set desired connect timeout in seconds	                                                                                                                                                                                                 | 60	                                                                         |No	|
+| `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
+| `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
+
 
 ## Optional Environment Variables
 
