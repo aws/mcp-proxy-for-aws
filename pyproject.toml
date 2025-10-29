@@ -2,7 +2,7 @@
 name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
-version = "0.0.0"
+version = "1.0.0"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"
@@ -121,7 +121,7 @@ exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.0"
+version_provider = "uv"
 tag_format = "v$version"
 version_files = [
     "pyproject.toml:version",
