@@ -18,7 +18,7 @@ def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
             )
         ),
         elicitation_handler=_basic_elicitation_handler,
-        timeout=10.0,  # seconds
+        timeout=30.0,  # seconds
     )
 
 
