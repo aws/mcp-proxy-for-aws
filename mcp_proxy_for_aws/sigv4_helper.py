@@ -33,10 +33,10 @@ class SigV4HTTPXAuth(httpx.Auth):
     """HTTPX Auth class that signs requests with AWS SigV4."""
 
     def __init__(
-        self,
-        credentials: Credentials,
-        service: str,
-        region: str,
+            self,
+            credentials: Credentials,
+            service: str,
+            region: str,
     ):
         """Initialize SigV4HTTPXAuth.
 
@@ -167,13 +167,54 @@ async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request
                     logger.info('Replacing non-dict _meta value with injected metadata')
                     body['params']['_meta'] = metadata
 
-                # Create new content
-                del request._content
+                # Create new content with updated metadata
                 new_content = json.dumps(body).encode('utf-8')
 
+                # Update the request with new content
                 request.stream = ByteStream(new_content)
+                request._content = new_content
+
+                # Remove old signature headers before re-signing
+                del request.headers['Content-Length']
+                del request.headers['x-amz-date']
+                del request.headers['x-amz-security-token']
+                del request.headers['authorization']
+
+                # Set the new Content-Length AFTER deleting the old one
                 request.headers['Content-Length'] = str(len(new_content))
 
+                logger.info('Headers are: %s', request.headers)
+                service = 'eks-mcp'
+                region = 'us-west-2'
+                session = create_aws_session()
+                credentials = session.get_credentials()
+                logger.info('DEBUG about to sign again: %s', credentials)
+
+                # Create headers dict for signing, removing connection header like in auth_flow
+                headers_for_signing = dict(request.headers)
+                headers_for_signing.pop('connection', None)  # Remove connection header for signing
+
+                signer = SigV4Auth(credentials, service, region)
+                aws_request = AWSRequest(
+                    method=request.method,
+                    url=str(request.url),
+                    data=request.content,
+                    headers=headers_for_signing,
+                )
+
+                # Sign the request with SigV4
+                logger.info('aws_request before signing: %s', aws_request.headers)
+                signer.add_auth(aws_request)
+                logger.info('aws_request after signing: %s', aws_request.headers)
+
+                # Update request headers with signed headers (this includes Authorization, x-amz-date, etc.)
+                request.headers['x-amz-date'] = aws_request.headers['x-amz-date']
+                request.headers['x-amz-security-token'] = aws_request.headers[
+                    'x-amz-security-token'
+                ]
+                request.headers['Authorization'] = aws_request.headers['Authorization']
+
+                logger.info('New headers: %s', request.headers)
                 logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
@@ -240,14 +281,14 @@ def create_sigv4_auth(service: str, region: str, profile: Optional[str] = None) 
 
 
 def create_sigv4_client(
-    service: str,
-    region: str,
-    timeout: Optional[httpx.Timeout] = None,
-    profile: Optional[str] = None,
-    headers: Optional[Dict[str, str]] = None,
-    auth: Optional[httpx.Auth] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    **kwargs: Any,
+        service: str,
+        region: str,
+        timeout: Optional[httpx.Timeout] = None,
+        profile: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
+        auth: Optional[httpx.Auth] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
 
