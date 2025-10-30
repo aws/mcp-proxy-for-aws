@@ -60,6 +60,7 @@ def create_transport_with_sigv4(
             region=region,
             headers=headers,
             timeout=custom_timeout,
+            metadata={'AWS_REGION': region},
             auth=auth,
         )
 
