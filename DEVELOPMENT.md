@@ -96,23 +96,21 @@ git commit -m "feat: add new feature description"
 #### Basic Local Execution
 ```bash
 # Run the server directly
-uv run mcp_proxy_for_aws/server.py --endpoint <your-endpoint>
+uv run mcp_proxy_for_aws/server.py <your-endpoint>
 ```
 
 #### With MCP Inspector (for debugging)
 ```bash
 # Run with MCP inspector for interactive debugging
 npx @modelcontextprotocol/inspector uv run \
-  mcp_proxy_for_aws/server.py \
-  --endpoint <your-endpoint>
+  mcp_proxy_for_aws/server.py <your-endpoint>
 ```
 A browser window will open automatically outside of your terminal window. Navigate to the browser window. Then click "Connect" in the opened browser window to interact with the server.
 
 #### Advanced Options
 ```bash
 # Run with specific AWS profile and write permissions
-uv run mcp_proxy_for_aws/server.py \
-  --endpoint <your-endpoint> \
+uv run mcp_proxy_for_aws/server.py <your-endpoint> \
   --service <aws-service> \
   --profile <aws-profile> \
   --allow-write
@@ -378,7 +376,7 @@ Enable debug logging for troubleshooting:
 ```bash
 # Set logging level to debug
 export LOG_LEVEL=DEBUG
-uv run mcp_proxy_for_aws/server.py --endpoint <endpoint>
+uv run mcp_proxy_for_aws/server.py <endpoint>
 ```
 
 ## Additional Resources
