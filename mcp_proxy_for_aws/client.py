@@ -25,7 +25,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from mcp.client.streamable_http import (
     GetSessionIdCallback,
     create_mcp_http_client,
-    streamablehttp_client
+    streamablehttp_client,
 )
 from mcp.shared._httpx_utils import McpHttpClientFactory
 from mcp.shared.message import SessionMessage
@@ -34,6 +34,7 @@ from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
 
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def aws_iam_mcp_client(
@@ -79,8 +80,8 @@ async def aws_iam_mcp_client(
             - get_session_id: Function to retrieve the current session ID
     """
     # Create a SigV4 authentication handler with AWS credentials
-    logger.info("Preparing AWS IAM MCP client for endpoint: %s", endpoint)
-    
+    logger.info('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
+
     kwargs = {}
     if aws_region is not None:
         kwargs['region_name'] = aws_region
@@ -92,14 +93,14 @@ async def aws_iam_mcp_client(
 
     profile = session.profile_name
     region = session.region_name
-    
-    logger.debug("AWS profile: %s", profile)
-    logger.debug("AWS region: %s", region)
-    logger.debug("AWS service: %s", aws_service)
-    
+
+    logger.debug('AWS profile: %s', profile)
+    logger.debug('AWS region: %s', region)
+    logger.debug('AWS service: %s', aws_service)
+
     # Create a SigV4 authentication handler with AWS credentials
     auth = SigV4HTTPXAuth(session.get_credentials(), aws_service, region)
-    
+
     # Establish connection using MCP SDK's streamable HTTP client
     async with streamablehttp_client(
         url=endpoint,
@@ -111,5 +112,5 @@ async def aws_iam_mcp_client(
         httpx_client_factory=httpx_client_factory,
     ) as (read_stream, write_stream, get_session_id):
         # Return transport components for external session management
-        logger.info("Successfully prepared AWS IAM MCP client for endpoint: %s", endpoint)
+        logger.info('Successfully prepared AWS IAM MCP client for endpoint: %s', endpoint)
         yield (read_stream, write_stream, get_session_id)
