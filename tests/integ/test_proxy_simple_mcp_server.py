@@ -1,6 +1,7 @@
 """Test the features about testing connecting to remote MCP Server runtime via the proxy."""
 
 import fastmcp
+import json
 import logging
 import pytest
 from mcp.types import TextContent
@@ -91,3 +92,35 @@ async def test_handle_elicitation_when_declining(
 async def test_handle_sampling(mcp_client: fastmcp.Client):
     """TODO."""
     pass
+
+
+@pytest.mark.asyncio(loop_scope='module')
+async def test_metadata_injection_aws_region(
+    mcp_client: fastmcp.Client, remote_mcp_server_configuration
+):
+    """Test that AWS_REGION is automatically injected and received by the server.
+
+    This integration test verifies the full flow:
+    1. Client makes a request through the proxy
+    2. Proxy injects AWS_REGION into the _meta field
+    3. Server receives the request with metadata
+    4. Server echoes back the metadata it received
+    5. We verify AWS_REGION was correctly transmitted
+    """
+    # Call the echo_metadata tool which returns the _meta field it received
+    actual_response = await mcp_client.call_tool('echo_metadata', {})
+
+    # Extract the response content
+    actual_text = get_text_content(actual_response)
+
+    # Parse the JSON response
+    response_data = json.loads(actual_text)
+
+    # Verify that AWS_REGION was injected and received by the server
+    assert 'received_meta' in response_data, (
+        f'Response should contain received_meta: {response_data}'
+    )
+    assert response_data['received_meta'] is not None, 'Metadata should not be None'
+    assert 'AWS_REGION' in response_data['received_meta'], (
+        f'Metadata should contain AWS_REGION: {response_data["received_meta"]}'
+    )

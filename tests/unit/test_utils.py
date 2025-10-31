@@ -61,6 +61,7 @@ class TestCreateTransportWithSigv4:
                 headers={'test': 'header'},
                 timeout=custom_timeout,
                 auth=None,
+                metadata={'AWS_REGION': region},
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -91,6 +92,7 @@ class TestCreateTransportWithSigv4:
                 headers=None,
                 timeout=custom_timeout,
                 auth=None,
+                metadata={'AWS_REGION': region},
             )
         else:
             # If we can't access the factory directly, just verify the transport was created

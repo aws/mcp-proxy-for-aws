@@ -16,10 +16,13 @@
 
 import boto3
 import httpx
+import json
 import logging
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
+from functools import partial
+from httpx._content import ByteStream
 from typing import Any, Dict, Generator, Optional
 
 
@@ -120,6 +123,68 @@ async def _handle_error_response(response: httpx.Response) -> None:
             raise e
 
 
+async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request) -> None:
+    """Request hook to inject metadata into MCP calls.
+
+    Args:
+        metadata: Dictionary of metadata to inject into _meta field
+        request: The HTTP request object
+    """
+    logger.info('=== Outgoing Request ===')
+    logger.info('URL: %s', request.url)
+    logger.info('Method: %s', request.method)
+
+    # Try to inject metadata if it's a JSON-RPC/MCP request
+    if request.content and metadata:
+        try:
+            # Parse the request body
+            body = json.loads(await request.aread())
+
+            # Check if it's a JSON-RPC request
+            if isinstance(body, dict) and 'jsonrpc' in body:
+                # Ensure params exists
+                # if 'params' not in body:
+                #     body['params'] = {}
+
+                # Ensure _meta exists in params
+                if '_meta' not in body['params']:
+                    body['params']['_meta'] = {}
+
+                # Get existing metadata
+                existing_meta = body['params']['_meta']
+
+                # Merge metadata (existing takes precedence)
+                if isinstance(existing_meta, dict):
+                    # Check for conflicting keys before merge
+                    conflicting_keys = set(metadata.keys()) & set(existing_meta.keys())
+                    if conflicting_keys:
+                        for key in conflicting_keys:
+                            logger.warning(
+                                'Metadata key "%s" already exists in _meta. '
+                                'Keeping existing value "%s", ignoring injected value "%s"',
+                                key,
+                                existing_meta[key],
+                                metadata[key],
+                            )
+                    body['params']['_meta'] = {**metadata, **existing_meta}
+                else:
+                    logger.info('Replacing non-dict _meta value with injected metadata')
+                    body['params']['_meta'] = metadata
+
+                # Create new content
+                del request._content
+                new_content = json.dumps(body).encode('utf-8')
+
+                request.stream = ByteStream(new_content)
+                request.headers['Content-Length'] = str(len(new_content))
+
+                logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            # Not a JSON request or invalid format, skip metadata injection
+            logger.error('Skipping metadata injection: %s', e)
+
+
 def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     """Create an AWS session with optional profile.
 
@@ -185,6 +250,7 @@ def create_sigv4_client(
     profile: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     auth: Optional[httpx.Auth] = None,
+    metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
@@ -196,6 +262,7 @@ def create_sigv4_client(
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         auth: Auth parameter (ignored as we provide our own)
+        metadata: Metadata to inject into MCP _meta field
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:
@@ -228,5 +295,8 @@ def create_sigv4_client(
     return httpx.AsyncClient(
         auth=sigv4_auth,
         **client_kwargs,
-        event_hooks={'response': [_handle_error_response]},
+        event_hooks={
+            'response': [_handle_error_response],
+            'request': [partial(_inject_metadata_hook, metadata or {})],
+        },
     )
