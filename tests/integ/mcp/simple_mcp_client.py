@@ -23,7 +23,7 @@ def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
 
 
 async def _basic_elicitation_handler(message: str, response_type: type, params, context):
-    logger.info(f'Server asks: {message} with response_type {response_type}')
+    logger.info('Server asks: %s with response_type %s', message, response_type)
 
     # Usually the Handler would expect an user Input to control flow via Accept, Decline, Cancel
     # But in this Integ test we only care that an Elicitation request went through the handler

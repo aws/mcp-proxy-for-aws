@@ -18,7 +18,7 @@ async def test_proxy_reflects_tool_addition(mcp_client: fastmcp.Client, is_using
     initial_tools = await mcp_client.list_tools()
     initial_tool_names = [tool.name for tool in initial_tools]
 
-    logger.info(f'Initial tools: {initial_tool_names}')
+    logger.info('Initial tools: %s', initial_tool_names)
 
     # Verify 'multiply' tool doesn't exist yet
     assert 'multiply' not in initial_tool_names, 'multiply tool should not exist initially'
@@ -26,13 +26,13 @@ async def test_proxy_reflects_tool_addition(mcp_client: fastmcp.Client, is_using
     # Act - Trigger backend to dynamically add a new tool
     logger.info('Calling add_tool_multiply to add a new tool to the backend')
     add_result = await mcp_client.call_tool('add_tool_multiply', {})
-    logger.info(f'Backend response: {add_result}')
+    logger.info('Backend response: %s', add_result)
 
     # Get updated tool list
     updated_tools = await mcp_client.list_tools()
     updated_tool_names = [tool.name for tool in updated_tools]
 
-    logger.info(f'Updated tools: {updated_tool_names}')
+    logger.info('Updated tools: %s', updated_tool_names)
 
     # Assert
     # The proxy should reflect the newly added tool
