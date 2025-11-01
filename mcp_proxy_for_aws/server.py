@@ -111,7 +111,7 @@ def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
     mcp.add_middleware(RetryMiddleware(retries))
 
 
-def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
+def add_logging_middleware(mcp: FastMCP, log_level: str) -> None:
     """Add logging middleware."""
     if log_level != 'DEBUG':
         return
