@@ -34,7 +34,7 @@ class ToolFilteringMiddleware(Middleware):
         """Filter tools based on read only flag."""
         # Get list of FastMCP Components
         tools = await call_next(context)
-        self.logger.info(f'Filtering tools for read only: {self.read_only}')
+        self.logger.info('Filtering tools for read only: %s', self.read_only)
 
         # If not read only, return the list of tools as is
         if not self.read_only:
@@ -49,7 +49,7 @@ class ToolFilteringMiddleware(Middleware):
             read_only_hint = getattr(annotations, 'readOnlyHint', False)
             if not read_only_hint:
                 # Skip tools that don't have readOnlyHint=True
-                self.logger.info(f'Skipping tool {tool.name} needing write permissions')
+                self.logger.info('Skipping tool %s needing write permissions', tool.name)
                 continue
 
             filtered_tools.append(tool)
