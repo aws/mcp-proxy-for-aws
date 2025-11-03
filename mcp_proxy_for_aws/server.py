@@ -22,22 +22,19 @@ This server provides a unified interface to backend servers by:
 5. Supporting tool refresh
 """
 
-import argparse
 import asyncio
 import httpx
 import logging
-import os
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
-from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
-    within_range,
 )
 from typing import Any
 
@@ -125,99 +122,6 @@ def add_logging_middleware(mcp: FastMCP, log_level: int) -> None:
             include_payload_length=True,
         )
     )
-
-
-def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description=f'MCP Proxy for AWS v{__version__}',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run with your endpoint
-  mcp-proxy-for-aws <SigV4 MCP endpoint URL>
-
-  # Run with custom service and profile
-  mcp-proxy-for-aws <SigV4 MCP endpoint URL> --service <aws-service> --profile default
-
-  # Run with write permissions enabled
-  mcp-proxy-for-aws <SigV4 MCP endpoint URL> --read-only
-        """,
-    )
-
-    parser.add_argument(
-        'endpoint',
-        help='SigV4 MCP endpoint URL',
-    )
-
-    parser.add_argument(
-        '--service',
-        help='AWS service name for SigV4 signing (inferred from endpoint if not provided)',
-    )
-
-    parser.add_argument(
-        '--profile',
-        help='AWS profile to use (uses AWS_PROFILE environment variable if not provided)',
-        default=os.getenv('AWS_PROFILE'),
-    )
-
-    parser.add_argument(
-        '--region',
-        help='AWS region to use (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
-        default=None,
-    )
-
-    parser.add_argument(
-        '--read-only',
-        action='store_true',
-        help='Disable tools which may require write permissions (readOnlyHint True or unknown)',
-    )
-
-    parser.add_argument(
-        '--log-level',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
-        help='Set the logging level (default: INFO)',
-    )
-
-    parser.add_argument(
-        '--retries',
-        type=int,
-        default=0,
-        choices=range(0, 11),
-        metavar='[0-10]',
-        help='Number of retries when calling endpoint mcp (default: 0) - setting this to 0 disables retries.',
-    )
-
-    parser.add_argument(
-        '--timeout',
-        type=within_range(0),
-        default=180.0,
-        help='Timeout (seconds) when connecting to endpoint (default: 180)',
-    )
-
-    parser.add_argument(
-        '--connect-timeout',
-        type=within_range(0),
-        default=60.0,
-        help='Connection timeout (seconds) when connecting to endpoint (default: 60)',
-    )
-
-    parser.add_argument(
-        '--read-timeout',
-        type=within_range(0),
-        default=120.0,
-        help='Read timeout (seconds) when connecting to endpoint (default: 120)',
-    )
-
-    parser.add_argument(
-        '--write-timeout',
-        type=within_range(0),
-        default=180.0,
-        help='Write timeout (seconds) when connecting to endpoint (default: 180)',
-    )
-
-    return parser.parse_args()
 
 
 def main():
