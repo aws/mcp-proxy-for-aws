@@ -77,7 +77,7 @@ def _build_endpoint_environment_remote_configuration():
 
     region_name = os.environ.get('AWS_REGION')
     if not region_name:
-        logger.warn('AWS_REGION param not set. Defaulting to us-east-1')
+        logger.warning('AWS_REGION param not set. Defaulting to us-east-1')
         region_name = 'us-east-1'
 
     logger.info(f'Starting server with config - {remote_endpoint_url=} and {region_name=}')

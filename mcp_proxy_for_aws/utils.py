@@ -32,6 +32,7 @@ def create_transport_with_sigv4(
     url: str,
     service: str,
     region: str,
+    forwarding_region: str,
     custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
 ) -> StreamableHttpTransport:
@@ -41,6 +42,7 @@ def create_transport_with_sigv4(
         url: The endpoint URL
         service: AWS service name for SigV4 signing
         region: AWS region to use
+        forwarding_region: AWS region to forward to server
         custom_timeout: httpx.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
 
@@ -60,7 +62,7 @@ def create_transport_with_sigv4(
             region=region,
             headers=headers,
             timeout=custom_timeout,
-            metadata={'AWS_REGION': region},
+            metadata={'AWS_REGION': forwarding_region},
             auth=auth,
         )
 

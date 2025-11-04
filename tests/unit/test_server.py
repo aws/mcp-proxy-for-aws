@@ -56,6 +56,7 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
+        mock_args.forwarding_region = None
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -86,8 +87,9 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        # call_args[0][3] is the Timeout object
-        assert call_args[0][4] is None  # profile
+        assert call_args[0][3] == 'us-east-1'  # forwarding_region (defaults to region)
+        # call_args[0][4] is the Timeout object
+        assert call_args[0][5] is None  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
@@ -116,6 +118,7 @@ class TestServer:
         mock_args.profile = 'test-profile'
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
+        mock_args.forwarding_region = 'eu-west-1'
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -146,8 +149,9 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        # call_args[0][3] is the Timeout object
-        assert call_args[0][4] == 'test-profile'  # profile
+        assert call_args[0][3] == 'eu-west-1'  # forwarding_region
+        # call_args[0][4] is the Timeout object
+        assert call_args[0][5] == 'test-profile'  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()

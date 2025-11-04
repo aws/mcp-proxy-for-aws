@@ -55,13 +55,20 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Validate and determine region
     region = determine_aws_region(args.endpoint, args.region)
+    forwarding_region = args.forwarding_region or region
     logger.debug('Using region: %s', region)
 
     # Get profile
     profile = args.profile
 
     # Log server configuration
-    logger.info('Using service: %s, region: %s, profile: %s', service, region, profile)
+    logger.info(
+        'Using service: %s, region: %s, forwarding region: %s, profile: %s',
+        service,
+        region,
+        forwarding_region,
+        profile,
+    )
     logger.info('Running in MCP mode')
 
     timeout = httpx.Timeout(
@@ -72,7 +79,9 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     )
 
     # Create transport with SigV4 authentication
-    transport = create_transport_with_sigv4(args.endpoint, service, region, timeout, profile)
+    transport = create_transport_with_sigv4(
+        args.endpoint, service, region, forwarding_region, timeout, profile
+    )
 
     # Create proxy with the transport
     proxy = FastMCP.as_proxy(transport)
@@ -163,7 +172,13 @@ Examples:
 
     parser.add_argument(
         '--region',
-        help='AWS region to use (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
+        help='AWS region to sign (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
+        default=None,
+    )
+
+    parser.add_argument(
+        '--forwarding-region',
+        help='AWS region to forward to server (uses --region if not provided)',
         default=None,
     )
 
