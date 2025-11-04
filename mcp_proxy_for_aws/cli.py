@@ -60,7 +60,13 @@ Examples:
 
     parser.add_argument(
         '--region',
-        help='AWS region to use (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
+        help='AWS region to sign (uses AWS_REGION environment variable if not provided, with final fallback to us-east-1)',
+        default=None,
+    )
+
+    parser.add_argument(
+        '--forwarding-region',
+        help='AWS region to forward to server (uses --region if not provided)',
         default=None,
     )
 

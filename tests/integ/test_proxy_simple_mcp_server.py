@@ -124,3 +124,7 @@ async def test_metadata_injection_aws_region(
     assert 'AWS_REGION' in response_data['received_meta'], (
         f'Metadata should contain AWS_REGION: {response_data["received_meta"]}'
     )
+    assert (
+        response_data['received_meta']['AWS_REGION']
+        == remote_mcp_server_configuration['region_name']
+    ), f'AWS_REGION should be {remote_mcp_server_configuration["region_name"]}'
