@@ -2,43 +2,77 @@
 
 ## Overview
 
-The MCP Proxy for AWS serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and backend AWS MCP servers.
+The **MCP Proxy for AWS** package provides two ways to connect AI applications to MCP servers on AWS:
 
-The proxy handles [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) authentication using local AWS credentials and provides dynamic tool discovery, making it ideal for developers who want access to AWS Hosted SigV4 secured MCP Servers without complex gateway setups.
+1. **MCP Proxy** - A lightweight, client-side bridge between MCP clients (AI assistants like Claude Desktop, Amazon Q Developer CLI) and MCP servers on AWS. (See [MCP Proxy](#mcp-proxy))
+2. **MCP Client Library** - A Python library to programmatically connect popular AI agent frameworks (LangChain, LlamaIndex, Strands Agents, etc.) to MCP servers on AWS. (See [MCP Client Library](#mcp-client-library))
+
+### When Do You Need This Package?
+
+- You want to connect to **MCP servers on AWS** (e.g., using Amazon Bedrock AgentCore) that use AWS IAM authentication (SigV4) instead of OAuth
+- You're using MCP clients (like Claude Desktop, Amazon Q Developer CLI) that don't natively support AWS IAM authentication
+- You're building AI agents with popular frameworks like LangChain, Strands Agents, LlamaIndex, etc., that need to connect to MCP servers on AWS
+- You want to avoid building custom SigV4 request signing logic yourself
+
+### How This Package Helps
+
+**The Problem:** The official MCP specification supports OAuth-based authentication, but MCP servers on AWS can also use AWS IAM authentication (SigV4). Standard MCP clients don't know how to sign requests with AWS credentials.
+
+**The Solution:** This package bridges that gap by:
+- **Handling SigV4 authentication automatically** - Uses your local AWS credentials (from AWS CLI, environment variables, or IAM roles) to sign all MCP requests using [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html)
+- **Providing seamless integration** - Works with existing MCP clients and frameworks
+- **Eliminating custom code** - No need to build your own MCP client with SigV4 signing logic
+
+## Which Feature Should I Use?
+
+**Use the MCP Proxy if you want to:**
+- Connect MCP clients like Claude Desktop or Amazon Q Developer CLI to MCP servers on AWS with IAM credentials
+- Add MCP servers on AWS to your AI assistant's configuration
+- Use a command-line tool that runs as a bridge between your MCP client and AWS
+
+**Use the MCP Client Library if you want to:**
+- Build AI agents programmatically using popular frameworks like LangChain, Strands Agents, or LlamaIndex
+- Integrate AWS IAM-secured MCP servers directly into your Python applications
+- Have fine-grained control over the MCP session lifecycle in your code
 
 ## Prerequisites
 
 * [Install Python 3.10+](https://www.python.org/downloads/release/python-3100/)
 * [Install the `uv` package manager](https://docs.astral.sh/uv/getting-started/installation/)
-* [Install and configure the AWS CLI with credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+* AWS credentials configured (via [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html), environment variables, or IAM roles)
 * (Optional, for docker users) [Install Docker Desktop](https://www.docker.com/products/docker-desktop)
 
-## Installation
+---
 
-### Using PyPi
+## MCP Proxy
 
+The MCP Proxy serves as a lightweight, client-side bridge between MCP clients (AI assistants and developer tools) and IAM-secured MCP servers on AWS. The proxy handles SigV4 authentication using local AWS credentials and provides dynamic tool discovery.
 
-```
+### Installation
+
+#### Using PyPi
+
+```bash
 # Run the server
 uvx mcp-proxy-for-aws@latest <SigV4 MCP endpoint URL>
 ```
 
-### Using Local Repository
+#### Using a local repository
 
-```
+```bash
 git clone https://github.com/aws/mcp-proxy-for-aws.git
 cd mcp-proxy-for-aws
 uv run mcp_proxy_for_aws/server.py <SigV4 MCP endpoint URL>
 ```
 
-### Using Docker
+#### Using Docker
 
-```
+```bash
 # Build the Docker image
 docker build -t mcp-proxy-for-aws .
 ```
 
-## Configuration Parameters
+### Configuration Parameters
 
 | Parameter	           | Description	                                                                                                                                                                                                                            | Default	                                                                    |Required	|
 |----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|---	|
@@ -55,12 +89,11 @@ docker build -t mcp-proxy-for-aws .
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 
-
-## Optional Environment Variables
+### Optional Environment Variables
 
 Set the environment variables for the MCP Proxy for AWS:
 
-```
+```bash
 # Credentials through profile
 export AWS_PROFILE=<aws_profile>
 
@@ -73,14 +106,14 @@ export AWS_SESSION_TOKEN=<session_token>
 export AWS_REGION=<aws_region>
 ```
 
-## Setup Examples
+### Setup Examples
 
 Add the following configuration to your MCP client config file (e.g., for Amazon Q Developer CLI, edit `~/.aws/amazonq/mcp.json`):
 **Note** Add your own endpoint by replacing  `<SigV4 MCP endpoint URL>`
 
-### Running from local - using uv
+#### Running from local - using uv
 
-```
+```json
 {
   "mcpServers": {
     "<mcp server name>": {
@@ -108,9 +141,9 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 }
 ```
 
-### Using Docker
+#### Using Docker
 
-```
+```json
 {
   "mcpServers": {
     "<mcp server name>": {
@@ -129,6 +162,123 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 }
 ```
 
+For additional proxy examples, see [`./examples/mcp-proxy`](./examples/mcp-proxy).
+
+---
+
+## MCP Client Library
+
+The MCP Client Library enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
+
+### Integration Patterns
+
+The library supports two integration patterns depending on your framework:
+
+#### Pattern 1: Framework-Native MCP Integration
+
+**Use with:** Frameworks that provide their own MCP client implementations accepting connection factories, e.g. Strands Agents SDK, Microsoft Agent Framework. The AWS IAM MCP Client provides the authenticated transport layer.
+
+**Example - Strands Agents SDK:**
+```python
+from mcp_proxy_for_aws.client import aws_iam_mcp_client
+
+iam_client_factory = lambda: aws_iam_mcp_client(
+    endpoint=mcp_url,    # The URL of the MCP server
+    aws_region=region,   # The region of the MCP server
+    aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
+)
+
+with MCPClient(iam_client_factory) as mcp_client:
+    mcp_tools = mcp_client.list_tools_sync()
+    agent = Agent(tools=mcp_tools, ...)
+```
+
+**Example - Microsoft Agent Framework:**
+```python
+from mcp_proxy_for_aws.client import aws_iam_mcp_client
+
+iam_client_factory = lambda: aws_iam_mcp_client(
+    endpoint=mcp_url,    # The URL of the MCP server
+    aws_region=region,   # The region of the MCP server
+    aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
+)
+
+mcp_tools = MCPStreamableHTTPTool(name="MCP Tools", url=mcp_url)
+mcp_tools.get_mcp_client = iam_client_factory
+
+async with mcp_client:
+    agent = ChatAgent(tools=mcp_tools, ...)
+```
+
+#### Pattern 2: Direct MCP Session Integration
+
+**Use with:** Frameworks that require direct access to MCP sessions, e.g. LangChain, LlamaIndex. The AWS IAM MCP Client provides the authenticated transport, and you can manually manage the MCP session lifecycle.
+
+**Example - LangChain:**
+```python
+from mcp_proxy_for_aws.client import aws_iam_mcp_client
+
+iam_client = aws_iam_mcp_client(
+    endpoint=mcp_url,    # The URL of the MCP server
+    aws_region=region,   # The region of the MCP server
+    aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
+)
+
+async with iam_client as (read, write, session_id_callback):
+    async with ClientSession(read, write) as session:
+        mcp_tools = await load_mcp_tools(session)
+        agent = create_langchain_agent(tools=mcp_tools, ...)
+```
+
+**Example - LlamaIndex:**
+```python
+from mcp_proxy_for_aws.client import aws_iam_mcp_client
+
+iam_client = aws_iam_mcp_client(
+    endpoint=mcp_url,    # The URL of the MCP server
+    aws_region=region,   # The region of the MCP server
+    aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
+)
+
+async with iam_client as (read, write, session_id_callback):
+    async with ClientSession(read, write) as session:
+        tools = await McpToolSpec(client=session).to_tool_list_async()
+        agent = ReActAgent(llm=model, tools=tools)
+```
+
+### Running Examples
+
+Explore complete working examples for different frameworks in the [`./examples/mcp-client`](./examples/mcp-client) directory:
+
+**Available examples:**
+- **[Strands Agents SDK](./examples/mcp-client/strands/)**
+- **[Microsoft Agent Framework](./examples/mcp-client/agent-framework/)**
+- **[LangChain](./examples/mcp-client/langchain/)**
+- **[LlamaIndex](./examples/mcp-client/llamaindex/)**
+
+Run examples individually:
+```bash
+cd examples/mcp-client/[framework]  # e.g. examples/mcp-client/strands
+uv run main.py
+```
+
+### Installation
+
+The client library is included when you install the package:
+
+```bash
+pip install mcp-proxy-for-aws
+```
+
+For development:
+```bash
+git clone https://github.com/aws/mcp-proxy-for-aws.git
+cd mcp-proxy-for-aws
+uv sync
+```
+
+---
+
 ## Development & Contributing
 
 For development setup, testing, and contribution guidelines, see:
@@ -138,8 +288,8 @@ For development setup, testing, and contribution guidelines, see:
 
 Resources to understand SigV4:
 
-- <https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html>
-- SigV4: <https://github.com/boto/botocore/blob/develop/botocore/signers.py>
+- SigV4 User Guide: <https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html>
+- SigV4 Signers: <https://github.com/boto/botocore/blob/develop/botocore/signers.py>
 - SigV4a: <https://github.com/aws-samples/sigv4a-signing-examples/blob/main/python/sigv4a_sign.py>
 
 ## License
