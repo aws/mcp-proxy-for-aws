@@ -243,7 +243,7 @@ iam_client = aws_iam_mcp_client(
 async with iam_client as (read, write, session_id_callback):
     async with ClientSession(read, write) as session:
         tools = await McpToolSpec(client=session).to_tool_list_async()
-        agent = ReActAgent(llm=model, tools=tools)
+        agent = ReActAgent(tools=tools, ...)
 ```
 
 ### Running Examples
