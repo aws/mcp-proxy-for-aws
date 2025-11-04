@@ -79,7 +79,6 @@ async def aws_iam_mcp_client(
             - write_stream: Async generator for sending requests to server
             - get_session_id: Function to retrieve the current session ID
     """
-    # Create a SigV4 authentication handler with AWS credentials
     logger.info('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 
     kwargs = {}
@@ -88,7 +87,6 @@ async def aws_iam_mcp_client(
     if aws_profile is not None:
         kwargs['profile_name'] = aws_profile
 
-    # Create a boto3 session with the provided arguments
     session = boto3.Session(**kwargs)
 
     profile = session.profile_name

@@ -112,7 +112,9 @@ async def test_sigv4_auth_is_created_and_used(mock_session, mock_streams, servic
                 mock_auth_cls.assert_called_once_with(
                     # Auth should be constructed with the resolved credentials, service, and region,
                     # and passed into the streamable client.
-                    mock_session.get_credentials.return_value, service_name, region
+                    mock_session.get_credentials.return_value,
+                    service_name,
+                    region,
                 )
                 assert mock_stream_client.call_args[1]['auth'] is mock_auth
 

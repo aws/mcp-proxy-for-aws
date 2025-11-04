@@ -15,12 +15,8 @@
 """mcp-proxy-for-aws"""
 
 from importlib.metadata import version as _metadata_version
-from .client import aws_iam_mcp_client
 
 
 __version__ = _metadata_version('mcp-proxy-for-aws')
 
-__all__ = [
-    '__version__',
-    'aws_iam_mcp_client',
-]
+__all__ = ['__version__']
