@@ -36,7 +36,6 @@ from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
 async def aws_iam_mcp_client(
     endpoint: str,
     aws_service: str,
@@ -100,7 +99,7 @@ async def aws_iam_mcp_client(
     auth = SigV4HTTPXAuth(session.get_credentials(), aws_service, region)
 
     # Establish connection using MCP SDK's streamable HTTP client
-    async with streamablehttp_client(
+    return streamablehttp_client(
         url=endpoint,
         auth=auth,
         headers=headers,
@@ -108,7 +107,4 @@ async def aws_iam_mcp_client(
         sse_read_timeout=sse_read_timeout,
         terminate_on_close=terminate_on_close,
         httpx_client_factory=httpx_client_factory,
-    ) as (read_stream, write_stream, get_session_id):
-        # Return transport components for external session management
-        logger.info('Successfully prepared AWS IAM MCP client for endpoint: %s', endpoint)
-        yield (read_stream, write_stream, get_session_id)
+    )
