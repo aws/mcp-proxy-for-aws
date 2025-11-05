@@ -14,14 +14,11 @@
 
 import boto3
 import logging
-
 from datetime import timedelta
-from typing import Optional
-
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
-
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -38,8 +35,7 @@ def aws_iam_mcp_client(
     terminate_on_close: bool = True,
     httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
 ):
-    """
-    Create an AWS IAM-authenticated MCP streamable HTTP client.
+    """Create an AWS IAM-authenticated MCP streamable HTTP client.
 
     This function creates a context manager for connecting to an MCP server using AWS IAM
     authentication via SigV4 signing. Use with 'async with' to manage the connection lifecycle.

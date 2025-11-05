@@ -1,5 +1,4 @@
-"""
-Example: Using MCP Proxy for AWS as a client for Strands Agent integration
+"""Example: Using MCP Proxy for AWS as a client for Strands Agent integration.
 
 This example demonstrates how to use the aws_iam_mcp_client with the Strands SDK
 to connect an AI agent to an MCP server using AWS IAM authentication.
@@ -24,11 +23,9 @@ import asyncio
 import dotenv
 import os
 from contextlib import asynccontextmanager
-
+from mcp_proxy_for_aws.client import aws_iam_mcp_client
 from strands import Agent
 from strands.tools.mcp.mcp_client import MCPClient
-
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
 
 # Load configuration from .env file (if present)
@@ -42,20 +39,19 @@ MCP_REGION = os.environ.get('MCP_SERVER_REGION')
 
 @asynccontextmanager
 async def create_agent():
-    """
-    Create a Strands agent with AWS IAM-authenticated MCP server access.
+    """Create a Strands agent with AWS IAM-authenticated MCP server access.
 
     This function demonstrates the key integration pattern:
-    1. Configure an aws_iam_mcp_client factory with the MCP server details
+    1. Define an aws_iam_mcp_client factory function with the MCP server details
     2. Initialize a Strands MCPClient with the client factory
     3. Retrieve the available tools from the MCP server
     4. Create an agent with access to those tools
     5. Return a callable interface to communicate with the agent
     """
-    # Configure the MCP client with AWS IAM authentication
-    mcp_client_factory = lambda: aws_iam_mcp_client(
-        endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
-    )
+
+    # Define MCP client factory function for AWS IAM authentication
+    def mcp_client_factory():
+        return aws_iam_mcp_client(endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE)
 
     # Create a Strands MCP client and retrieve the tools from the server
     with MCPClient(mcp_client_factory) as mcp_client:
@@ -75,7 +71,6 @@ async def create_agent():
 
 async def main():
     """Run the agent example by asking it to list its available tools."""
-
     # Validate required environment variables
     if not MCP_URL or not MCP_REGION or not MCP_SERVICE:
         raise ValueError(

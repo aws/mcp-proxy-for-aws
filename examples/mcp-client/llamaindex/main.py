@@ -1,5 +1,4 @@
-"""
-Example: Using MCP Proxy for AWS as a client for LlamaIndex Agent integration
+"""Example: Using MCP Proxy for AWS as a client for LlamaIndex Agent integration.
 
 This example demonstrates how to use the aws_iam_mcp_client with LlamaIndex
 to connect an AI agent to an MCP server using AWS IAM authentication.
@@ -22,22 +21,20 @@ MCP_SERVER_REGION=us-west-2
 OPENAI_API_KEY=sk-...
 """
 
-# Ignore Pydantic UserWarnings that are not relevant to this example
-import warnings
-
-warnings.filterwarnings('ignore', category=UserWarning, module='pydantic.*')
-
 import asyncio
 import dotenv
 import os
+import warnings
 from contextlib import asynccontextmanager
-
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.llms.openai import OpenAI
 from llama_index.tools.mcp import McpToolSpec
 from mcp.client.session import ClientSession
-
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
+
+
+# Ignore Pydantic UserWarnings that are not relevant to this example
+warnings.filterwarnings('ignore', category=UserWarning, module='pydantic.*')
 
 
 # Load configuration from .env file (if present)
@@ -57,8 +54,7 @@ OPENAI_MODEL_ID = 'gpt-4.1-mini'
 
 @asynccontextmanager
 async def create_agent():
-    """
-    Create a LlamaIndex agent with AWS IAM-authenticated MCP server access.
+    """Create a LlamaIndex agent with AWS IAM-authenticated MCP server access.
 
     This function demonstrates the key integration pattern:
     1. Configure an aws_iam_mcp_client with the MCP server details
@@ -96,7 +92,6 @@ async def create_agent():
 
 async def main():
     """Run the agent example by asking it to list its available tools."""
-
     # Validate required environment variables
     if not MCP_URL or not MCP_REGION or not MCP_SERVICE or not OPENAI_API_KEY:
         raise ValueError(

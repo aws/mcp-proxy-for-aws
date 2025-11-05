@@ -15,10 +15,9 @@
 """Unit tests for the client, parameterized by internal call."""
 
 import pytest
-
 from datetime import timedelta
-from unittest.mock import AsyncMock, Mock, patch
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from unittest.mock import AsyncMock, Mock, patch
 
 
 @pytest.fixture

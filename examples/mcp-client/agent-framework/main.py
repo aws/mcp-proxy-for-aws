@@ -1,5 +1,4 @@
-"""
-Example: Using MCP Proxy for AWS as a client for Microsoft Agent Framework integration
+"""Example: Using MCP Proxy for AWS as a client for Microsoft Agent Framework integration.
 
 This example demonstrates how to use the aws_iam_mcp_client with the Microsoft Agent Framework
 to connect an AI agent to an MCP server using AWS IAM authentication.
@@ -25,12 +24,10 @@ OPENAI_API_KEY=sk-...
 import asyncio
 import dotenv
 import os
-from contextlib import asynccontextmanager
-
 from agent_framework import ChatAgent
-from agent_framework.openai import OpenAIChatClient
 from agent_framework._mcp import MCPStreamableHTTPTool
-
+from agent_framework.openai import OpenAIChatClient
+from contextlib import asynccontextmanager
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
 
@@ -51,19 +48,18 @@ OPENAI_MODEL_ID = 'gpt-4.1-mini'
 
 @asynccontextmanager
 async def create_agent():
-    """
-    Create an Agent Framework agent with AWS IAM-authenticated MCP server access.
+    """Create an Agent Framework agent with AWS IAM-authenticated MCP server access.
 
     This function demonstrates the key integration pattern:
-    1. Configure an aws_iam_mcp_client factory with the MCP server details
+    1. Define an aws_iam_mcp_client factory function with the MCP server details
     2. Initialize an MCPStreamableHTTPTool and add the client factory
     3. Create an agent with access to the tools provided by the MCP server
     4. Return a callable interface to communicate with the agent
     """
-    # Configure the MCP client with AWS IAM authentication
-    mcp_client_factory = lambda: aws_iam_mcp_client(
-        endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
-    )
+
+    # Define MCP client factory function for AWS IAM authentication
+    def mcp_client_factory():
+        return aws_iam_mcp_client(endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE)
 
     # Create an Agent Framework MCP and add the client
     mcp_tools = MCPStreamableHTTPTool(name='MCP Tools', url=MCP_URL)
@@ -87,7 +83,6 @@ async def create_agent():
 
 async def main():
     """Run the agent example by asking it to list its available tools."""
-
     # Validate required environment variables
     if not MCP_URL or not MCP_REGION or not MCP_SERVICE or not OPENAI_API_KEY:
         raise ValueError(
