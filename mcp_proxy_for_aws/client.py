@@ -14,9 +14,12 @@
 
 import boto3
 import logging
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import GetSessionIdCallback, streamablehttp_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
+from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
 from typing import Optional
 
@@ -34,7 +37,14 @@ def aws_iam_streamablehttp_client(
     sse_read_timeout: float | timedelta = 60 * 5,
     terminate_on_close: bool = True,
     httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
-):
+) -> _AsyncGeneratorContextManager[
+    tuple[
+        MemoryObjectReceiveStream[SessionMessage | Exception],
+        MemoryObjectSendStream[SessionMessage],
+        GetSessionIdCallback,
+    ],
+    None,
+]:
     """Create an AWS IAM-authenticated MCP streamable HTTP client.
 
     This function creates a context manager for connecting to an MCP server using AWS IAM
