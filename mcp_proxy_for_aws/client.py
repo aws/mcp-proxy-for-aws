@@ -77,7 +77,12 @@ def aws_iam_mcp_client(
     session = boto3.Session(**kwargs)
 
     profile = session.profile_name
-    region: str = session.region_name
+    region = session.region_name
+
+    if not region:
+        raise ValueError(
+            'AWS region must be specified via aws_region parameter, AWS_PROFILE environment variable, or AWS config.'
+        )
 
     logger.debug('AWS profile: %s', profile)
     logger.debug('AWS region: %s', region)

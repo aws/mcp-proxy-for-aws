@@ -45,6 +45,7 @@ import os
 from contextlib import asynccontextmanager
 from langchain.agents import create_agent as create_langchain_agent
 from langchain_aws import ChatBedrock
+from langchain_core.messages import HumanMessage
 from langchain_mcp_adapters.tools import load_mcp_tools
 from mcp.client.session import ClientSession
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
@@ -91,13 +92,13 @@ async def create_agent():
 
             # Create the agent with access to the tools
             agent = create_langchain_agent(
-                model=ChatBedrock(model_id=BEDROCK_MODEL_ID), tools=mcp_tools
+                model=ChatBedrock(model=BEDROCK_MODEL_ID), tools=mcp_tools
             )
 
             # Yield a callable interface to the agent
             async def agent_callable(user_input: str) -> str:
                 """Send a message to the agent and return its response."""
-                result = await agent.ainvoke({'messages': [('user', user_input)]})
+                result = await agent.ainvoke({'messages': [HumanMessage(content=user_input)]})
                 return result['messages'][-1].content
 
             yield agent_callable
