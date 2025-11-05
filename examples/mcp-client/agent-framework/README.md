@@ -1,8 +1,8 @@
 # Example: Microsoft Agent Framework
 
-This example demonstrates how to use `aws_iam_mcp_client` from `mcp-proxy-for-aws` to connect a [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) agent to an MCP server using AWS IAM authentication.
+This example demonstrates how to use `aws_iam_streamablehttp_client` from `mcp-proxy-for-aws` to connect a [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/) agent to an MCP server using AWS IAM authentication.
 
-**Note:** Microsoft Agent Framework accepts a factory function that returns an MCP client. The `aws_iam_mcp_client` is passed as a factory to the framework's `MCPStreamableHTTPTool`, which handles the connection lifecycle internally.
+**Note:** Microsoft Agent Framework accepts a factory function that returns an MCP client. The `aws_iam_streamablehttp_client` is passed as a factory to the framework's `MCPStreamableHTTPTool`, which handles the connection lifecycle internally.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ The agent will connect to the MCP server and list its available tools.
 ## How It Works
 
 1. **Loads configuration** from environment variables or `.env` file
-3. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_mcp_client()`
+3. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_streamablehttp_client()`
 4. **Integrates with Agent Framework** by configuring `MCPStreamableHTTPTool.get_mcp_client`
 5. **Creates an agent** with access to the MCP server tools
 6. **Runs the agent** to demonstrate tool discovery and usage

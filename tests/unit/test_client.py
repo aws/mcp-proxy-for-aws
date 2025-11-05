@@ -16,7 +16,7 @@
 
 import pytest
 from datetime import timedelta
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from unittest.mock import AsyncMock, Mock, patch
 
 
@@ -55,7 +55,7 @@ async def test_boto3_session_parameters(
     mock_session, mock_streams, aws_region, aws_profile, expected_kwargs
 ):
     """Test the correctness of boto3.Session parameters: region and profile."""
-    # Validate that aws_iam_mcp_client passes region/profile correctly to boto3.Session.
+    # Validate that aws_iam_streamablehttp_client passes region/profile correctly to boto3.Session.
     mock_read, mock_write, mock_get_session = mock_streams
 
     with patch('boto3.Session', return_value=mock_session) as mock_boto:
@@ -65,7 +65,7 @@ async def test_boto3_session_parameters(
             )
             mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            async with aws_iam_mcp_client(
+            async with aws_iam_streamablehttp_client(
                 endpoint='https://test.example.com/mcp',
                 aws_service='bedrock-agentcore',
                 aws_region=aws_region,
@@ -101,7 +101,7 @@ async def test_sigv4_auth_is_created_and_used(mock_session, mock_streams, servic
                 )
                 mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
-                async with aws_iam_mcp_client(
+                async with aws_iam_streamablehttp_client(
                     endpoint='https://test.example.com/mcp',
                     aws_service=service_name,
                     aws_region=region,
@@ -142,7 +142,7 @@ async def test_streamable_client_parameters(
             )
             mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            async with aws_iam_mcp_client(
+            async with aws_iam_streamablehttp_client(
                 endpoint='https://test.example.com/mcp',
                 aws_service='bedrock-agentcore',
                 headers=headers,
@@ -175,7 +175,7 @@ async def test_custom_httpx_client_factory_is_passed(mock_session, mock_streams)
             )
             mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            async with aws_iam_mcp_client(
+            async with aws_iam_streamablehttp_client(
                 endpoint='https://test.example.com/mcp',
                 aws_service='bedrock-agentcore',
                 httpx_client_factory=custom_factory,
@@ -203,7 +203,7 @@ async def test_context_manager_cleanup(mock_session, mock_streams):
             )
             mock_stream_client.return_value.__aexit__ = mock_aexit
 
-            async with aws_iam_mcp_client(
+            async with aws_iam_streamablehttp_client(
                 endpoint='https://test.example.com/mcp',
                 aws_service='bedrock-agentcore',
             ):

@@ -1,8 +1,8 @@
 # Example: LlamaIndex
 
-This example demonstrates how to use `aws_iam_mcp_client` from `mcp-proxy-for-aws` to connect a [LlamaIndex](https://www.llamaindex.ai/) AI agent to an MCP server using AWS IAM authentication.
+This example demonstrates how to use `aws_iam_streamablehttp_client` from `mcp-proxy-for-aws` to connect a [LlamaIndex](https://www.llamaindex.ai/) AI agent to an MCP server using AWS IAM authentication.
 
-**Note:** LlamaIndex requires direct access to MCP sessions. The `aws_iam_mcp_client` provides the authenticated transport streams, which are then used to create an MCP ClientSession.
+**Note:** LlamaIndex requires direct access to MCP sessions. The `aws_iam_streamablehttp_client` provides the authenticated transport streams, which are then used to create an MCP ClientSession.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ The agent will connect to the MCP server and list its available tools.
 ## How It Works
 
 1. **Loads configuration** from environment variables or `.env` file
-2. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_mcp_client()`
+2. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_streamablehttp_client()`
 3. **Extracts transport streams** from the client context manager
 4. **Creates an MCP ClientSession** with the authenticated transport streams
 5. **Loads MCP tools** using LlamaIndex's `MCPToolSpec`

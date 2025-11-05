@@ -165,7 +165,7 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 
 ---
 
-## Using the MCP Proxy for AWS as a client library
+## Programmatic Access
 
 The MCP Proxy for AWS enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
 
@@ -175,13 +175,13 @@ The library supports two integration patterns depending on your framework:
 
 #### Pattern 1: Client Factory Integration
 
-**Use with:** Frameworks that accept a factory function that returns an MCP client, e.g. Strands Agents, Microsoft Agent Framework. The `aws_iam_mcp_client` is passed as a factory to the framework, which handles the connection lifecycle internally.
+**Use with:** Frameworks that accept a factory function that returns an MCP client, e.g. Strands Agents, Microsoft Agent Framework. The `aws_iam_streamablehttp_client` is passed as a factory to the framework, which handles the connection lifecycle internally.
 
 **Example - Strands Agents:**
 ```python
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
-mcp_client_factory = lambda: aws_iam_mcp_client(
+mcp_client_factory = lambda: aws_iam_streamablehttp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
@@ -194,9 +194,9 @@ with MCPClient(mcp_client_factory) as mcp_client:
 
 **Example - Microsoft Agent Framework:**
 ```python
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
-mcp_client_factory = lambda: aws_iam_mcp_client(
+mcp_client_factory = lambda: aws_iam_streamablehttp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
@@ -211,13 +211,13 @@ async with mcp_tools:
 
 #### Pattern 2: Direct MCP Session Integration
 
-**Use with:** Frameworks that require direct access to the MCP sessions, e.g. LangChain, LlamaIndex. The `aws_iam_mcp_client` provides the authenticated transport streams, which are then used to create an MCP `ClientSession`.
+**Use with:** Frameworks that require direct access to the MCP sessions, e.g. LangChain, LlamaIndex. The `aws_iam_streamablehttp_client` provides the authenticated transport streams, which are then used to create an MCP `ClientSession`.
 
 **Example - LangChain:**
 ```python
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
-mcp_client = aws_iam_mcp_client(
+mcp_client = aws_iam_streamablehttp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
@@ -231,9 +231,9 @@ async with mcp_client as (read, write, session_id_callback):
 
 **Example - LlamaIndex:**
 ```python
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
-mcp_client = aws_iam_mcp_client(
+mcp_client = aws_iam_streamablehttp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"

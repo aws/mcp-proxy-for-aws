@@ -14,7 +14,7 @@
 
 """Example: Using MCP Proxy for AWS as a client for LlamaIndex Agent integration.
 
-This example demonstrates how to use the aws_iam_mcp_client with LlamaIndex
+This example demonstrates how to use the aws_iam_streamablehttp_client with LlamaIndex
 to connect an AI agent to an MCP server using AWS IAM authentication.
 
 Setup:
@@ -44,7 +44,7 @@ from llama_index.core.agent.workflow import ReActAgent
 from llama_index.llms.openai import OpenAI
 from llama_index.tools.mcp import McpToolSpec
 from mcp.client.session import ClientSession
-from mcp_proxy_for_aws.client import aws_iam_mcp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
 
 # Ignore Pydantic UserWarnings that are not relevant to this example
@@ -74,15 +74,15 @@ async def create_agent():
     """Create a LlamaIndex agent with AWS IAM-authenticated MCP server access.
 
     This function demonstrates the key integration pattern:
-    1. Configure an aws_iam_mcp_client with the MCP server details
+    1. Configure an aws_iam_streamablehttp_client with the MCP server details
     2. Get authenticated transport streams from the MCP client
     3. Create an MCP ClientSession with the transport streams
     4. Load MCP tools from the session using LlamaIndex's MCPToolSpec
     5. Create an agent with access to those tools
     6. Return a callable interface to communicate with the agent
     """
-    # Configure the MCP client with AWS IAM authentication
-    mcp_client = aws_iam_mcp_client(
+    # Configure an MCP client with AWS IAM authentication
+    mcp_client = aws_iam_streamablehttp_client(
         endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
     )
 

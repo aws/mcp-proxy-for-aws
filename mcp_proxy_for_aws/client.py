@@ -24,7 +24,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def aws_iam_mcp_client(
+def aws_iam_streamablehttp_client(
     endpoint: str,
     aws_service: str,
     aws_region: Optional[str] = None,

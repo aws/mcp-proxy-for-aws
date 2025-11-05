@@ -1,8 +1,8 @@
 # Example: Using MCP Proxy for AWS as a client for Strands Agents SDK
 
-This example demonstrates how to use `aws_iam_mcp_client` from `mcp-proxy-for-aws` to connect a [Strands](https://strandsagents.com/) AI agent to an MCP server using AWS IAM authentication.
+This example demonstrates how to use `aws_iam_streamablehttp_client` from `mcp-proxy-for-aws` to connect a [Strands](https://strandsagents.com/) AI agent to an MCP server using AWS IAM authentication.
 
-**Note:** Strands accepts a factory function that returns an MCP client. The `aws_iam_mcp_client` is passed as a factory to Strands' `MCPClient`, which handles the connection lifecycle internally.
+**Note:** Strands accepts a factory function that returns an MCP client. The `aws_iam_streamablehttp_client` is passed as a factory to Strands' `MCPClient`, which handles the connection lifecycle internally.
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ The agent will connect to the MCP server and list its available tools.
 ## How It Works
 
 1. **Loads configuration** from environment variables or `.env` file
-2. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_mcp_client()`
+2. **Creates an AWS IAM-authenticated MCP client** using `aws_iam_streamablehttp_client()`
 3. **Integrates with Strands** by passing the client factory to `MCPClient`
 4. **Loads tools** from the MCP server
 5. **Creates an agent** with access to the MCP server tools
