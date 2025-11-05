@@ -1631,6 +1631,7 @@ dependencies = [
     { name = "boto3" },
     { name = "botocore" },
     { name = "fastmcp" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -1661,6 +1662,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.11.2" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.3.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
 ]
 provides-extras = ["dev"]
 

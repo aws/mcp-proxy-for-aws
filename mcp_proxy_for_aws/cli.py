@@ -39,12 +39,21 @@ Examples:
 
   # Run with write permissions enabled
   mcp-proxy-for-aws <SigV4 MCP endpoint URL> --read-only
+
+  # Run with configuration file
+  mcp-proxy-for-aws --config config.yaml
         """,
     )
 
     parser.add_argument(
         'endpoint',
+        nargs='?',
         help='SigV4 MCP endpoint URL',
+    )
+
+    parser.add_argument(
+        '--config',
+        help='Path to YAML configuration file',
     )
 
     parser.add_argument(

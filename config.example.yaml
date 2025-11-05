@@ -1,0 +1,38 @@
+# MCP Proxy for AWS Configuration Example
+# Save this file as config.yaml and customize for your environment
+
+# Required: SigV4 MCP endpoint URL
+endpoint: "https://your-service.us-east-1.amazonaws.com/mcp"
+
+# Optional: AWS service name for SigV4 signing
+# If not provided, will be inferred from the endpoint
+service: "your-service"
+
+# Optional: AWS profile to use
+# If not provided, uses AWS_PROFILE environment variable
+profile: "default"
+
+# Optional: AWS region to use
+# If not provided, uses AWS_REGION environment variable or infers from endpoint
+region: "us-east-1"
+
+# Optional: Disable tools which may require write permissions
+# Default: false
+read_only: false
+
+# Optional: Logging level
+# Choices: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Default: INFO
+log_level: "INFO"
+
+# Optional: Number of retries when calling endpoint
+# Range: 0-10, 0 disables retries
+# Default: 0
+retries: 0
+
+# Optional: Timeout settings (in seconds)
+# Default values shown below
+timeout: 180.0
+connect_timeout: 60.0
+read_timeout: 120.0
+write_timeout: 180.0

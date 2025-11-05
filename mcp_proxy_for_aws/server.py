@@ -29,6 +29,7 @@ from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
 from mcp_proxy_for_aws.cli import parse_args
+from mcp_proxy_for_aws.config import load_config_file, merge_config
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.utils import (
@@ -126,7 +127,23 @@ def add_logging_middleware(mcp: FastMCP, log_level: str) -> None:
 
 def main():
     """Run the MCP server."""
-    args = parse_args()
+    cli_args = parse_args()
+
+    # Load config file if specified
+    file_config = None
+    if cli_args.config:
+        try:
+            file_config = load_config_file(cli_args.config)
+        except Exception as e:
+            print(f'Error loading configuration file: {e}')
+            raise
+
+    # Merge file config and CLI args
+    try:
+        args = merge_config(file_config, cli_args)
+    except ValueError as e:
+        print(f'Configuration error: {e}')
+        raise
 
     # Configure logging
     configure_logging(args.log_level)
