@@ -52,8 +52,12 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Validate and determine region
     region = determine_aws_region(args.endpoint, args.region)
-    forwarding_region = args.forwarding_region or region
     logger.debug('Using region: %s', region)
+
+    # Build metadata dictionary - start with AWS_REGION, then merge user metadata
+    metadata = {'AWS_REGION': region}
+    if args.metadata:
+        metadata.update(args.metadata)
 
     # Get profile
     profile = args.profile
@@ -63,7 +67,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
         'Using service: %s, region: %s, forwarding region: %s, profile: %s',
         service,
         region,
-        forwarding_region,
+        metadata.get('AWS_REGION'),
         profile,
     )
     logger.info('Running in MCP mode')
@@ -77,7 +81,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Create transport with SigV4 authentication
     transport = create_transport_with_sigv4(
-        args.endpoint, service, region, forwarding_region, timeout, profile
+        args.endpoint, service, region, metadata, timeout, profile
     )
 
     # Create proxy with the transport

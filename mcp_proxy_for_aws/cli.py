@@ -18,6 +18,38 @@ import argparse
 import os
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.utils import within_range
+from typing import Dict, Optional, Sequence
+
+
+class KeyValueAction(argparse.Action):
+    """Custom argparse action to parse key=value pairs into a dictionary."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[str],
+        option_string: Optional[str] = None,
+    ) -> None:
+        """Parse key=value pairs into a dictionary.
+
+        Args:
+            parser: The argument parser
+            namespace: The namespace object to update
+            values: The values to parse (list of key=value strings)
+            option_string: The option string that triggered this action
+        """
+        metadata: Dict[str, str] = {}
+        # Ensure values is a sequence
+        if isinstance(values, str):
+            values = [values]
+
+        for item in values:
+            if '=' not in item:
+                parser.error(f'Metadata must be in key=value format, got: {item}')
+            key, value = item.split('=', 1)
+            metadata[key] = value
+        setattr(namespace, self.dest, metadata)
 
 
 def parse_args():
@@ -65,9 +97,11 @@ Examples:
     )
 
     parser.add_argument(
-        '--forwarding-region',
-        help='AWS region to forward to server (uses --region if not provided)',
+        '--metadata',
+        nargs='*',
+        action=KeyValueAction,
         default=None,
+        help='Metadata to inject into MCP requests as key=value pairs (e.g., --metadata AWS_REGION=us-west-2 KEY=VALUE)',
     )
 
     parser.add_argument(

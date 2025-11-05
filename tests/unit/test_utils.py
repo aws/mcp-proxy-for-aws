@@ -39,11 +39,11 @@ class TestCreateTransportWithSigv4:
         service = 'test-service'
         profile = 'test-profile'
         region = 'us-east-1'
-        forwarding_region = 'us-west-2'
+        metadata = {'AWS_REGION': 'us-west-2', 'CUSTOM_KEY': 'custom_value'}
         custom_timeout = Timeout(30.0)
 
         result = create_transport_with_sigv4(
-            url, service, region, forwarding_region, custom_timeout, profile
+            url, service, region, metadata, custom_timeout, profile
         )
 
         # Verify result is StreamableHttpTransport
@@ -64,7 +64,7 @@ class TestCreateTransportWithSigv4:
                 headers={'test': 'header'},
                 timeout=custom_timeout,
                 auth=None,
-                metadata={'AWS_REGION': forwarding_region},
+                metadata=metadata,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -78,12 +78,10 @@ class TestCreateTransportWithSigv4:
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
         region = 'test-region'
-        forwarding_region = 'test-forwarding-region'
+        metadata = {'AWS_REGION': 'test-forwarding-region'}
         custom_timeout = Timeout(60.0)
 
-        result = create_transport_with_sigv4(
-            url, service, region, forwarding_region, custom_timeout
-        )
+        result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
@@ -98,7 +96,7 @@ class TestCreateTransportWithSigv4:
                 headers=None,
                 timeout=custom_timeout,
                 auth=None,
-                metadata={'AWS_REGION': forwarding_region},
+                metadata=metadata,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created

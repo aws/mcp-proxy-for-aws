@@ -56,7 +56,7 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
-        mock_args.forwarding_region = None
+        mock_args.metadata = None
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -87,7 +87,7 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        assert call_args[0][3] == 'us-east-1'  # forwarding_region (defaults to region)
+        assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
@@ -118,7 +118,7 @@ class TestServer:
         mock_args.profile = 'test-profile'
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
-        mock_args.forwarding_region = 'eu-west-1'
+        mock_args.metadata = {'AWS_REGION': 'eu-west-1', 'CUSTOM_KEY': 'custom_value'}
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -149,12 +149,115 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        assert call_args[0][3] == 'eu-west-1'  # forwarding_region
+        assert call_args[0][3] == {
+            'AWS_REGION': 'eu-west-1',
+            'CUSTOM_KEY': 'custom_value',
+        }  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()
+
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    async def test_setup_mcp_mode_no_metadata_injects_aws_region(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
+        """Test that AWS_REGION is automatically injected when no metadata is provided."""
+        # Arrange
+        local_mcp = Mock(spec=FastMCP)
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'ap-southeast-1'
+        mock_args.profile = None
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = None  # No metadata provided
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'ap-southeast-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_as_proxy.return_value = mock_proxy
+
+        # Act
+        await setup_mcp_mode(local_mcp, mock_args)
+
+        # Assert - verify AWS_REGION was automatically injected
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        metadata = call_args[0][3]
+        assert metadata == {'AWS_REGION': 'ap-southeast-1'}
+
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    async def test_setup_mcp_mode_metadata_without_aws_region_injects_it(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
+        """Test that AWS_REGION is injected even when other metadata is provided."""
+        # Arrange
+        local_mcp = Mock(spec=FastMCP)
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'us-west-1'
+        mock_args.profile = None
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = {'CUSTOM_KEY': 'custom_value', 'ANOTHER_KEY': 'another_value'}
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-west-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_as_proxy.return_value = mock_proxy
+
+        # Act
+        await setup_mcp_mode(local_mcp, mock_args)
+
+        # Assert - verify AWS_REGION was injected along with custom metadata
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        metadata = call_args[0][3]
+        assert metadata == {
+            'AWS_REGION': 'us-west-1',
+            'CUSTOM_KEY': 'custom_value',
+            'ANOTHER_KEY': 'another_value',
+        }
 
     def test_add_tool_filtering_middleware(self):
         """Test that tool filtering middleware is added correctly."""
