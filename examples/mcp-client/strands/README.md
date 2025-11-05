@@ -1,4 +1,4 @@
-# Example: Strands Agents SDK
+# Example: Using MCP Proxy for AWS as a client for Strands Agents SDK
 
 This example demonstrates how to use `aws_iam_mcp_client` from `mcp-proxy-for-aws` to connect a [Strands](https://strandsagents.com/) AI agent to an MCP server using AWS IAM authentication.
 

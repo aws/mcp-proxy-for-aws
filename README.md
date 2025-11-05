@@ -4,8 +4,9 @@
 
 The **MCP Proxy for AWS** package provides two ways to connect AI applications to MCP servers on AWS:
 
-1. **MCP Proxy** - A lightweight, client-side bridge between MCP clients (AI assistants like Claude Desktop, Amazon Q Developer CLI) and MCP servers on AWS. (See [MCP Proxy](#mcp-proxy))
-2. **MCP Client Library** - A Python library to programmatically connect popular AI agent frameworks (LangChain, LlamaIndex, Strands Agents, etc.) to MCP servers on AWS. (See [MCP Client Library](#mcp-client-library))
+1. **Using it as a proxy** - It becomes a lightweight, client-side bridge between MCP clients (AI assistants like Claude Desktop, Amazon Q Developer CLI) and MCP servers on AWS. (See [MCP Proxy](#mcp-proxy))
+2. **Using it as a library** - Programmatically connect popular AI agent frameworks (LangChain, LlamaIndex, Strands Agents, etc.) to MCP servers on AWS. (See [Programmatic Access](#programmatic-access))
+
 
 ### When Do You Need This Package?
 
@@ -25,12 +26,12 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 
 ## Which Feature Should I Use?
 
-**Use the MCP Proxy if you want to:**
+**Use as a proxy if you want to:**
 - Connect MCP clients like Claude Desktop or Amazon Q Developer CLI to MCP servers on AWS with IAM credentials
 - Add MCP servers on AWS to your AI assistant's configuration
 - Use a command-line tool that runs as a bridge between your MCP client and AWS
 
-**Use the MCP Client Library if you want to:**
+**Use as a library if you want to:**
 - Build AI agents programmatically using popular frameworks like LangChain, Strands Agents, or LlamaIndex
 - Integrate AWS IAM-secured MCP servers directly into your Python applications
 - Have fine-grained control over the MCP session lifecycle in your code
@@ -166,9 +167,9 @@ For additional proxy examples, see [`./examples/mcp-proxy`](./examples/mcp-proxy
 
 ---
 
-## MCP Client Library
+## Using the MCP Proxy for AWS as a client library
 
-The MCP Client Library enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
+The MCP Proxy for AWS enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
 
 ### Integration Patterns
 

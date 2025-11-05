@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for the AWS IAM MCP client, parameterized by internal call."""
+"""Unit tests for the client, parameterized by internal call."""
 
 import pytest
 
