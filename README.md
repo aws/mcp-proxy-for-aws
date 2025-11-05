@@ -163,8 +163,6 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 }
 ```
 
-For additional proxy examples, see [`./examples/mcp-proxy`](./examples/mcp-proxy).
-
 ---
 
 ## Using the MCP Proxy for AWS as a client library

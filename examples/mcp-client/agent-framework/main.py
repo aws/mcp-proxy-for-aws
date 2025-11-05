@@ -1,5 +1,5 @@
 """
-AWS IAM MCP Client Example: Microsoft Agent Framework Integration
+Example: Using MCP Proxy for AWS as a client for Microsoft Agent Framework integration
 
 This example demonstrates how to use the aws_iam_mcp_client with the Microsoft Agent Framework
 to connect an AI agent to an MCP server using AWS IAM authentication.

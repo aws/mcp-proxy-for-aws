@@ -1,5 +1,5 @@
 """
-AWS IAM MCP Client Example: LlamaIndex Agent Integration
+Example: Using MCP Proxy for AWS as a client for LlamaIndex Agent integration
 
 This example demonstrates how to use the aws_iam_mcp_client with LlamaIndex
 to connect an AI agent to an MCP server using AWS IAM authentication.
