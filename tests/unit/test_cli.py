@@ -32,7 +32,7 @@ class TestParseArgs:
         assert args.profile is None
         assert args.region is None
         assert args.read_only is False
-        assert args.log_level == 'INFO'
+        assert args.log_level == 'ERROR'
         assert args.retries == 0
         assert args.timeout == 180.0
         assert args.connect_timeout == 60.0
