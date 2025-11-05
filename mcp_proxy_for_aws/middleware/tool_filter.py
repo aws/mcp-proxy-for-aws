@@ -16,6 +16,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool
+from typing import Sequence
 
 
 class ToolFilteringMiddleware(Middleware):
@@ -29,7 +30,7 @@ class ToolFilteringMiddleware(Middleware):
     async def on_list_tools(
         self,
         context: MiddlewareContext,
-        call_next: Callable[[MiddlewareContext], Awaitable[list[Tool]]],
+        call_next: Callable[[MiddlewareContext], Awaitable[Sequence[Tool]]],
     ):
         """Filter tools based on read only flag."""
         # Get list of FastMCP Components
