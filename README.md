@@ -174,21 +174,21 @@ The MCP Client Library enables programmatic integration of IAM-secured MCP serve
 
 The library supports two integration patterns depending on your framework:
 
-#### Pattern 1: Framework-Native MCP Integration
+#### Pattern 1: Client Factory Integration
 
-**Use with:** Frameworks that provide their own MCP client implementations accepting connection factories, e.g. Strands Agents SDK, Microsoft Agent Framework. The AWS IAM MCP Client provides the authenticated transport layer.
+**Use with:** Frameworks that accept a factory function that returns an MCP client, e.g. Strands Agents, Microsoft Agent Framework. The `aws_iam_mcp_client` is passed as a factory to the framework, which handles the connection lifecycle internally.
 
-**Example - Strands Agents SDK:**
+**Example - Strands Agents:**
 ```python
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
-iam_client_factory = lambda: aws_iam_mcp_client(
+mcp_client_factory = lambda: aws_iam_mcp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
-with MCPClient(iam_client_factory) as mcp_client:
+with MCPClient(mcp_client_factory) as mcp_client:
     mcp_tools = mcp_client.list_tools_sync()
     agent = Agent(tools=mcp_tools, ...)
 ```
@@ -197,34 +197,34 @@ with MCPClient(iam_client_factory) as mcp_client:
 ```python
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
-iam_client_factory = lambda: aws_iam_mcp_client(
+mcp_client_factory = lambda: aws_iam_mcp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
 mcp_tools = MCPStreamableHTTPTool(name="MCP Tools", url=mcp_url)
-mcp_tools.get_mcp_client = iam_client_factory
+mcp_tools.get_mcp_client = mcp_client_factory
 
-async with mcp_client:
-    agent = ChatAgent(tools=mcp_tools, ...)
+async with mcp_tools:
+    agent = ChatAgent(tools=[mcp_tools], ...)
 ```
 
 #### Pattern 2: Direct MCP Session Integration
 
-**Use with:** Frameworks that require direct access to MCP sessions, e.g. LangChain, LlamaIndex. The AWS IAM MCP Client provides the authenticated transport, and you can manually manage the MCP session lifecycle.
+**Use with:** Frameworks that require direct access to the MCP sessions, e.g. LangChain, LlamaIndex. The `aws_iam_mcp_client` provides the authenticated transport streams, which are then used to create an MCP `ClientSession`.
 
 **Example - LangChain:**
 ```python
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
-iam_client = aws_iam_mcp_client(
+mcp_client = aws_iam_mcp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
-async with iam_client as (read, write, session_id_callback):
+async with mcp_client as (read, write, session_id_callback):
     async with ClientSession(read, write) as session:
         mcp_tools = await load_mcp_tools(session)
         agent = create_langchain_agent(tools=mcp_tools, ...)
@@ -234,16 +234,16 @@ async with iam_client as (read, write, session_id_callback):
 ```python
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
-iam_client = aws_iam_mcp_client(
+mcp_client = aws_iam_mcp_client(
     endpoint=mcp_url,    # The URL of the MCP server
     aws_region=region,   # The region of the MCP server
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
-async with iam_client as (read, write, session_id_callback):
+async with mcp_client as (read, write, session_id_callback):
     async with ClientSession(read, write) as session:
-        tools = await McpToolSpec(client=session).to_tool_list_async()
-        agent = ReActAgent(tools=tools, ...)
+        mcp_tools = await McpToolSpec(client=session).to_tool_list_async()
+        agent = ReActAgent(tools=mcp_tools, ...)
 ```
 
 ### Running Examples
@@ -251,10 +251,10 @@ async with iam_client as (read, write, session_id_callback):
 Explore complete working examples for different frameworks in the [`./examples/mcp-client`](./examples/mcp-client) directory:
 
 **Available examples:**
-- **[Strands Agents SDK](./examples/mcp-client/strands/)**
-- **[Microsoft Agent Framework](./examples/mcp-client/agent-framework/)**
 - **[LangChain](./examples/mcp-client/langchain/)**
 - **[LlamaIndex](./examples/mcp-client/llamaindex/)**
+- **[Microsoft Agent Framework](./examples/mcp-client/agent-framework/)**
+- **[Strands Agents SDK](./examples/mcp-client/strands/)**
 
 Run examples individually:
 ```bash

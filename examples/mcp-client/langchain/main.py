@@ -1,60 +1,83 @@
 """
-AWS MCP Client Example: LangChain Agent Integration
+AWS IAM MCP Client Example: LangChain Agent Integration
 
-This example demonstrates how to use the AWS IAM MCP Client library (aws-iam-mcp-client)
-with LangChain to connect an AI agent to an MCP server on Amazon Bedrock AgentCore using
-AWS IAM authentication.
+This example demonstrates how to use the aws_iam_mcp_client with LangChain
+to connect an AI agent to an MCP server using AWS IAM authentication.
 
-How to use this example:
-========================
-1. Set your AWS credentials (via AWS CLI, environment variables, or IAM roles)
-2. Update MCP_SERVER_URL, MCP_SERVER_REGION, and MCP_SERVER_AWS_SERVICE with your MCP server details
-3. Run: uv run main.py to ask the agent what it can do
+Setup:
+======
+1. Configure AWS credentials (via AWS CLI, environment variables, or IAM roles)
+2. Set the following environment variables (or create a .env file):
+   - MCP_URL: The URL of your MCP server
+   - MCP_SERVICE: AWS service hosting the MCP server (e.g., "bedrock-agentcore")
+   - MCP_REGION: AWS region where the MCP server is hosted (e.g., "us-west-2")
+3. Run: `uv run main.py`
+
+Example .env file:
+==================
+MCP_SERVER_URL=https://example.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
+MCP_SERVER_AWS_SERVICE=bedrock-agentcore
+MCP_SERVER_REGION=us-west-2
 """
 
 import asyncio
+import dotenv
+import os
 from contextlib import asynccontextmanager
-
-from mcp.client.session import ClientSession
 
 from langchain_aws import ChatBedrock
 from langchain.agents import create_agent as create_langchain_agent
 from langchain_mcp_adapters.tools import load_mcp_tools
+from mcp.client.session import ClientSession
 
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
 
-# Set the MCP Server URL, AWS Region, and AWS Service (see README.md for details)
-MCP_SERVER_URL = '<MCP Server URL>'
-MCP_SERVER_REGION = '<MCP Server Region>'
-MCP_SERVER_AWS_SERVICE = '<AWS Service>'  # e.g. "bedrock-agentcore"
+# Load configuration from .env file (if present)
+dotenv.load_dotenv()
+
+# MCP server configuration - can be set via environment variables or .env file
+MCP_URL = os.environ.get('MCP_SERVER_URL')
+MCP_SERVICE = os.environ.get('MCP_SERVER_AWS_SERVICE')
+MCP_REGION = os.environ.get('MCP_SERVER_REGION')
+
+# The model for the agent (using Claude Haiku on Amazon Bedrock as an example)
+BEDROCK_MODEL_ID = 'global.anthropic.claude-haiku-4-5-20251001-v1:0'
 
 
-# The async context manager automatically manages the underlying resources.
 @asynccontextmanager
 async def create_agent():
-    """Create a LangChain agent with IAM authenticated access to an MCP server."""
+    """
+    Create a LangChain agent with AWS IAM-authenticated MCP server access.
 
-    # Set up access to an LLM
-    model = ChatBedrock(model_id='us.anthropic.claude-3-7-sonnet-20250219-v1:0')
-
-    # Initialize an MCP client with IAM authentication
-    iam_client = aws_iam_mcp_client(
-        endpoint=MCP_SERVER_URL, aws_region=MCP_SERVER_REGION, aws_service=MCP_SERVER_AWS_SERVICE
+    This function demonstrates the key integration pattern:
+    1. Configure an aws_iam_mcp_client with the MCP server details
+    2. Get authenticated transport streams from the MCP client
+    3. Create an MCP ClientSession with the transport streams
+    4. Load MCP tools from the session using LangChain's tools adapter
+    5. Create an agent with access to those tools
+    6. Return a callable interface to communicate with the agent
+    """
+    # Configure the MCP client with AWS IAM authentication
+    mcp_client = aws_iam_mcp_client(
+        endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
     )
 
-    # Initialize an MCP session with the IAM client
-    async with iam_client as (read, write, session_id_callback):
+    # Get authenticated transport streams from the MCP client
+    async with mcp_client as (read, write, session_id_callback):
+        # Create an MCP session with the transport streams
         async with ClientSession(read, write) as session:
-            # Retrieve the MCP tools from the session
+            # Load MCP tools from the session using LangChain's tools adapter
             mcp_tools = await load_mcp_tools(session)
 
-            # Create an agent with access to the MCP tools
-            agent = create_langchain_agent(model=model, tools=mcp_tools)
+            # Create the agent with access to the tools
+            agent = create_langchain_agent(
+                model=ChatBedrock(model_id=BEDROCK_MODEL_ID), tools=mcp_tools
+            )
 
-            # Return the agent as a callable function
+            # Yield a callable interface to the agent
             async def agent_callable(user_input: str) -> str:
-                """Call the agent with the given input."""
+                """Send a message to the agent and return its response."""
                 result = await agent.ainvoke({'messages': [('user', user_input)]})
                 return result['messages'][-1].content
 
@@ -62,7 +85,15 @@ async def create_agent():
 
 
 async def main():
-    """Create and run a LangChain agent with access to the MCP server."""
+    """Run the agent example by asking it to list its available tools."""
+
+    # Validate required environment variables
+    if not MCP_URL or not MCP_REGION or not MCP_SERVICE:
+        raise ValueError(
+            'Please set MCP_SERVER_URL, MCP_SERVER_REGION, and MCP_SERVER_AWS_SERVICE environment variables or create an .env file.'
+        )
+
+    # Create and run the agent
     async with create_agent() as agent:
         result = await agent('Show me your available tools.')
         print(f'\n{result}')

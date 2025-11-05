@@ -1,23 +1,31 @@
 """
-AWS MCP Client Example: LlamaIndex Agent Integration
+AWS IAM MCP Client Example: LlamaIndex Agent Integration
 
-This example demonstrates how to use the AWS IAM MCP Client library (aws-iam-mcp-client)
-with LlamaIndex to connect an AI agent to an MCP server on Amazon Bedrock AgentCore using
-AWS IAM authentication.
+This example demonstrates how to use the aws_iam_mcp_client with LlamaIndex
+to connect an AI agent to an MCP server using AWS IAM authentication.
 
-How to use this example:
-========================
-1. Set your AWS credentials (via AWS CLI, environment variables, or IAM roles)
-2. Set your OPENAI_API_KEY environment variable (for the GPT model)
-3. Update MCP_SERVER_URL, MCP_SERVER_REGION, and MCP_SERVER_AWS_SERVICE with your MCP server details
-4. Run: uv run main.py to ask the agent what it can do
+Setup:
+======
+1. Configure AWS credentials (via AWS CLI, environment variables, or IAM roles)
+2. Set the following environment variables (or create a .env file):
+   - MCP_URL: The URL of your MCP server
+   - MCP_SERVICE: AWS service hosting the MCP server (e.g., "bedrock-agentcore")
+   - MCP_REGION: AWS region where the MCP server is hosted (e.g., "us-west-2")
+   - OPENAI_API_KEY: Your OpenAI API key for the LLM
+3. Run: `uv run main.py`
+
+Example .env file:
+==================
+MCP_SERVER_URL=https://example.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
+MCP_SERVER_AWS_SERVICE=bedrock-agentcore
+MCP_SERVER_REGION=us-west-2
+OPENAI_API_KEY=sk-...
 """
 
 # Ignore Pydantic UserWarnings that are not relevant to this example
 import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='pydantic.*')
-
 
 import asyncio
 import dotenv
@@ -32,36 +40,54 @@ from mcp.client.session import ClientSession
 from mcp_proxy_for_aws.client import aws_iam_mcp_client
 
 
-# Set the MCP Server URL, AWS Region, and AWS Service (see README.md for details)
-MCP_SERVER_URL = '<MCP Server URL>'
-MCP_SERVER_REGION = '<MCP Server Region>'
-MCP_SERVER_AWS_SERVICE = '<AWS Service>'  # e.g. "bedrock-agentcore"
+# Load configuration from .env file (if present)
+dotenv.load_dotenv()
+
+# MCP server configuration - can be set via environment variables or .env file
+MCP_URL = os.environ.get('MCP_SERVER_URL')
+MCP_SERVICE = os.environ.get('MCP_SERVER_AWS_SERVICE')
+MCP_REGION = os.environ.get('MCP_SERVER_REGION')
+
+# OpenAI API key for the language model
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '<Your OpenAI API Key>')
+
+# The model for the agent (using GPT-4.1 Mini as an example)
+OPENAI_MODEL_ID = 'gpt-4.1-mini'
 
 
 @asynccontextmanager
 async def create_agent():
-    """Create a LlamaIndex agent with IAM authenticated access to an MCP server."""
+    """
+    Create a LlamaIndex agent with AWS IAM-authenticated MCP server access.
 
-    # Set up access to an LLM
-    model = OpenAI(model='gpt-4.1-mini', api_key=os.getenv('OPENAI_API_KEY'))
-
-    # Initialize an MCP client with IAM authentication
-    iam_client = aws_iam_mcp_client(
-        endpoint=MCP_SERVER_URL, aws_region=MCP_SERVER_REGION, aws_service=MCP_SERVER_AWS_SERVICE
+    This function demonstrates the key integration pattern:
+    1. Configure an aws_iam_mcp_client with the MCP server details
+    2. Get authenticated transport streams from the MCP client
+    3. Create an MCP ClientSession with the transport streams
+    4. Load MCP tools from the session using LlamaIndex's MCPToolSpec
+    5. Create an agent with access to those tools
+    6. Return a callable interface to communicate with the agent
+    """
+    # Configure the MCP client with AWS IAM authentication
+    mcp_client = aws_iam_mcp_client(
+        endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
     )
 
-    # Initialize an MCP session with the IAM client
-    async with iam_client as (read_stream, write_stream, session_id_callback):
-        async with ClientSession(read_stream, write_stream) as session:
-            # Retrieve the MCP tools from the session using the LlamaIndex MCPToolSpec
+    # Get authenticated transport streams from the MCP client
+    async with mcp_client as (read, write, session_id_callback):
+        # Create an MCP session with the transport streams
+        async with ClientSession(read, write) as session:
+            # Load MCP tools from the session using LlamaIndex's MCPToolSpec
             mcp_tools = await McpToolSpec(client=session).to_tool_list_async()
 
-            # Create an agent with access to the MCP tools
-            agent = ReActAgent(llm=model, tools=mcp_tools)
+            # Create the agent with access to the tools
+            agent = ReActAgent(
+                llm=OpenAI(model=OPENAI_MODEL_ID, api_key=OPENAI_API_KEY), tools=mcp_tools
+            )
 
-            # Return the agent as a callable function
+            # Yield a callable interface to the agent
             async def agent_callable(user_input: str) -> str:
-                """Call the agent with the given input."""
+                """Send a message to the agent and return its response."""
                 response = await agent.run(user_msg=user_input)
                 return str(response)
 
@@ -69,14 +95,15 @@ async def create_agent():
 
 
 async def main():
-    """Create and run an LlamaIndex agent with access to the MCP server."""
+    """Run the agent example by asking it to list its available tools."""
 
-    # This example requires OPENAI_API_KEY to be set as an environment variable or in an .env file
-    dotenv.load_dotenv()
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise RuntimeError('OPENAI_API_KEY environment variable is required')
+    # Validate required environment variables
+    if not MCP_URL or not MCP_REGION or not MCP_SERVICE or not OPENAI_API_KEY:
+        raise ValueError(
+            'Please set OPENAI_API_KEY, MCP_SERVER_URL, MCP_SERVER_REGION, and MCP_SERVER_AWS_SERVICE environment variables or create an .env file.'
+        )
 
+    # Create and run the agent
     async with create_agent() as agent:
         result = await agent('Show me your available tools.')
         print(f'\n{result}')

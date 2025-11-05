@@ -3,8 +3,8 @@ name = "mcp-client-example-agent-framework"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp_proxy_for_aws",
     "agent-framework",
+    "mcp-proxy-for-aws",
 ]
 
 [tool.uv]
