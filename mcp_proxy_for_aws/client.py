@@ -62,10 +62,10 @@ def aws_iam_streamablehttp_client(
         httpx_client_factory: Factory function for creating HTTPX clients.
 
     Returns:
-        An async context manager that yields a tuple of transport components:
-            - read_stream: Async generator for reading server responses
-            - write_stream: Async generator for sending requests to server
-            - get_session_id: Function to retrieve the current session ID
+        An async generator context manager that yields a tuple of transport components:
+            - read_stream: MemoryObjectReceiveStream for reading server responses
+            - write_stream: MemoryObjectSendStream for sending requests to server
+            - get_session_id: Callback function to retrieve the current session ID
 
     Example:
         async with aws_iam_mcp_client(
