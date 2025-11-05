@@ -3,7 +3,7 @@ name = "mcp-client-example-strands-agents"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "mcp_proxy_for_aws",
+    "mcp-proxy-for-aws",
     "python-dotenv",
     "strands-agents",
 ]

@@ -6,6 +6,6 @@ dependencies = [
     "langchain",
     "langchain-aws",
     "langchain-mcp-adapters",
-    "mcp_proxy_for_aws",
+    "mcp-proxy-for-aws",
     "python-dotenv",
 ]

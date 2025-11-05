@@ -6,6 +6,6 @@ dependencies = [
     "llama-index",
     "llama-index-llms-openai",
     "llama-index-tools-mcp",
-    "mcp_proxy_for_aws",
+    "mcp-proxy-for-aws",
     "python-dotenv",
 ]
