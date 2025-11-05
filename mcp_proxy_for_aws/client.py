@@ -70,7 +70,7 @@ def aws_iam_mcp_client(
             # Use the streams here
             pass
     """
-    logger.info('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
+    logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 
     kwargs = {}
     if aws_profile is not None:
