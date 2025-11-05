@@ -9,3 +9,6 @@ dependencies = [
 
 [tool.uv]
 prerelease = "allow"
+
+[tool.uv.sources]
+mcp-proxy-for-aws = { workspace = true }

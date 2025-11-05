@@ -9,3 +9,6 @@ dependencies = [
     "mcp-proxy-for-aws",
     "python-dotenv",
 ]
+
+[tool.uv.sources]
+mcp-proxy-for-aws = { workspace = true }

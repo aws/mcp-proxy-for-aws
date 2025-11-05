@@ -54,9 +54,12 @@ from mcp_proxy_for_aws.client import aws_iam_mcp_client
 dotenv.load_dotenv()
 
 # MCP server configuration - can be set via environment variables or .env file
-MCP_URL = os.environ.get('MCP_SERVER_URL')
-MCP_SERVICE = os.environ.get('MCP_SERVER_AWS_SERVICE')
-MCP_REGION = os.environ.get('MCP_SERVER_REGION')
+try:
+    MCP_URL = os.environ['MCP_SERVER_URL']
+    MCP_SERVICE = os.environ['MCP_SERVER_AWS_SERVICE']
+    MCP_REGION = os.environ['MCP_SERVER_REGION']
+except KeyError:
+    raise AssertionError('Please follow the README to setup environment variables.')
 
 # The model for the agent (using Claude Haiku on Amazon Bedrock as an example)
 BEDROCK_MODEL_ID = 'global.anthropic.claude-haiku-4-5-20251001-v1:0'

@@ -7,3 +7,6 @@ dependencies = [
     "python-dotenv",
     "strands-agents",
 ]
+
+[tool.uv.sources]
+mcp-proxy-for-aws = { workspace = true }
