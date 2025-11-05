@@ -16,13 +16,12 @@
 
 import boto3
 import httpx
-import json
 import logging
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
 from functools import partial
-from httpx._content import ByteStream
+from mcp_proxy_for_aws.hooks import _handle_error_response, _inject_metadata_hook
 from typing import Any, Dict, Generator, Optional
 
 
@@ -72,176 +71,6 @@ class SigV4HTTPXAuth(httpx.Auth):
         request.headers.update(dict(aws_request.headers))
 
         yield request
-
-
-async def _handle_error_response(response: httpx.Response) -> None:
-    """Event hook to handle HTTP error responses and extract details.
-
-    This function is called for every HTTP response to check for errors
-    and provide more detailed error information when requests fail.
-
-    Args:
-        response: The HTTP response object
-
-    Raises:
-        No raises. let the mcp http client handle the errors.
-    """
-    if response.is_error:
-        # warning only because the SDK logs error
-        log_level = logging.WARNING
-        if (
-            # The server MAY respond 405 to GET (SSE) and DELETE (session).
-            response.status_code == 405 and response.request.method in ('GET', 'DELETE')
-        ) or (
-            # The server MAY terminate the session at any time, after which it MUST
-            # respond to requests containing that session ID with HTTP 404 Not Found.
-            response.status_code == 404 and response.request.method == 'POST'
-        ):
-            log_level = logging.DEBUG
-
-        try:
-            # read the content and settle the response content. required to get body (.json(), .text)
-            await response.aread()
-        except Exception as e:
-            logger.debug('Failed to read response: %s', e)
-            # do nothing and let the client and SDK handle the error
-            return
-
-        # Try to extract error details with fallbacks
-        try:
-            # Try to parse JSON error details
-            error_details = response.json()
-            logger.log(log_level, 'HTTP %d Error Details: %s', response.status_code, error_details)
-        except Exception:
-            # If JSON parsing fails, use response text or status code
-            try:
-                response_text = response.text
-                logger.log(log_level, 'HTTP %d Error: %s', response.status_code, response_text)
-            except Exception:
-                # Fallback to just status code and URL
-                logger.log(
-                    log_level, 'HTTP %d Error for url %s', response.status_code, response.url
-                )
-
-
-def _resign_request_with_sigv4(
-    request: httpx.Request,
-    region: str,
-    service: str,
-    profile: Optional[str] = None,
-) -> None:
-    """Re-sign an HTTP request with AWS SigV4 after content modification.
-
-    This function removes old signature headers, creates a new signature based on
-    the current request content, and updates the request headers with the new signature.
-
-    Args:
-        request: The HTTP request object to re-sign (modified in-place)
-        region: AWS region for SigV4 signing
-        service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional)
-    """
-    # Remove old signature headers before re-signing
-    headers_to_remove = ['Content-Length', 'x-amz-date', 'x-amz-security-token', 'authorization']
-    for header in headers_to_remove:
-        request.headers.pop(header, None)
-
-    # Set the new Content-Length
-    request.headers['Content-Length'] = str(len(request.content))
-
-    logger.info('Headers after cleanup: %s', request.headers)
-
-    # Get AWS credentials
-    session = create_aws_session(profile)
-    credentials = session.get_credentials()
-    logger.info('Re-signing request with credentials for access key: %s', credentials.access_key)
-
-    # Create headers dict for signing, removing connection header like in auth_flow
-    headers_for_signing = dict(request.headers)
-    headers_for_signing.pop('connection', None)  # Remove connection header for signing
-
-    # Create SigV4 signer and AWS request
-    signer = SigV4Auth(credentials, service, region)
-    aws_request = AWSRequest(
-        method=request.method,
-        url=str(request.url),
-        data=request.content,
-        headers=headers_for_signing,
-    )
-
-    # Sign the request
-    logger.info('AWS request before signing: %s', aws_request.headers)
-    signer.add_auth(aws_request)
-    logger.info('AWS request after signing: %s', aws_request.headers)
-
-    # Update request headers with signed headers
-    request.headers.update(dict(aws_request.headers))
-    logger.info('Request headers after re-signing: %s', request.headers)
-
-
-async def _inject_metadata_hook(
-    metadata: Dict[str, Any], region: str, service: str, request: httpx.Request
-) -> None:
-    """Request hook to inject metadata into MCP calls.
-
-    Args:
-        metadata: Dictionary of metadata to inject into _meta field
-        region: AWS region for SigV4 re-signing after metadata injection
-        service: AWS service name for SigV4 re-signing after metadata injection
-        request: The HTTP request object
-    """
-    logger.info('=== Outgoing Request ===')
-    logger.info('URL: %s', request.url)
-    logger.info('Method: %s', request.method)
-
-    # Try to inject metadata if it's a JSON-RPC/MCP request
-    if request.content and metadata:
-        try:
-            # Parse the request body
-            body = json.loads(await request.aread())
-
-            # Check if it's a JSON-RPC request
-            if isinstance(body, dict) and 'jsonrpc' in body:
-                # Ensure _meta exists in params
-                if '_meta' not in body['params']:
-                    body['params']['_meta'] = {}
-
-                # Get existing metadata
-                existing_meta = body['params']['_meta']
-
-                # Merge metadata (existing takes precedence)
-                if isinstance(existing_meta, dict):
-                    # Check for conflicting keys before merge
-                    conflicting_keys = set(metadata.keys()) & set(existing_meta.keys())
-                    if conflicting_keys:
-                        for key in conflicting_keys:
-                            logger.warning(
-                                'Metadata key "%s" already exists in _meta. '
-                                'Keeping existing value "%s", ignoring injected value "%s"',
-                                key,
-                                existing_meta[key],
-                                metadata[key],
-                            )
-                    body['params']['_meta'] = {**metadata, **existing_meta}
-                else:
-                    logger.info('Replacing non-dict _meta value with injected metadata')
-                    body['params']['_meta'] = metadata
-
-                # Create new content with updated metadata
-                new_content = json.dumps(body).encode('utf-8')
-
-                # Update the request with new content
-                request.stream = ByteStream(new_content)
-                request._content = new_content
-
-                # Re-sign the request with the new content
-                _resign_request_with_sigv4(request, region, service)
-
-                logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
-
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            # Not a JSON request or invalid format, skip metadata injection
-            logger.error('Skipping metadata injection: %s', e)
 
 
 def create_aws_session(profile: Optional[str] = None) -> boto3.Session:

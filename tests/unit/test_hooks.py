@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for sigv4_helper metadata injection hook."""
+"""Unit tests for hooks module."""
 
 import httpx
 import json
 import pytest
 from functools import partial
-from mcp_proxy_for_aws.sigv4_helper import _inject_metadata_hook
-from unittest.mock import MagicMock, patch
+from mcp_proxy_for_aws.hooks import _handle_error_response, _inject_metadata_hook
+from unittest.mock import MagicMock, Mock, patch
 
 
 def create_request_with_sigv4_headers(
@@ -46,6 +46,87 @@ def create_mock_session():
     mock_credentials.token = 'test-token'
     mock_session.get_credentials.return_value = mock_credentials
     return mock_session
+
+
+class TestHandleErrorResponse:
+    """Test cases for the _handle_error_response function."""
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_json_error(self):
+        """Test error handling with JSON error response."""
+        # Create a mock error response with JSON content
+        request = httpx.Request('GET', 'https://example.com/test')
+        error_data = {'error': 'Not Found', 'message': 'The requested resource was not found'}
+        response = httpx.Response(
+            status_code=404,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+
+        await _handle_error_response(response)
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_non_json_error(self):
+        """Test error handling with non-JSON error response."""
+        # Create a mock error response with plain text content
+        request = httpx.Request('GET', 'https://example.com/test')
+        response = httpx.Response(
+            status_code=500,
+            headers={'content-type': 'text/plain'},
+            content=b'Internal Server Error',
+            request=request,
+        )
+
+        await _handle_error_response(response)
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_success_response(self):
+        """Test that successful responses don't raise errors."""
+        # Create a mock success response
+        request = httpx.Request('GET', 'https://example.com/test')
+        response = httpx.Response(
+            status_code=200,
+            headers={'content-type': 'application/json'},
+            content=b'{"success": true}',
+            request=request,
+        )
+
+        await _handle_error_response(response)
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_read_failure(self):
+        """Test error handling when response reading fails."""
+        # Create a mock response that fails to read
+        request = httpx.Request('GET', 'https://example.com/test')
+        response = Mock(spec=httpx.Response)
+        response.is_error = True
+        response.aread = Mock(side_effect=Exception('Read failed'))
+        response.json = Mock(side_effect=Exception('JSON parsing failed'))
+        response.text = 'Mock error text'
+        response.status_code = 500
+        response.url = 'https://example.com/test'
+        response.raise_for_status = Mock(
+            side_effect=httpx.HTTPStatusError(
+                message='HTTP Error', request=request, response=response
+            )
+        )
+
+        await _handle_error_response(response)
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_invalid_json(self):
+        """Test error handling with invalid JSON response."""
+        # Create a mock error response with invalid JSON
+        request = httpx.Request('GET', 'https://example.com/test')
+        response = httpx.Response(
+            status_code=400,
+            headers={'content-type': 'application/json'},
+            content=b'Invalid JSON content {',
+            request=request,
+        )
+
+        await _handle_error_response(response)
 
 
 class TestMetadataInjectionHook:

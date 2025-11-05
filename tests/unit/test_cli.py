@@ -168,6 +168,16 @@ class TestParseArgs:
         args = parse_args()
         assert args.metadata == {'KEY': 'value with spaces'}
 
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://example.com', '--metadata'])
+    def test_parse_metadata_no_values(self):
+        """Test parsing --metadata flag with no values results in empty dict."""
+        args = parse_args()
+        # When --metadata is provided with no values (nargs='*'), it should be empty dict
+        # This is handled by KeyValueAction which sets an empty dict when values is None
+        assert args.metadata == {} or args.metadata is None, (
+            f'Expected empty dict or None, got {args.metadata}'
+        )
+
     @patch('sys.argv', ['mcp-proxy-for-aws', 'https://example.com', '--metadata', 'INVALID'])
     def test_parse_metadata_invalid_format(self):
         """Test that invalid metadata format raises an error."""
