@@ -81,43 +81,44 @@ async def _handle_error_response(response: httpx.Response) -> None:
         response: The HTTP response object
 
     Raises:
-        httpx.HTTPStatusError: With enhanced error message containing response details
+        No raises. let the mcp http client handle the errors.
     """
     if response.is_error:
+        # warning only because the SDK logs error
+        log_level = logging.WARNING
+        if (
+            # The server MAY respond 405 to GET (SSE) and DELETE (session).
+            response.status_code == 405 and response.request.method in ('GET', 'DELETE')
+        ) or (
+            # The server MAY terminate the session at any time, after which it MUST
+            # respond to requests containing that session ID with HTTP 404 Not Found.
+            response.status_code == 404 and response.request.method == 'POST'
+        ):
+            log_level = logging.DEBUG
+
         try:
-            # Read response content to extract error details
+            # read the content and settle the response content. required to get body (.json(), .text)
             await response.aread()
         except Exception as e:
-            logger.error('Failed to read response: %s', e)
+            logger.debug('Failed to read response: %s', e)
+            # do nothing and let the client and SDK handle the error
+            return
 
         # Try to extract error details with fallbacks
-        error_msg = ''
         try:
             # Try to parse JSON error details
             error_details = response.json()
-            logger.error('HTTP %d Error Details: %s', response.status_code, error_details)
-            error_msg = f'HTTP {response.status_code}: {error_details} for url {response.url}'
+            logger.log(log_level, 'HTTP %d Error Details: %s', response.status_code, error_details)
         except Exception:
             # If JSON parsing fails, use response text or status code
             try:
                 response_text = response.text
-                logger.error('HTTP %d Error: %s', response.status_code, response_text)
-                error_msg = f'HTTP {response.status_code}: {response_text} for url {response.url}'
+                logger.log(log_level, 'HTTP %d Error: %s', response.status_code, response_text)
             except Exception:
                 # Fallback to just status code and URL
-                logger.error('HTTP %d Error for url %s', response.status_code, response.url)
-                error_msg = f'HTTP {response.status_code} Error for url {response.url}'
-
-        # Raise the status error with enhanced message
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            # Replace the error message and throw HTTP error
-            if error_msg:
-                raise httpx.HTTPStatusError(
-                    message=error_msg, request=e.request, response=e.response
+                logger.log(
+                    log_level, 'HTTP %d Error for url %s', response.status_code, response.url
                 )
-            raise e
 
 
 def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
