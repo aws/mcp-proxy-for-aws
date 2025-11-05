@@ -194,7 +194,7 @@ class TestServer:
         assert args.region is None
         assert args.profile is None
         assert args.read_only is False
-        assert args.log_level == 'INFO'
+        assert args.log_level == 'ERROR'
         assert args.retries == 0
 
     @patch(
