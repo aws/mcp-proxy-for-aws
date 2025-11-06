@@ -61,7 +61,7 @@ jobs:
           uv run --frozen coverage report --fail-under=80
 
       - name: Run pyright
-        run: uv run --frozen pyright
+        run: uv run --frozen --all-packages pyright
 
       - name: Run ruff format
         run: uv run --frozen ruff format .
