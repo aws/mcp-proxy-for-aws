@@ -18,7 +18,11 @@ import httpx
 import json
 import pytest
 from functools import partial
-from mcp_proxy_for_aws.hooks import _handle_error_response, _inject_metadata_hook
+from mcp_proxy_for_aws.hooks import (
+    _handle_error_response,
+    _inject_metadata_hook,
+    _sign_request_hook,
+)
 from unittest.mock import MagicMock, Mock, patch
 
 
@@ -132,15 +136,9 @@ class TestHandleErrorResponse:
 class TestMetadataInjectionHook:
     """Test cases for _inject_metadata_hook function."""
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_hook_injects_metadata_into_jsonrpc_request(self, mock_create_session):
+    async def test_hook_injects_metadata_into_jsonrpc_request(self):
         """Test that hook injects metadata into JSON-RPC request body."""
-        # Setup mocks
-        mock_create_session.return_value = create_mock_session()
-
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2', 'tracking_id': 'test-123'}
 
         # Create request with JSON-RPC body
@@ -151,7 +149,7 @@ class TestMetadataInjectionHook:
         request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
 
         # Call the hook
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         stream_content = await request.aread()
 
@@ -161,18 +159,9 @@ class TestMetadataInjectionHook:
         assert modified_body['params']['_meta']['AWS_REGION'] == 'us-west-2'
         assert modified_body['params']['_meta']['tracking_id'] == 'test-123'
 
-        # Verify Content-Length was updated
-        assert request.headers['content-length'] == str(len(stream_content))
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_hook_merges_with_existing_metadata(self, mock_create_session):
+    async def test_hook_merges_with_existing_metadata(self):
         """Test that hook merges with existing _meta, existing takes precedence."""
-        # Setup mocks
-        mock_create_session.return_value = create_mock_session()
-
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2', 'field1': 'injected'}
 
         request_body = json.dumps(
@@ -189,7 +178,7 @@ class TestMetadataInjectionHook:
 
         request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
 
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         stream_content = await request.aread()
 
@@ -203,8 +192,6 @@ class TestMetadataInjectionHook:
     @pytest.mark.asyncio
     async def test_hook_skips_non_jsonrpc_requests(self):
         """Test that hook doesn't modify non-JSON-RPC requests."""
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request_body = json.dumps({'regular': 'request'}).encode('utf-8')
@@ -212,7 +199,7 @@ class TestMetadataInjectionHook:
 
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         # Body should be unchanged
         assert request._content == original_body
@@ -220,15 +207,13 @@ class TestMetadataInjectionHook:
     @pytest.mark.asyncio
     async def test_hook_handles_invalid_json_gracefully(self):
         """Test that hook handles invalid JSON without crashing."""
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request_body = b'not valid json'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
         # Should not raise exception
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         # Body should be unchanged
         assert request._content == request_body
@@ -236,20 +221,16 @@ class TestMetadataInjectionHook:
     @pytest.mark.asyncio
     async def test_hook_handles_empty_body(self):
         """Test that hook handles requests with no body."""
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request = httpx.Request('GET', 'https://example.com/api')
 
         # Should not raise exception
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
     @pytest.mark.asyncio
     async def test_hook_handles_empty_metadata(self):
         """Test that hook works with empty metadata dict."""
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {}
 
         request_body = json.dumps(
@@ -259,21 +240,15 @@ class TestMetadataInjectionHook:
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
         # Should not inject anything but shouldn't crash
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_hook_with_partial_application(self, mock_create_session):
+    async def test_hook_with_partial_application(self):
         """Test that hook works correctly with functools.partial."""
-        # Setup mocks
-        mock_create_session.return_value = create_mock_session()
-
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2', 'custom': 'value'}
 
         # Create curried function using partial
-        curried_hook = partial(_inject_metadata_hook, metadata, region, service)
+        curried_hook = partial(_inject_metadata_hook, metadata)
 
         request_body = json.dumps(
             {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'myTool'}}
@@ -290,15 +265,9 @@ class TestMetadataInjectionHook:
         assert modified_body['params']['_meta']['AWS_REGION'] == 'us-west-2'
         assert modified_body['params']['_meta']['custom'] == 'value'
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_hook_handles_non_dict_meta(self, mock_create_session):
+    async def test_hook_handles_non_dict_meta(self):
         """Test that hook replaces non-dict _meta with dict."""
-        # Setup mocks
-        mock_create_session.return_value = create_mock_session()
-
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request_body = json.dumps(
@@ -312,7 +281,7 @@ class TestMetadataInjectionHook:
 
         request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
 
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         stream_content = await request.aread()
 
@@ -322,15 +291,9 @@ class TestMetadataInjectionHook:
         assert isinstance(modified_body['params']['_meta'], dict)
         assert modified_body['params']['_meta'] == metadata
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_hook_preserves_other_params(self, mock_create_session):
+    async def test_hook_preserves_other_params(self):
         """Test that hook doesn't modify other params fields."""
-        # Setup mocks
-        mock_create_session.return_value = create_mock_session()
-
-        region = 'us-west-2'
-        service = 'execute-api'
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request_body = json.dumps(
@@ -348,7 +311,7 @@ class TestMetadataInjectionHook:
 
         request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
 
-        await _inject_metadata_hook(metadata, region, service, request)
+        await _inject_metadata_hook(metadata, request)
 
         stream_content = await request.aread()
 
@@ -359,3 +322,100 @@ class TestMetadataInjectionHook:
         assert modified_body['params']['arguments'] == {'arg1': 'value1'}
         assert modified_body['params']['other_field'] == 'preserved'
         assert modified_body['params']['_meta']['AWS_REGION'] == 'us-west-2'
+
+
+class TestSignRequestHook:
+    """Test cases for sign_request_hook function."""
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_signs_request(self, mock_create_session):
+        """Test that sign_request_hook properly signs requests."""
+        # Setup mocks
+        mock_create_session.return_value = create_mock_session()
+
+        region = 'us-east-1'
+        service = 'bedrock-agentcore'
+        profile = None
+
+        # Create request without signature headers
+        request_body = json.dumps({'test': 'data'}).encode('utf-8')
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        # Call the hook
+        await _sign_request_hook(region, service, profile, request)
+
+        # Verify signature headers were added
+        assert 'authorization' in request.headers
+        assert 'x-amz-date' in request.headers
+        assert 'x-amz-security-token' in request.headers
+        assert request.headers['content-length'] == str(len(request_body))
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_with_profile(self, mock_create_session):
+        """Test that sign_request_hook uses profile when provided."""
+        # Setup mocks
+        mock_create_session.return_value = create_mock_session()
+
+        region = 'us-west-2'
+        service = 'execute-api'
+        profile = 'test-profile'
+
+        request_body = b'test content'
+        request = httpx.Request('POST', 'https://example.com/api', content=request_body)
+
+        # Call the hook
+        await _sign_request_hook(region, service, profile, request)
+
+        # Verify session was created with profile
+        mock_create_session.assert_called_once_with(profile)
+
+        # Verify request was signed
+        assert 'authorization' in request.headers
+        assert 'x-amz-date' in request.headers
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_sets_content_length(self, mock_create_session):
+        """Test that sign_request_hook sets Content-Length header."""
+        # Setup mocks
+        mock_create_session.return_value = create_mock_session()
+
+        region = 'eu-west-1'
+        service = 'lambda'
+        profile = None
+
+        # Create request
+        request_body = b'test content with specific length'
+        request = httpx.Request('POST', 'https://example.com/api', content=request_body)
+
+        await _sign_request_hook(region, service, profile, request)
+
+        # Verify Content-Length was set correctly
+        assert request.headers['content-length'] == str(len(request_body))
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_with_partial_application(self, mock_create_session):
+        """Test that sign_request_hook works with functools.partial."""
+        # Setup mocks
+        mock_create_session.return_value = create_mock_session()
+
+        region = 'ap-southeast-1'
+        service = 'execute-api'
+        profile = 'prod-profile'
+
+        # Create curried function using partial
+        curried_hook = partial(_sign_request_hook, region, service, profile)
+
+        request_body = b'request data'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        # Call the curried function (only needs request parameter)
+        await curried_hook(request)
+
+        # Verify request was signed
+        assert 'authorization' in request.headers
+        assert 'x-amz-date' in request.headers
+        mock_create_session.assert_called_once_with(profile)

@@ -64,10 +64,10 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
 
     # Log server configuration
     logger.info(
-        'Using service: %s, region: %s, forwarding region: %s, profile: %s',
+        'Using service: %s, region: %s, metadata: %s, profile: %s',
         service,
         region,
-        metadata.get('AWS_REGION'),
+        metadata,
         profile,
     )
     logger.info('Running in MCP mode')

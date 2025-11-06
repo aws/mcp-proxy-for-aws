@@ -19,7 +19,6 @@ import pytest
 from mcp_proxy_for_aws.sigv4_helper import (
     SigV4HTTPXAuth,
     create_aws_session,
-    create_sigv4_auth,
     create_sigv4_client,
 )
 from unittest.mock import Mock, patch
@@ -117,87 +116,32 @@ class TestCreateAwsSession:
         assert 'invalid-profile' in str(exc_info.value)
 
 
-class TestCreateSigv4Auth:
-    """Test cases for the create_sigv4_auth function."""
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_create_sigv4_auth_default(self, mock_create_session):
-        """Test creating SigV4 auth with default parameters."""
-        # Mock session and credentials
-        mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = 'test_token'
-        mock_session.get_credentials.return_value = mock_credentials
-        mock_create_session.return_value = mock_session
-
-        # Test auth creation
-        result = create_sigv4_auth('test-service', 'test-region')
-
-        # Verify auth was created correctly
-        assert isinstance(result, SigV4HTTPXAuth)
-        assert result.service == 'test-service'
-        assert result.region == 'test-region'  # default region
-        assert result.credentials == mock_credentials
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_create_sigv4_auth_with_explicit_region(self, mock_create_session):
-        """Test creating SigV4 auth with explicit region parameter."""
-        # Mock session and credentials
-        mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = 'test_token'
-        mock_session.get_credentials.return_value = mock_credentials
-        mock_create_session.return_value = mock_session
-
-        # Test auth creation with explicit region
-        result = create_sigv4_auth('test-service', region='ap-southeast-1')
-
-        # Verify auth was created with explicit region
-        assert isinstance(result, SigV4HTTPXAuth)
-        assert result.service == 'test-service'
-        assert result.region == 'ap-southeast-1'
-        assert result.credentials == mock_credentials
-
-
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(self, mock_client_class, mock_create_auth):
+    def test_create_sigv4_client_default(self, mock_client_class):
         """Test creating SigV4 client with default parameters."""
-        # Mock auth and client
-        mock_auth = Mock()
-        mock_create_auth.return_value = mock_auth
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
         # Test client creation
         result = create_sigv4_client(service='test-service', region='test-region')
 
-        # Verify client was created correctly
-        mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
-
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
-        assert call_args[1]['auth'] == mock_auth
+        assert 'auth' not in call_args[1], 'Auth should not be used, signing via hooks'
         assert 'event_hooks' in call_args[1]
         assert 'response' in call_args[1]['event_hooks']
+        assert 'request' in call_args[1]['event_hooks']
         assert len(call_args[1]['event_hooks']['response']) == 1
+        assert len(call_args[1]['event_hooks']['request']) == 2  # metadata + sign hooks
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_auth):
+    def test_create_sigv4_client_with_custom_headers(self, mock_client_class):
         """Test creating SigV4 client with custom headers."""
-        # Mock auth and client
-        mock_auth = Mock()
-        mock_create_auth.return_value = mock_auth
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
@@ -216,15 +160,9 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(
-        self, mock_client_class, mock_create_auth
-    ):
+    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
         """Test creating SigV4 client with custom service and region."""
-        # Mock auth and client
-        mock_auth = Mock()
-        mock_create_auth.return_value = mock_auth
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
@@ -233,17 +171,12 @@ class TestCreateSigv4Client:
             service='custom-service', profile='test-profile', region='us-east-1'
         )
 
-        # Verify auth was created with custom parameters
-        mock_create_auth.assert_called_once_with('custom-service', 'us-east-1', 'test-profile')
+        # Verify client was created
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_kwargs(self, mock_client_class, mock_create_auth):
+    def test_create_sigv4_client_with_kwargs(self, mock_client_class):
         """Test creating SigV4 client with additional kwargs."""
-        # Mock auth and client
-        mock_auth = Mock()
-        mock_create_auth.return_value = mock_auth
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
@@ -261,18 +194,14 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_auth):
+    def test_create_sigv4_client_with_prompt_context(self, mock_client_class):
         """Test creating SigV4 client when prompts exist in the system context.
 
         This test simulates the scenario where the sigv4_helper is used in a context
         where MCP prompts are present, ensuring the client is properly configured
         to handle requests that might include prompt-related content or headers.
         """
-        # Mock auth and client
-        mock_auth = Mock()
-        mock_create_auth.return_value = mock_auth
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
@@ -286,12 +215,8 @@ class TestCreateSigv4Client:
             service='test-service', headers=prompt_context_headers, region='us-west-2'
         )
 
-        # Verify client was created correctly with prompt context
-        mock_create_auth.assert_called_once_with('test-service', 'us-west-2', None)
-
         # Check that AsyncClient was called with correct parameters including prompt headers
         call_args = mock_client_class.call_args
-        assert call_args[1]['auth'] == mock_auth
 
         # Verify headers include both default and prompt-context headers
         expected_headers = {

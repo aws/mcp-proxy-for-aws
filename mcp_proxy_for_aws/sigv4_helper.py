@@ -21,7 +21,11 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
 from functools import partial
-from mcp_proxy_for_aws.hooks import _handle_error_response, _inject_metadata_hook
+from mcp_proxy_for_aws.hooks import (
+    _handle_error_response,
+    _inject_metadata_hook,
+    _sign_request_hook,
+)
 from typing import Any, Dict, Generator, Optional
 
 
@@ -102,42 +106,12 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     return session
 
 
-def create_sigv4_auth(service: str, region: str, profile: Optional[str] = None) -> SigV4HTTPXAuth:
-    """Create SigV4 authentication for AWS requests.
-
-    Args:
-        service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional)
-        region: AWS region (defaults to AWS_REGION env var or us-east-1)
-
-    Returns:
-        SigV4HTTPXAuth instance
-
-    Raises:
-        ValueError: If credentials cannot be obtained
-    """
-    # Create session and get credentials
-    session = create_aws_session(profile)
-    credentials = session.get_credentials()
-
-    # Create SigV4Auth with explicit credentials
-    sigv4_auth = SigV4HTTPXAuth(
-        credentials=credentials,
-        service=service,
-        region=region,
-    )
-
-    logger.info("Created SigV4 authentication for service '%s' in region '%s'", service, region)
-    return sigv4_auth
-
-
 def create_sigv4_client(
     service: str,
     region: str,
     timeout: Optional[httpx.Timeout] = None,
     profile: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
-    auth: Optional[httpx.Auth] = None,
     metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
@@ -149,7 +123,6 @@ def create_sigv4_client(
         region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
-        auth: Auth parameter (ignored as we provide our own)
         metadata: Metadata to inject into MCP _meta field
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
@@ -174,17 +147,15 @@ def create_sigv4_client(
         'Creating httpx.AsyncClient with custom headers: %s', client_kwargs.get('headers', {})
     )
 
-    # Create SigV4 auth
-    sigv4_auth = create_sigv4_auth(service, region, profile)
-
-    # Create the client with SigV4 auth and error handling event hook
-    logger.info("Creating httpx.AsyncClient with SigV4 authentication for service '%s'", service)
+    logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
 
     return httpx.AsyncClient(
-        auth=sigv4_auth,
         **client_kwargs,
         event_hooks={
             'response': [_handle_error_response],
-            'request': [partial(_inject_metadata_hook, metadata or {}, region, service)],
+            'request': [
+                partial(_inject_metadata_hook, metadata or {}),
+                partial(_sign_request_hook, region, service, profile),
+            ],
         },
     )

@@ -369,41 +369,37 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
     @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
-    @patch('mcp_proxy_for_aws.sigv4_helper.SigV4Auth')
-    def test_create_sigv4_client(self, mock_sigv4_auth, mock_async_client, mock_session):
-        """Test creating SigV4 authenticated client with HTTPX auth."""
-        # Arrange
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = 'test_token'
+    def test_create_sigv4_client(self, mock_async_client):
+        """Test creating SigV4 authenticated client with request hooks.
 
-        mock_session_instance = Mock()
-        mock_session_instance.get_credentials.return_value = mock_credentials
-        mock_session.return_value = mock_session_instance
-
+        Note: Session creation and signing now happens in sign_request_hook,
+        not during client creation.
+        """
         # Act
         create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
 
         # Assert
-        mock_session.assert_called_once_with(profile_name='test-profile')
-        mock_sigv4_auth.assert_called_once_with(mock_credentials, 'test-service', 'us-west-2')
-        mock_async_client.assert_called_once()
+        # Verify AsyncClient was called (signing happens via hooks)
+        assert mock_async_client.call_count == 1
+        call_args = mock_async_client.call_args
+        # Verify hooks are registered
+        assert 'event_hooks' in call_args[1]
+        assert 'request' in call_args[1]['event_hooks']
+        assert 'response' in call_args[1]['event_hooks']
+        # Should have metadata injection + sign hooks
+        assert len(call_args[1]['event_hooks']['request']) == 2
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
-    def test_create_sigv4_client_no_credentials(self, mock_session):
-        """Test creating SigV4 client with no credentials."""
-        # Arrange
-        mock_session_instance = Mock()
-        mock_session_instance.get_credentials.return_value = None
-        mock_session.return_value = mock_session_instance
+    def test_create_sigv4_client_no_credentials(self):
+        """Test that credential check happens in sign_request_hook, not during client creation.
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            create_sigv4_client(service='test-service', region='test-region')
-        assert 'No AWS credentials found' in str(exc_info.value)
+        Note: With the refactoring, client creation no longer validates credentials.
+        Credential validation now happens in sign_request_hook when the request is signed.
+        """
+        # Client creation should succeed even without credentials
+        # (credentials are checked when signing happens)
+        client = create_sigv4_client(service='test-service', region='test-region')
+        assert client is not None
 
     def test_main_module_execution(self):
         """Test that main is called when module is executed directly."""

@@ -17,8 +17,6 @@
 import httpx
 import json
 import logging
-from botocore.auth import SigV4Auth
-from botocore.awsrequest import AWSRequest
 from httpx._content import ByteStream
 from typing import Any, Dict, Optional
 
@@ -76,73 +74,50 @@ async def _handle_error_response(response: httpx.Response) -> None:
                 )
 
 
-def _resign_request_with_sigv4(
-    request: httpx.Request,
+async def _sign_request_hook(
     region: str,
     service: str,
-    profile: Optional[str] = None,
+    profile: Optional[str],
+    request: httpx.Request,
 ) -> None:
-    """Re-sign an HTTP request with AWS SigV4 after content modification.
+    """Request hook to sign HTTP requests with AWS SigV4.
 
-    This function removes old signature headers, creates a new signature based on
-    the current request content, and updates the request headers with the new signature.
+    This hook signs the request with AWS SigV4 credentials and adds signature headers.
+
+    This should be the last hook called to ensure the signature includes any modifications.
 
     Args:
-        request: The HTTP request object to re-sign (modified in-place)
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
+        request: The HTTP request object to sign (modified in-place)
     """
-    # Import here to avoid circular dependency
-    from mcp_proxy_for_aws.sigv4_helper import create_aws_session
+    # Import here to avoid circular dependency and for compatibility
+    from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, create_aws_session
 
-    # Remove old signature headers before re-signing
-    headers_to_remove = ['Content-Length', 'x-amz-date', 'x-amz-security-token', 'authorization']
-    for header in headers_to_remove:
-        request.headers.pop(header, None)
-
-    # Set the new Content-Length
+    # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
-
-    logger.info('Headers after cleanup: %s', request.headers)
 
     # Get AWS credentials
     session = create_aws_session(profile)
     credentials = session.get_credentials()
-    logger.info('Re-signing request with credentials for access key: %s', credentials.access_key)
+    logger.info('Signing request with credentials for access key: %s', credentials.access_key)
 
-    # Create headers dict for signing, removing connection header like in auth_flow
-    headers_for_signing = dict(request.headers)
-    headers_for_signing.pop('connection', None)  # Remove connection header for signing
+    # Create SigV4 auth and use its signing logic
+    auth = SigV4HTTPXAuth(credentials, service, region)
 
-    # Create SigV4 signer and AWS request
-    signer = SigV4Auth(credentials, service, region)
-    aws_request = AWSRequest(
-        method=request.method,
-        url=str(request.url),
-        data=request.content,
-        headers=headers_for_signing,
-    )
+    # Call auth_flow to sign the request (it modifies request in-place)
+    auth_flow = auth.auth_flow(request)
+    next(auth_flow)  # Execute the generator to perform signing
 
-    # Sign the request
-    logger.info('AWS request before signing: %s', aws_request.headers)
-    signer.add_auth(aws_request)
-    logger.info('AWS request after signing: %s', aws_request.headers)
-
-    # Update request headers with signed headers
-    request.headers.update(dict(aws_request.headers))
-    logger.info('Request headers after re-signing: %s', request.headers)
+    logger.debug('Request headers after signing: %s', request.headers)
 
 
-async def _inject_metadata_hook(
-    metadata: Dict[str, Any], region: str, service: str, request: httpx.Request
-) -> None:
+async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request) -> None:
     """Request hook to inject metadata into MCP calls.
 
     Args:
         metadata: Dictionary of metadata to inject into _meta field
-        region: AWS region for SigV4 re-signing after metadata injection
-        service: AWS service name for SigV4 re-signing after metadata injection
         request: The HTTP request object
     """
     logger.info('=== Outgoing Request ===')
@@ -188,9 +163,6 @@ async def _inject_metadata_hook(
                 # Update the request with new content
                 request.stream = ByteStream(new_content)
                 request._content = new_content
-
-                # Re-sign the request with the new content
-                _resign_request_with_sigv4(request, region, service)
 
                 logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
 
