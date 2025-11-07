@@ -1,6 +1,6 @@
 ## Integration tests
 
-This folder contains the Integration tests for the aws-mcp-proxy. To help with testing, we have also created a simple MCP Server and MCP Client to mimic a real scenario.
+This folder contains the Integration tests for the mcp-proxy-for-aws. To help with testing, we have also created a simple MCP Server and MCP Client to mimic a real scenario.
 
 * `mcp/simple_mcp_server/mcp_server.py` - A simple MCP Server which supports different features to mimic the Customers remote MCP Server
 * `mcp/simple_mcp_client.py` - A simple MCP Client which uses the proxy to connect to a remote HTTP MCP Server

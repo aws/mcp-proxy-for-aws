@@ -1,0 +1,12 @@
+[project]
+name = "mcp-client-example-strands-agents"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp-proxy-for-aws",
+    "python-dotenv",
+    "strands-agents",
+]
+
+[tool.uv.sources]
+mcp-proxy-for-aws = { workspace = true }

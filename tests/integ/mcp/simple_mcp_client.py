@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
-    """Create a MCP Client using the aws-mcp-proxy against a remote MCP Server."""
+    """Create a MCP Client using the mcp-proxy-for-aws against a remote MCP Server."""
     return fastmcp.Client(
         StdioTransport(
             **_build_mcp_config(
@@ -18,12 +18,12 @@ def build_mcp_client(endpoint: str, region_name: str) -> fastmcp.Client:
             )
         ),
         elicitation_handler=_basic_elicitation_handler,
-        timeout=10.0,  # seconds
+        timeout=30.0,  # seconds
     )
 
 
 async def _basic_elicitation_handler(message: str, response_type: type, params, context):
-    logger.info(f'Server asks: {message} with response_type {response_type}')
+    logger.info('Server asks: %s with response_type %s', message, response_type)
 
     # Usually the Handler would expect an user Input to control flow via Accept, Decline, Cancel
     # But in this Integ test we only care that an Elicitation request went through the handler
@@ -50,7 +50,7 @@ def _build_mcp_config(endpoint: str, region_name: str):
     }
 
     return {
-        'command': 'aws-mcp-proxy',
+        'command': 'mcp-proxy-for-aws',
         'args': [
             endpoint,
             '--log-level',

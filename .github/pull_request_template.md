@@ -12,7 +12,7 @@
 
 If your change doesn't seem to apply, please leave them unchecked.
 
-* [ ] I have reviewed the [contributing guidelines](https://github.com/aws/aws-mcp-proxy/blob/main/CONTRIBUTING.md)
+* [ ] I have reviewed the [contributing guidelines](https://github.com/aws/mcp-proxy-for-aws/blob/main/CONTRIBUTING.md)
 * [ ] I have performed a self-review of this change
 * [ ] Changes have been tested
 * [ ] Changes are documented

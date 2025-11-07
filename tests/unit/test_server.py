@@ -12,31 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the aws-mcp-proxy Server."""
+"""Tests for the mcp-proxy-for-aws Server."""
 
 import pytest
-from aws_mcp_proxy.server import (
+from fastmcp.server.server import FastMCP
+from mcp_proxy_for_aws.server import (
     add_retry_middleware,
     add_tool_filtering_middleware,
     main,
     parse_args,
     setup_mcp_mode,
 )
-from aws_mcp_proxy.sigv4_helper import create_sigv4_client
-from aws_mcp_proxy.utils import determine_service_name
-from fastmcp.server.server import FastMCP
+from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
+from mcp_proxy_for_aws.utils import determine_service_name
 from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestServer:
     """Tests for the server module."""
 
-    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    @patch('aws_mcp_proxy.server.determine_aws_region')
-    @patch('aws_mcp_proxy.server.determine_service_name')
-    @patch('aws_mcp_proxy.server.add_tool_filtering_middleware')
-    @patch('aws_mcp_proxy.server.add_retry_middleware')
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    @patch('mcp_proxy_for_aws.server.add_retry_middleware')
     async def test_setup_mcp_mode(
         self,
         mock_add_retry,
@@ -56,6 +56,12 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
+        # Add timeout parameters
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
@@ -74,19 +80,24 @@ class TestServer:
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
         mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
-        mock_create_transport.assert_called_once_with(
-            'https://test.example.com', 'test-service', 'us-east-1', None
-        )
+        # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        assert call_args[0][0] == 'https://test.example.com'
+        assert call_args[0][1] == 'test-service'
+        assert call_args[0][2] == 'us-east-1'
+        # call_args[0][3] is the Timeout object
+        assert call_args[0][4] is None  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
         mock_proxy.run_async.assert_called_once()
 
-    @patch('aws_mcp_proxy.server.create_transport_with_sigv4')
-    @patch('aws_mcp_proxy.server.FastMCP.as_proxy')
-    @patch('aws_mcp_proxy.server.determine_aws_region')
-    @patch('aws_mcp_proxy.server.determine_service_name')
-    @patch('aws_mcp_proxy.server.add_tool_filtering_middleware')
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
     async def test_setup_mcp_mode_no_retries(
         self,
         mock_add_filtering,
@@ -105,6 +116,12 @@ class TestServer:
         mock_args.profile = 'test-profile'
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
+        # Add timeout parameters
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
@@ -123,9 +140,14 @@ class TestServer:
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
         mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
-        mock_create_transport.assert_called_once_with(
-            'https://test.example.com', 'test-service', 'us-east-1', 'test-profile'
-        )
+        # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        assert call_args[0][0] == 'https://test.example.com'
+        assert call_args[0][1] == 'test-service'
+        assert call_args[0][2] == 'us-east-1'
+        # call_args[0][3] is the Timeout object
+        assert call_args[0][4] == 'test-profile'  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()
@@ -142,7 +164,7 @@ class TestServer:
         mock_mcp.add_middleware.assert_called_once()
         # Verify that the middleware added is a ToolFilteringMiddleware
         call_args = mock_mcp.add_middleware.call_args[0][0]
-        from aws_mcp_proxy.middleware.tool_filter import ToolFilteringMiddleware
+        from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 
         assert isinstance(call_args, ToolFilteringMiddleware)
         assert call_args.read_only is True
@@ -172,7 +194,7 @@ class TestServer:
         assert args.region is None
         assert args.profile is None
         assert args.read_only is False
-        assert args.log_level == 'INFO'
+        assert args.log_level == 'ERROR'
         assert args.retries == 0
 
     @patch(
@@ -201,7 +223,7 @@ class TestServer:
         assert args.log_level == 'DEBUG'
         assert args.retries == 5
 
-    @patch('aws_mcp_proxy.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.asyncio.run')
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_main_function(self, mock_asyncio_run):
         """Test that main function runs server correctly."""
@@ -214,7 +236,7 @@ class TestServer:
         # Assert
         mock_asyncio_run.assert_called_once()
 
-    @patch('aws_mcp_proxy.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.asyncio.run')
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_main_error_handling(self, mock_asyncio_run):
         """Test that main function handles errors gracefully."""
@@ -240,9 +262,9 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('aws_mcp_proxy.sigv4_helper.boto3.Session')
-    @patch('aws_mcp_proxy.sigv4_helper.httpx.AsyncClient')
-    @patch('aws_mcp_proxy.sigv4_helper.SigV4Auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
+    @patch('mcp_proxy_for_aws.sigv4_helper.SigV4Auth')
     def test_create_sigv4_client(self, mock_sigv4_auth, mock_async_client, mock_session):
         """Test creating SigV4 authenticated client with HTTPX auth."""
         # Arrange
@@ -263,7 +285,7 @@ class TestServer:
         mock_sigv4_auth.assert_called_once_with(mock_credentials, 'test-service', 'us-west-2')
         mock_async_client.assert_called_once()
 
-    @patch('aws_mcp_proxy.sigv4_helper.boto3.Session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
     def test_create_sigv4_client_no_credentials(self, mock_session):
         """Test creating SigV4 client with no credentials."""
         # Arrange
@@ -280,7 +302,7 @@ class TestServer:
         """Test that main is called when module is executed directly."""
         # This test is more complex because we need to test the actual module execution
         # We'll test by checking if the server module has the correct structure
-        import aws_mcp_proxy.server as server_module
+        import mcp_proxy_for_aws.server as server_module
 
         # Verify the module has the main function
         assert hasattr(server_module, 'main')

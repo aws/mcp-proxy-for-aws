@@ -1,0 +1,14 @@
+[project]
+name = "mcp-client-example-llamaindex"
+version = "0.1.0"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "llama-index",
+    "llama-index-llms-openai",
+    "llama-index-tools-mcp",
+    "mcp-proxy-for-aws",
+    "python-dotenv",
+]
+
+[tool.uv.sources]
+mcp-proxy-for-aws = { workspace = true }

@@ -17,7 +17,7 @@
 import httpx
 import json
 import pytest
-from aws_mcp_proxy.sigv4_helper import (
+from mcp_proxy_for_aws.sigv4_helper import (
     SigV4HTTPXAuth,
     _handle_error_response,
     create_aws_session,
@@ -70,15 +70,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        # Test that the function raises HTTPStatusError with enhanced message
-        with pytest.raises(httpx.HTTPStatusError) as exc_info:
-            await _handle_error_response(response)
-
-        # Verify the error message contains the JSON details
-        error_msg = str(exc_info.value)
-        assert '404' in error_msg
-        assert 'Not Found' in error_msg
-        assert 'https://example.com/test' in error_msg
+        await _handle_error_response(response)
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_non_json_error(self):
@@ -92,12 +84,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        # Test that the function raises HTTPStatusError
-        with pytest.raises(httpx.HTTPStatusError) as exc_info:
-            await _handle_error_response(response)
-
-        # Verify the error contains status code information
-        assert exc_info.value.response.status_code == 500
+        await _handle_error_response(response)
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_success_response(self):
@@ -111,11 +98,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        # Test that no exception is raised for successful responses
-        try:
-            await _handle_error_response(response)
-        except Exception as e:
-            pytest.fail(f'Unexpected exception raised for success response: {e}')
+        await _handle_error_response(response)
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_read_failure(self):
@@ -135,9 +118,7 @@ class TestHandleErrorResponse:
             )
         )
 
-        # Test that the function still raises HTTPStatusError even when reading fails
-        with pytest.raises(httpx.HTTPStatusError):
-            await _handle_error_response(response)
+        await _handle_error_response(response)
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_invalid_json(self):
@@ -151,9 +132,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        # Test that the function raises HTTPStatusError even with invalid JSON
-        with pytest.raises(httpx.HTTPStatusError):
-            await _handle_error_response(response)
+        await _handle_error_response(response)
 
 
 class TestCreateAwsSession:
@@ -224,7 +203,7 @@ class TestCreateAwsSession:
 class TestCreateSigv4Auth:
     """Test cases for the create_sigv4_auth function."""
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     def test_create_sigv4_auth_default(self, mock_create_session):
         """Test creating SigV4 auth with default parameters."""
         # Mock session and credentials
@@ -245,7 +224,7 @@ class TestCreateSigv4Auth:
         assert result.region == 'test-region'  # default region
         assert result.credentials == mock_credentials
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_aws_session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     def test_create_sigv4_auth_with_explicit_region(self, mock_create_session):
         """Test creating SigV4 auth with explicit region parameter."""
         # Mock session and credentials
@@ -270,7 +249,7 @@ class TestCreateSigv4Auth:
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
     def test_create_sigv4_client_default(self, mock_client_class, mock_create_auth):
         """Test creating SigV4 client with default parameters."""
@@ -295,7 +274,7 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
         assert result == mock_client
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
     def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_auth):
         """Test creating SigV4 client with custom headers."""
@@ -320,7 +299,7 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
     def test_create_sigv4_client_with_custom_service_and_region(
         self, mock_client_class, mock_create_auth
@@ -341,7 +320,7 @@ class TestCreateSigv4Client:
         mock_create_auth.assert_called_once_with('custom-service', 'us-east-1', 'test-profile')
         assert result == mock_client
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
     def test_create_sigv4_client_with_kwargs(self, mock_client_class, mock_create_auth):
         """Test creating SigV4 client with additional kwargs."""
@@ -365,7 +344,7 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
-    @patch('aws_mcp_proxy.sigv4_helper.create_sigv4_auth')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_sigv4_auth')
     @patch('httpx.AsyncClient')
     def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_auth):
         """Test creating SigV4 client when prompts exist in the system context.

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the src.aws-mcp-proxy package."""
+"""Tests for the src.mcp-proxy-for-aws package."""
 
 import importlib
 import re
@@ -24,30 +24,30 @@ class TestInit:
     def test_version(self):
         """Test that __version__ is defined and follows semantic versioning."""
         # Import the module
-        import aws_mcp_proxy
+        import mcp_proxy_for_aws
 
         # Check that __version__ is defined
-        assert hasattr(aws_mcp_proxy, '__version__')
+        assert hasattr(mcp_proxy_for_aws, '__version__')
 
         # Check that __version__ is a string
-        assert isinstance(aws_mcp_proxy.__version__, str)
+        assert isinstance(mcp_proxy_for_aws.__version__, str)
 
         # Check that __version__ follows semantic versioning (major.minor.patch)
         version_pattern = r'^\d+\.\d+\.\d+$'
-        assert re.match(version_pattern, aws_mcp_proxy.__version__), (
-            f"Version '{aws_mcp_proxy.__version__}' does not follow semantic versioning"
+        assert re.match(version_pattern, mcp_proxy_for_aws.__version__), (
+            f"Version '{mcp_proxy_for_aws.__version__}' does not follow semantic versioning"
         )
 
     def test_module_reload(self):
         """Test that the module can be reloaded."""
         # Import the module
-        import aws_mcp_proxy
+        import mcp_proxy_for_aws
 
         # Store the original version
-        original_version = aws_mcp_proxy.__version__
+        original_version = mcp_proxy_for_aws.__version__
 
         # Reload the module
-        importlib.reload(aws_mcp_proxy)
+        importlib.reload(mcp_proxy_for_aws)
 
         # Check that the version is still the same
-        assert aws_mcp_proxy.__version__ == original_version
+        assert mcp_proxy_for_aws.__version__ == original_version

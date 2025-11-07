@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers the development workflow for the AWS MCP Proxy Server.
+This guide covers the development workflow of MCP Proxy for AWS.
 
 ## Table of Contents
 
@@ -29,8 +29,8 @@ Before you begin development, ensure you have the following installed:
 
 ```bash
 # Clone the repository
-git clone git@github.com:aws/aws-mcp-proxy.git
-cd aws-mcp-proxy
+git clone git@github.com:aws/mcp-proxy-for-aws.git
+cd mcp-proxy-for-aws
 
 # Install dependencies including dev dependencies
 uv sync --group dev
@@ -43,7 +43,7 @@ uv run pre-commit install
 
 ```bash
 # Check that the server can start
-uv run aws_mcp_proxy/server.py --help
+uv run mcp_proxy_for_aws/server.py --help
 
 # Run tests to ensure everything is working
 uv run pytest
@@ -52,7 +52,7 @@ uv run pytest
 ## Project Structure
 
 ```
-aws_mcp_proxy/
+mcp_proxy_for_aws/
 ├── __init__.py              # Package initialization
 ├── server.py                # Main MCP server implementation
 ├── mcp_proxy_manager.py     # MCP proxy management logic
@@ -96,23 +96,21 @@ git commit -m "feat: add new feature description"
 #### Basic Local Execution
 ```bash
 # Run the server directly
-uv run aws_mcp_proxy/server.py --endpoint <your-endpoint>
+uv run mcp_proxy_for_aws/server.py <your-endpoint>
 ```
 
 #### With MCP Inspector (for debugging)
 ```bash
 # Run with MCP inspector for interactive debugging
 npx @modelcontextprotocol/inspector uv run \
-  aws_mcp_proxy/server.py \
-  --endpoint <your-endpoint>
+  mcp_proxy_for_aws/server.py <your-endpoint>
 ```
 A browser window will open automatically outside of your terminal window. Navigate to the browser window. Then click "Connect" in the opened browser window to interact with the server.
 
 #### Advanced Options
 ```bash
 # Run with specific AWS profile and write permissions
-uv run aws_mcp_proxy/server.py \
-  --endpoint <your-endpoint> \
+uv run mcp_proxy_for_aws/server.py <your-endpoint> \
   --service <aws-service> \
   --profile <aws-profile> \
   --allow-write
@@ -284,7 +282,7 @@ If your commit message doesn't follow conventional format, the pre-commit hook w
 #### Configuration
 
 Commitizen is configured in `pyproject.toml`:
-- **Version files**: Automatically updates version in `pyproject.toml` and `aws_mcp_proxy/__init__.py`
+- **Version files**: Automatically updates version in `pyproject.toml` and `mcp_proxy_for_aws/__init__.py`
 - **Tag format**: Creates git tags in `v{version}` format (e.g., `v0.1.0`)
 - **Changelog**: Automatically generates `CHANGELOG.md` when bumping versions
 
@@ -378,7 +376,7 @@ Enable debug logging for troubleshooting:
 ```bash
 # Set logging level to debug
 export LOG_LEVEL=DEBUG
-uv run aws_mcp_proxy/server.py --endpoint <endpoint>
+uv run mcp_proxy_for_aws/server.py <endpoint>
 ```
 
 ## Additional Resources
@@ -391,6 +389,6 @@ uv run aws_mcp_proxy/server.py --endpoint <endpoint>
 ---
 
 For questions or issues not covered in this guide, please:
-1. Check existing [GitHub Issues](https://github.com/aws/aws-mcp-proxy/issues)
+1. Check existing [GitHub Issues](https://github.com/aws/mcp-proxy-for-aws/issues)
 2. Review the [MCP Specification](https://spec.modelcontextprotocol.io/)
 3. Create a new issue with detailed information about your problem
