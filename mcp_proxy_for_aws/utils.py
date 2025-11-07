@@ -101,6 +101,35 @@ def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
     return determined_service
 
 
+def is_global_endpoint(endpoint: str) -> bool:
+    """Detect if endpoint is a global endpoint based on URL pattern.
+
+    Args:
+        endpoint: The endpoint URL
+
+    Returns:
+        True if endpoint appears to be global, False otherwise
+    """
+    parsed = urlparse(endpoint)
+    hostname = parsed.hostname or ''
+
+    # Check for global endpoint patterns:
+    # - Contains ".global." in hostname
+    # - Ends with ".api.aws" without region pattern
+    # - Contains "global" subdomain
+    if '.global.' in hostname or hostname.startswith('global.'):
+        return True
+
+    # Check if it's an api.aws endpoint without a region
+    if '.api.aws' in hostname:
+        # If no region pattern found, it might be global
+        region_match = re.search(r'\.([a-z0-9-]+)\.api\.aws', hostname)
+        if not region_match:
+            return True
+
+    return False
+
+
 def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
     """Validate and determine the AWS region.
 
@@ -109,7 +138,7 @@ def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
         region: Optional region name
 
     Returns:
-        Validated AWS region
+        Validated AWS region (defaults to us-east-1 for global endpoints)
 
     Raises:
         ValueError: If region cannot be determined
@@ -117,6 +146,11 @@ def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
     if region:
         logger.debug('Region determined through explicit parameter')
         return region
+
+    # Check if it's a global endpoint first (before trying to parse region)
+    if is_global_endpoint(endpoint):
+        logger.info('Global endpoint detected, defaulting to us-east-1 with SigV4 (will auto-detect SigV4A if needed)')
+        return "us-east-1"
 
     # Parse AWS region from endpoint URL
     parsed = urlparse(endpoint)

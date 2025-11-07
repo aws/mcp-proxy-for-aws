@@ -210,3 +210,102 @@ async def test_context_manager_cleanup(mock_session, mock_streams):
                 pass
 
             assert cleanup_called
+
+
+@pytest.mark.asyncio
+async def test_auto_detect_sigv4a_enabled(mock_session, mock_streams):
+    """Test that SigV4HTTPXAuth is always created (auto-detection is always enabled)."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auto_auth_cls:
+            with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+                mock_auto_auth = Mock()
+                mock_auto_auth_cls.return_value = mock_auto_auth
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    aws_region='us-west-2',
+                ):
+                    pass
+
+                # Verify SigV4HTTPXAuth was created with correct parameters
+                mock_auto_auth_cls.assert_called_once_with(
+                    mock_session.get_credentials.return_value,
+                    'bedrock-agentcore',
+                    'us-west-2',
+                )
+                # Verify the auth handler was passed to streamablehttp_client
+                assert mock_stream_client.call_args[1]['auth'] is mock_auto_auth
+
+
+@pytest.mark.asyncio
+async def test_auto_detect_sigv4a_disabled(mock_session, mock_streams):
+    """Test that SigV4HTTPXAuth is always created (no disable option)."""
+    # This test is now redundant since auto-detection is always enabled
+    # Keeping it for backward compatibility but it tests the same as the above
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auto_auth_cls:
+            with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+                mock_auto_auth = Mock()
+                mock_auto_auth_cls.return_value = mock_auto_auth
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    aws_region='us-west-2',
+                ):
+                    pass
+
+                # Verify SigV4HTTPXAuth was created with correct parameters
+                mock_auto_auth_cls.assert_called_once_with(
+                    mock_session.get_credentials.return_value,
+                    'bedrock-agentcore',
+                    'us-west-2',
+                )
+                # Verify the auth handler was passed to streamablehttp_client
+                assert mock_stream_client.call_args[1]['auth'] is mock_auto_auth
+
+
+@pytest.mark.asyncio
+async def test_auto_detect_sigv4a_default_behavior(mock_session, mock_streams):
+    """Test backward compatibility - default behavior uses auto-detection."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auto_auth_cls:
+            with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+                mock_auto_auth = Mock()
+                mock_auto_auth_cls.return_value = mock_auto_auth
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                # Call without specifying auto_detect_sigv4a parameter
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    aws_region='us-west-2',
+                ):
+                    pass
+
+                # Verify SigV4HTTPXAuth was created (default behavior)
+                mock_auto_auth_cls.assert_called_once_with(
+                    mock_session.get_credentials.return_value,
+                    'bedrock-agentcore',
+                    'us-west-2',
+                )
+                # Verify the auth handler was passed to streamablehttp_client
+                assert mock_stream_client.call_args[1]['auth'] is mock_auto_auth

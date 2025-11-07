@@ -21,8 +21,33 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 
 **The Solution:** This package bridges that gap by:
 - **Handling SigV4 authentication automatically** - Uses your local AWS credentials (from AWS CLI, environment variables, or IAM roles) to sign all MCP requests using [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html)
+- **Supporting global endpoints with SigV4A** - Automatically detects and upgrades to [SigV4A](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-signing.html) for multi-region and global AWS endpoints
 - **Providing seamless integration** - Works with existing MCP clients and frameworks
 - **Eliminating custom code** - No need to build your own MCP client with SigV4 signing logic
+
+### SigV4A Auto-Detection for Global Endpoints
+
+This package automatically handles authentication for both regional and global AWS endpoints:
+
+**Regional Endpoints (SigV4):**
+- Standard AWS endpoints tied to a specific region (e.g., `https://service.us-east-1.api.aws/mcp`)
+- Uses AWS Signature Version 4 (SigV4) for authentication
+- Region is extracted from the endpoint URL or specified explicitly
+
+**Global Endpoints (SigV4A):**
+- AWS endpoints that operate across multiple regions or globally (e.g., `https://service.global.api.aws/mcp`)
+- Automatically detected based on URL patterns (`.global.`, `global.` subdomain, or `.api.aws` without region)
+- Starts with SigV4 for compatibility, then automatically upgrades to SigV4A if the endpoint requires it
+- No configuration changes needed when services transition from regional to global
+
+**How Auto-Detection Works:**
+
+1. **Endpoint Detection** - The proxy analyzes the endpoint URL to determine if it's a global endpoint
+2. **Initial Request** - For global endpoints, starts with SigV4 signing (region defaults to `us-east-1`)
+3. **Automatic Upgrade** - If the endpoint returns an error indicating SigV4A is required, automatically retries with SigV4A
+4. **Subsequent Requests** - Once SigV4A is detected, all future requests use SigV4A signing
+
+This approach ensures seamless compatibility as AWS services evolve from regional to global endpoints without requiring configuration updates.
 
 ## Which Feature Should I Use?
 
@@ -163,6 +188,123 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 }
 ```
 
+### Usage Examples
+
+#### Example 1: Global Endpoint with Auto-Detection
+
+For global AWS endpoints, the proxy automatically detects the endpoint type and handles authentication:
+
+```json
+{
+  "mcpServers": {
+    "global-mcp-server": {
+      "command": "uv",
+      "args": [
+        "run",
+        "mcp-proxy-for-aws",
+        "https://service.global.api.aws/mcp",
+        "--service",
+        "my-service",
+        "--profile",
+        "default"
+      ]
+    }
+  }
+}
+```
+
+**What happens:**
+- The proxy detects `.global.` in the URL and identifies it as a global endpoint
+- Region defaults to `us-east-1` for the initial request
+- Starts with SigV4 signing for compatibility
+- If the endpoint requires SigV4A, automatically retries with SigV4A
+- All subsequent requests use the detected signing method
+
+#### Example 2: Regional Endpoint
+
+For regional endpoints, the proxy uses standard SigV4 signing:
+
+```json
+{
+  "mcpServers": {
+    "regional-mcp-server": {
+      "command": "uv",
+      "args": [
+        "run",
+        "mcp-proxy-for-aws",
+        "https://service.us-west-2.api.aws/mcp",
+        "--service",
+        "my-service",
+        "--region",
+        "us-west-2",
+        "--profile",
+        "default"
+      ]
+    }
+  }
+}
+```
+
+**What happens:**
+- The proxy extracts `us-west-2` from the URL
+- Uses SigV4 signing with the specified region
+- No auto-detection needed for regional endpoints
+
+#### Example 3: Explicit Region Override
+
+You can explicitly specify a region even for global endpoints:
+
+```json
+{
+  "mcpServers": {
+    "global-mcp-server-explicit": {
+      "command": "uv",
+      "args": [
+        "run",
+        "mcp-proxy-for-aws",
+        "https://service.global.api.aws/mcp",
+        "--service",
+        "my-service",
+        "--region",
+        "eu-west-1",
+        "--profile",
+        "default"
+      ]
+    }
+  }
+}
+```
+
+**What happens:**
+- The explicit `--region` parameter takes precedence
+- Uses `eu-west-1` for the initial SigV4 request
+- Auto-detection still works if SigV4A is required
+
+### Global Endpoint URL Patterns
+
+The proxy automatically detects global endpoints based on these URL patterns:
+
+| Pattern | Example | Detection |
+|---------|---------|-----------|
+| Contains `.global.` | `https://service.global.api.aws/mcp` | ✅ Global endpoint |
+| Starts with `global.` | `https://global.service.api.aws/mcp` | ✅ Global endpoint |
+| Ends with `.api.aws` (no region) | `https://service.api.aws/mcp` | ✅ Global endpoint |
+| Contains region pattern | `https://service.us-east-1.api.aws/mcp` | ❌ Regional endpoint |
+
+**Region Defaulting Behavior:**
+- **Global endpoints**: Default to `us-east-1` region for initial SigV4 request
+- **Regional endpoints**: Extract region from URL (e.g., `us-west-2` from `service.us-west-2.api.aws`)
+- **Explicit region**: The `--region` parameter always takes precedence over auto-detection
+
+**Auto-Detection and Retry Logic:**
+1. **First Request**: Proxy attempts authentication with SigV4 using the determined region
+2. **Error Detection**: If the endpoint returns a 403 error with signature mismatch indicating SigV4A is required
+3. **Automatic Retry**: Proxy automatically retries the same request with SigV4A signing (region set to `*` for global)
+4. **Caching**: Once SigV4A is detected, all subsequent requests use SigV4A without retry
+5. **Logging**: Auto-detection events are logged at INFO level for visibility
+
+**Note:** Auto-detection adds minimal overhead (one retry on first request only) and ensures compatibility as AWS services evolve from regional to global endpoints.
+
 ---
 
 ## Programmatic Access
@@ -245,6 +387,89 @@ async with mcp_client as (read, write, session_id_callback):
         agent = ReActAgent(tools=mcp_tools, ...)
 ```
 
+### Programmatic Usage Examples
+
+#### Example 1: Global Endpoint with Auto-Detection
+
+For global AWS endpoints, the client automatically handles SigV4A detection:
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+# Global endpoint - region auto-detected as us-east-1, SigV4A auto-detected if needed
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint="https://service.global.api.aws/mcp",
+    aws_service="my-service",
+    aws_profile="default"
+)
+
+async with mcp_client as (read, write, session_id_callback):
+    async with ClientSession(read, write) as session:
+        # Use the session with your framework
+        tools = await session.list_tools()
+```
+
+**What happens:**
+- The client detects `.global.` in the endpoint URL
+- Defaults to `us-east-1` region for initial request
+- Starts with SigV4, automatically upgrades to SigV4A if needed
+- No configuration changes required
+
+#### Example 2: Regional Endpoint
+
+For regional endpoints, standard SigV4 signing is used:
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+# Regional endpoint - uses specified region with SigV4
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint="https://service.us-west-2.api.aws/mcp",
+    aws_service="my-service",
+    aws_region="us-west-2",
+    aws_profile="default"
+)
+
+async with mcp_client as (read, write, session_id_callback):
+    async with ClientSession(read, write) as session:
+        # Use the session with your framework
+        tools = await session.list_tools()
+```
+
+**What happens:**
+- The client uses the specified `us-west-2` region
+- Uses SigV4 signing for regional endpoint
+- No auto-detection needed
+
+#### Example 3: Disabling Auto-Detection
+
+For performance-critical applications with known regional endpoints, you can disable auto-detection:
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+# Disable auto-detection for performance optimization
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint="https://service.us-west-2.api.aws/mcp",
+    aws_service="my-service",
+    aws_region="us-west-2",
+    aws_profile="default",
+    auto_detect_sigv4a=False  # Disable auto-detection
+)
+
+async with mcp_client as (read, write, session_id_callback):
+    async with ClientSession(read, write) as session:
+        # Use the session with your framework
+        tools = await session.list_tools()
+```
+
+**When to disable auto-detection:**
+- You know the endpoint only requires SigV4 (regional endpoint)
+- You want to avoid the potential one-time retry overhead
+- You're optimizing for performance in high-throughput scenarios
+
+**Note:** Auto-detection is enabled by default and recommended for most use cases to ensure compatibility as services evolve.
+
 ### Running Examples
 
 Explore complete working examples for different frameworks in the [`./examples/mcp-client`](./examples/mcp-client) directory:
@@ -275,6 +500,52 @@ git clone https://github.com/aws/mcp-proxy-for-aws.git
 cd mcp-proxy-for-aws
 uv sync
 ```
+
+---
+
+## Understanding SigV4 vs SigV4A
+
+### What is SigV4?
+
+AWS Signature Version 4 (SigV4) is the standard authentication protocol for AWS services. It signs requests with your AWS credentials to verify your identity and authorize access to AWS resources. SigV4 signatures are region-specific, meaning a request signed for `us-east-1` is only valid in that region.
+
+**Use SigV4 when:**
+- Connecting to regional AWS endpoints (e.g., `service.us-west-2.api.aws`)
+- Your MCP server operates in a single, specific AWS region
+- You want the most straightforward authentication setup
+
+### What is SigV4A?
+
+AWS Signature Version 4A (SigV4A) is an extension of SigV4 that supports multi-region signing. A SigV4A signature can be valid across multiple AWS regions simultaneously, which is essential for global or multi-region AWS services.
+
+**Use SigV4A when:**
+- Connecting to global AWS endpoints (e.g., `service.global.api.aws`)
+- Your MCP server operates across multiple regions
+- The AWS service requires multi-region authentication
+
+### When to Use Each
+
+| Scenario | Recommended | Why |
+|----------|-------------|-----|
+| Regional MCP server | SigV4 | Simpler, region-specific authentication |
+| Global MCP server | SigV4A | Required for multi-region services |
+| Unknown endpoint type | Auto-detection | Automatically uses the correct method |
+| Service transitioning to global | Auto-detection | Seamless upgrade without config changes |
+
+### Auto-Detection Benefits
+
+The MCP Proxy for AWS uses intelligent auto-detection to choose the right signing method:
+
+1. **Zero Configuration** - No need to specify which signing method to use
+2. **Future-Proof** - Automatically adapts when services transition from regional to global
+3. **Backward Compatible** - Works with both SigV4 and SigV4A endpoints
+4. **Minimal Overhead** - Only one retry on first request if upgrade is needed
+5. **Transparent** - Logs detection events for visibility and debugging
+
+### Requirements
+
+- **SigV4**: Available in all versions of botocore
+- **SigV4A**: Requires botocore >= 1.31.0 (automatically installed with this package)
 
 ---
 
