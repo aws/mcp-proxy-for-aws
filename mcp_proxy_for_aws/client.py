@@ -48,7 +48,8 @@ def aws_iam_streamablehttp_client(
     """Create an AWS IAM-authenticated MCP streamable HTTP client.
 
     This function creates a context manager for connecting to an MCP server using AWS IAM
-    authentication via SigV4 signing. Use with 'async with' to manage the connection lifecycle.
+    authentication via SigV4 signing with automatic SigV4A detection enabled by default.
+    Use with 'async with' to manage the connection lifecycle.
 
     Args:
         endpoint: The URL of the MCP server to connect to. Must be a valid HTTP/HTTPS URL.
@@ -98,8 +99,10 @@ def aws_iam_streamablehttp_client(
     logger.debug('AWS region: %s', region)
     logger.debug('AWS service: %s', aws_service)
 
-    # Create a SigV4 authentication handler with AWS credentials
+    # Create authentication handler with AWS credentials
+    # Auto-detection is always enabled to support both regional and global endpoints
     auth = SigV4HTTPXAuth(session.get_credentials(), aws_service, region)
+    logger.debug('Using SigV4 authentication with SigV4A auto-detection')
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
     return streamablehttp_client(

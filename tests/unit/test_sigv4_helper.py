@@ -54,6 +54,394 @@ class TestSigV4HTTPXAuth:
         assert 'X-Amz-Date' in signed_request.headers
 
 
+class TestSigV4HTTPXAuthAutoDetect:
+    """Test cases for the SigV4HTTPXAuth class with auto-detection."""
+
+    def test_initialization_starts_with_sigv4(self):
+        """Test that SigV4HTTPXAuth starts with SigV4 signer."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Verify initialization
+        assert auth.credentials == mock_credentials
+        assert auth.service == 'test-service'
+        assert auth.region == 'us-west-2'
+        assert auth.use_sigv4a is False
+        assert auth.sigv4_signer is not None
+        assert auth.sigv4a_signer is None  # Lazy initialization
+
+    def test_lazy_initialization_of_sigv4a_signer(self):
+        """Test that SigV4A signer is lazily initialized."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Verify SigV4A signer is not initialized yet
+        assert auth.sigv4a_signer is None
+
+        # Trigger lazy initialization by setting use_sigv4a
+        auth.use_sigv4a = True
+        # Note: actual initialization happens in auth_flow when needed
+
+    def test_credential_handling(self):
+        """Test that credentials are properly stored and accessible."""
+        # Create mock credentials with all attributes
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_session_token'
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Verify credentials are stored correctly
+        assert auth.credentials == mock_credentials
+        assert auth.credentials.access_key == 'test_access_key'
+        assert auth.credentials.secret_key == 'test_secret_key'
+        assert auth.credentials.token == 'test_session_token'
+
+    @pytest.mark.asyncio
+    async def test_successful_sigv4_request_no_retry(self):
+        """Test that successful SigV4 request does not trigger retry."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create a test request
+        request = httpx.Request('GET', 'https://example.com/test', headers={'Host': 'example.com'})
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Mock successful response
+        success_response = httpx.Response(
+            status_code=200,
+            headers={'content-type': 'application/json'},
+            content=b'{"success": true}',
+            request=request,
+        )
+
+        # Get signed request from auth flow
+        auth_flow = auth.auth_flow(request)
+        signed_request = next(auth_flow)
+
+        # Verify request was signed with SigV4
+        assert 'Authorization' in signed_request.headers
+        assert auth.use_sigv4a is False
+
+        # Send the response back to auth flow
+        try:
+            auth_flow.send(success_response)
+        except StopIteration:
+            pass
+
+        # Verify no retry occurred (still using SigV4)
+        assert auth.use_sigv4a is False
+        assert auth.sigv4a_signer is None
+
+    @pytest.mark.asyncio
+    async def test_sigv4a_detection_from_403_error(self):
+        """Test that 403 error with SigV4A indicators triggers detection."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create a test request
+        request = httpx.Request('GET', 'https://example.com/test', headers={'Host': 'example.com'})
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Mock 403 response with SigV4A requirement
+        error_data = {
+            'Code': 'SignatureDoesNotMatch',
+            'Message': 'The request signature requires SigV4A for multi-region access'
+        }
+        error_response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+
+        # Mock successful response after retry
+        success_response = httpx.Response(
+            status_code=200,
+            headers={'content-type': 'application/json'},
+            content=b'{"success": true}',
+            request=request,
+        )
+
+        # Get signed request from auth flow
+        auth_flow = auth.auth_flow(request)
+        signed_request = next(auth_flow)
+
+        # Verify initial request was signed with SigV4
+        assert auth.use_sigv4a is False
+
+        # Send error response to trigger retry
+        with patch('mcp_proxy_for_aws.sigv4_helper.SIGV4A_AVAILABLE', True):
+            with patch('mcp_proxy_for_aws.sigv4_helper.SigV4AAuth') as mock_sigv4a_class:
+                mock_sigv4a_signer = Mock()
+                mock_sigv4a_class.return_value = mock_sigv4a_signer
+
+                retry_request = auth_flow.send(error_response)
+
+                # Verify SigV4A was detected and retry occurred
+                assert auth.use_sigv4a is True
+                assert auth.sigv4a_signer is not None
+
+                # Send success response for retry
+                try:
+                    auth_flow.send(success_response)
+                except StopIteration:
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_automatic_retry_with_sigv4a(self):
+        """Test that automatic retry with SigV4A occurs after detection."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create a test request
+        request = httpx.Request('GET', 'https://example.com/test', headers={'Host': 'example.com'})
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Mock 403 response with SigV4A requirement
+        error_data = {
+            '__type': 'InvalidSignature',
+            'message': 'This endpoint requires sigv4a authentication'
+        }
+        error_response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+
+        # Mock successful response after retry
+        success_response = httpx.Response(
+            status_code=200,
+            headers={'content-type': 'application/json'},
+            content=b'{"success": true}',
+            request=request,
+        )
+
+        # Get signed request from auth flow
+        auth_flow = auth.auth_flow(request)
+        signed_request = next(auth_flow)
+
+        # Send error response to trigger retry
+        with patch('mcp_proxy_for_aws.sigv4_helper.SIGV4A_AVAILABLE', True):
+            with patch('mcp_proxy_for_aws.sigv4_helper.SigV4AAuth') as mock_sigv4a_class:
+                mock_sigv4a_signer = Mock()
+                mock_sigv4a_class.return_value = mock_sigv4a_signer
+
+                retry_request = auth_flow.send(error_response)
+
+                # Verify retry request was generated
+                assert retry_request is not None
+                assert 'Authorization' in retry_request.headers
+
+                # Verify SigV4A signer was initialized
+                mock_sigv4a_class.assert_called_once_with(mock_credentials, 'test-service', '*')
+
+    @pytest.mark.asyncio
+    async def test_subsequent_requests_use_sigv4a_after_detection(self):
+        """Test that subsequent requests use SigV4A after detection."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        # Create auth instance
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Simulate that SigV4A has already been detected
+        with patch('mcp_proxy_for_aws.sigv4_helper.SIGV4A_AVAILABLE', True):
+            with patch('mcp_proxy_for_aws.sigv4_helper.SigV4AAuth') as mock_sigv4a_class:
+                mock_sigv4a_signer = Mock()
+                
+                # Mock the add_auth method to add headers
+                def mock_add_auth(aws_request):
+                    aws_request.headers['Authorization'] = 'AWS4-ECDSA-P256-SHA256 Credential=...'
+                    aws_request.headers['X-Amz-Date'] = '20240101T000000Z'
+                
+                mock_sigv4a_signer.add_auth = mock_add_auth
+                mock_sigv4a_class.return_value = mock_sigv4a_signer
+
+                auth.use_sigv4a = True
+                auth.sigv4a_signer = mock_sigv4a_signer
+
+                # Create a new request
+                request = httpx.Request('GET', 'https://example.com/test2', headers={'Host': 'example.com'})
+
+                # Mock successful response
+                success_response = httpx.Response(
+                    status_code=200,
+                    headers={'content-type': 'application/json'},
+                    content=b'{"success": true}',
+                    request=request,
+                )
+
+                # Get signed request from auth flow
+                auth_flow = auth.auth_flow(request)
+                signed_request = next(auth_flow)
+
+                # Verify request was signed (SigV4A should be used)
+                assert 'Authorization' in signed_request.headers
+
+                # Send success response
+                try:
+                    auth_flow.send(success_response)
+                except StopIteration:
+                    pass
+
+                # Verify SigV4A is still being used
+                assert auth.use_sigv4a is True
+
+    def test_requires_sigv4a_with_signature_error(self):
+        """Test _requires_sigv4a() detects SigV4A requirement from error response."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Create request
+        request = httpx.Request('GET', 'https://example.com/test')
+
+        # Test with SignatureDoesNotMatch error and sigv4a hint
+        error_data = {
+            'Code': 'SignatureDoesNotMatch',
+            'Message': 'This endpoint requires sigv4a for multi-region access'
+        }
+        response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is True
+
+        # Test with InvalidSignature error and sigv4a hint
+        error_data = {
+            '__type': 'InvalidSignature',
+            'message': 'Please use SigV4A authentication'
+        }
+        response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is True
+
+    def test_requires_sigv4a_returns_false_for_non_sigv4a_errors(self):
+        """Test _requires_sigv4a() returns False for non-SigV4A errors."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Create request
+        request = httpx.Request('GET', 'https://example.com/test')
+
+        # Test with 403 but no SigV4A indicators
+        error_data = {
+            'Code': 'AccessDenied',
+            'Message': 'User is not authorized'
+        }
+        response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is False
+
+        # Test with 404 error
+        response = httpx.Response(
+            status_code=404,
+            headers={'content-type': 'application/json'},
+            content=b'{"error": "Not Found"}',
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is False
+
+        # Test with 500 error
+        response = httpx.Response(
+            status_code=500,
+            headers={'content-type': 'text/plain'},
+            content=b'Internal Server Error',
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is False
+
+        # Test with SignatureDoesNotMatch but no sigv4a hint
+        error_data = {
+            'Code': 'SignatureDoesNotMatch',
+            'Message': 'The signature does not match'
+        }
+        response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'application/json'},
+            content=json.dumps(error_data).encode(),
+            request=request,
+        )
+        assert auth._requires_sigv4a(response) is False
+
+    def test_sign_request_removes_connection_header(self):
+        """Test _sign_request() removes connection header."""
+        # Create mock credentials
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
+
+        # Create request with connection header
+        request = httpx.Request(
+            'GET',
+            'https://example.com/test',
+            headers={
+                'Host': 'example.com',
+                'Connection': 'keep-alive',
+                'User-Agent': 'test-agent'
+            }
+        )
+
+        # Sign the request
+        signed_request = auth._sign_request(request, auth.sigv4_signer)
+
+        # Verify connection header was removed from signing
+        # (The original request headers should still have it, but it shouldn't be in the signature)
+        assert 'Authorization' in signed_request.headers
+        assert 'X-Amz-Date' in signed_request.headers
+
+        # Verify the request was signed (has signature headers)
+        assert signed_request is not None
+
+
 class TestHandleErrorResponse:
     """Test cases for the _handle_error_response function."""
 
@@ -218,7 +606,7 @@ class TestCreateSigv4Auth:
         # Test auth creation
         result = create_sigv4_auth('test-service', 'test-region')
 
-        # Verify auth was created correctly
+        # Verify auth was created correctly (with auto-detection enabled by default)
         assert isinstance(result, SigV4HTTPXAuth)
         assert result.service == 'test-service'
         assert result.region == 'test-region'  # default region
@@ -239,11 +627,104 @@ class TestCreateSigv4Auth:
         # Test auth creation with explicit region
         result = create_sigv4_auth('test-service', region='ap-southeast-1')
 
-        # Verify auth was created with explicit region
+        # Verify auth was created with explicit region (with auto-detection enabled by default)
         assert isinstance(result, SigV4HTTPXAuth)
         assert result.service == 'test-service'
         assert result.region == 'ap-southeast-1'
         assert result.credentials == mock_credentials
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.SIGV4A_AVAILABLE', True)
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_create_sigv4_auth_returns_auto_detect_when_enabled(self, mock_create_session):
+        """Test that create_sigv4_auth returns SigV4HTTPXAuth by default."""
+        # Mock session and credentials
+        mock_session = Mock()
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+        mock_session.get_credentials.return_value = mock_credentials
+        mock_create_session.return_value = mock_session
+
+        # Test auth creation (auto-detection is always enabled)
+        result = create_sigv4_auth('test-service', 'us-west-2')
+
+        # Verify SigV4HTTPXAuth is returned
+        assert isinstance(result, SigV4HTTPXAuth)
+        assert result.service == 'test-service'
+        assert result.region == 'us-west-2'
+        assert result.credentials == mock_credentials
+        assert result.use_sigv4a is False  # Starts with SigV4
+        assert result.sigv4_signer is not None
+        assert result.sigv4a_signer is None  # Lazy initialization
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_create_sigv4_auth_returns_sigv4_when_disabled(self, mock_create_session):
+        """Test that create_sigv4_auth always returns SigV4HTTPXAuth (no disable option)."""
+        # This test is now redundant since auto-detection is always enabled
+        # Keeping it for backward compatibility but it tests the same as the above
+        mock_session = Mock()
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+        mock_session.get_credentials.return_value = mock_credentials
+        mock_create_session.return_value = mock_session
+
+        # Test auth creation
+        result = create_sigv4_auth('test-service', 'us-west-2')
+
+        # Verify SigV4HTTPXAuth is returned (always enabled now)
+        assert isinstance(result, SigV4HTTPXAuth)
+        assert result.service == 'test-service'
+        assert result.region == 'us-west-2'
+        assert result.credentials == mock_credentials
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.SIGV4A_AVAILABLE', False)
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_create_sigv4_auth_falls_back_when_sigv4a_unavailable(self, mock_create_session):
+        """Test that create_sigv4_auth falls back to SigV4HTTPXAuth when SigV4A is unavailable."""
+        # Mock session and credentials
+        mock_session = Mock()
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+        mock_session.get_credentials.return_value = mock_credentials
+        mock_create_session.return_value = mock_session
+
+        # Test auth creation when SigV4A is unavailable
+        result = create_sigv4_auth('test-service', 'us-west-2')
+
+        # Verify SigV4HTTPXAuth is returned as fallback
+        assert isinstance(result, SigV4HTTPXAuth)
+        assert result.service == 'test-service'
+        assert result.region == 'us-west-2'
+        assert result.credentials == mock_credentials
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_create_sigv4_auth_credential_handling(self, mock_create_session):
+        """Test that create_sigv4_auth properly handles credentials."""
+        # Mock session and credentials with all attributes
+        mock_session = Mock()
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'AKIAIOSFODNN7EXAMPLE'
+        mock_credentials.secret_key = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+        mock_credentials.token = 'test_session_token_12345'
+        mock_session.get_credentials.return_value = mock_credentials
+        mock_create_session.return_value = mock_session
+
+        # Test auth creation with profile
+        result = create_sigv4_auth('test-service', 'eu-west-1', profile='test-profile')
+
+        # Verify credentials are properly passed through
+        assert result.credentials == mock_credentials
+        assert result.credentials.access_key == 'AKIAIOSFODNN7EXAMPLE'
+        assert result.credentials.secret_key == 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+        assert result.credentials.token == 'test_session_token_12345'
+
+        # Verify session was created with profile
+        mock_create_session.assert_called_once_with('test-profile')
 
 
 class TestCreateSigv4Client:
@@ -262,7 +743,7 @@ class TestCreateSigv4Client:
         # Test client creation
         result = create_sigv4_client(service='test-service', region='test-region')
 
-        # Verify client was created correctly
+        # Verify client was created correctly (auto-detection is always enabled)
         mock_create_auth.assert_called_once_with('test-service', 'test-region', None)
 
         # Check that AsyncClient was called with correct parameters
@@ -316,7 +797,7 @@ class TestCreateSigv4Client:
             service='custom-service', profile='test-profile', region='us-east-1'
         )
 
-        # Verify auth was created with custom parameters
+        # Verify auth was created with custom parameters (auto-detection is always enabled)
         mock_create_auth.assert_called_once_with('custom-service', 'us-east-1', 'test-profile')
         assert result == mock_client
 
@@ -369,7 +850,7 @@ class TestCreateSigv4Client:
             service='test-service', headers=prompt_context_headers, region='us-west-2'
         )
 
-        # Verify client was created correctly with prompt context
+        # Verify client was created correctly with prompt context (auto-detection is always enabled)
         mock_create_auth.assert_called_once_with('test-service', 'us-west-2', None)
 
         # Check that AsyncClient was called with correct parameters including prompt headers

@@ -20,6 +20,7 @@ from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
+    is_global_endpoint,
 )
 from unittest.mock import MagicMock, patch
 
@@ -225,3 +226,85 @@ class TestDetermineRegion:
         # Assert
         assert result == 'us-west-1'
         mock_getenv.assert_called_once_with('AWS_REGION')
+
+    @patch('os.getenv')
+    def test_determine_region_global_endpoint_with_dot_global(self, mock_getenv):
+        """Test determination for global endpoint with .global. pattern."""
+        endpoint = 'https://service.global.api.aws/mcp'
+        mock_getenv.return_value = None
+
+        result = determine_aws_region(endpoint, None)
+
+        assert result == 'us-east-1'
+        # Environment variable should not be checked when global endpoint is detected
+
+    @patch('os.getenv')
+    def test_determine_region_global_endpoint_with_global_subdomain(self, mock_getenv):
+        """Test determination for global endpoint with global. subdomain."""
+        endpoint = 'https://global.service.api.aws/mcp'
+        mock_getenv.return_value = None
+
+        result = determine_aws_region(endpoint, None)
+
+        assert result == 'us-east-1'
+
+    @patch('os.getenv')
+    def test_determine_region_global_endpoint_without_region_pattern(self, mock_getenv):
+        """Test determination for global endpoint without region pattern."""
+        endpoint = 'https://service.api.aws/mcp'
+        mock_getenv.return_value = None
+
+        result = determine_aws_region(endpoint, None)
+
+        assert result == 'us-east-1'
+
+    @patch('os.getenv')
+    def test_determine_region_explicit_region_overrides_global(self, mock_getenv):
+        """Test that explicit region parameter takes precedence over global endpoint detection."""
+        endpoint = 'https://service.global.api.aws/mcp'
+        region = 'eu-west-1'
+        mock_getenv.return_value = None
+
+        result = determine_aws_region(endpoint, region)
+
+        assert result == 'eu-west-1'
+        mock_getenv.assert_not_called()
+
+
+class TestIsGlobalEndpoint:
+    """Test cases for is_global_endpoint function."""
+
+    def test_is_global_endpoint_with_dot_global(self):
+        """Test detection of .global. pattern in URLs."""
+        endpoint = 'https://service.global.api.aws/mcp'
+        assert is_global_endpoint(endpoint) is True
+
+    def test_is_global_endpoint_with_global_subdomain(self):
+        """Test detection of global. subdomain."""
+        endpoint = 'https://global.service.api.aws/mcp'
+        assert is_global_endpoint(endpoint) is True
+
+    def test_is_global_endpoint_without_region_in_api_aws(self):
+        """Test detection of .api.aws without region."""
+        endpoint = 'https://service.api.aws/mcp'
+        assert is_global_endpoint(endpoint) is True
+
+    def test_is_global_endpoint_regional_endpoint_returns_false(self):
+        """Test that regional endpoint patterns return False."""
+        endpoint = 'https://service.us-east-1.api.aws/mcp'
+        assert is_global_endpoint(endpoint) is False
+
+    def test_is_global_endpoint_non_aws_endpoint_returns_false(self):
+        """Test that non-AWS endpoints return False."""
+        endpoint = 'https://service.example.com/mcp'
+        assert is_global_endpoint(endpoint) is False
+
+    def test_is_global_endpoint_regional_with_complex_service_name(self):
+        """Test that regional endpoints with complex service names return False."""
+        endpoint = 'https://my-service-beta.us-west-2.api.aws/mcp'
+        assert is_global_endpoint(endpoint) is False
+
+    def test_is_global_endpoint_empty_hostname(self):
+        """Test handling of endpoint with empty hostname."""
+        endpoint = 'https://'
+        assert is_global_endpoint(endpoint) is False
