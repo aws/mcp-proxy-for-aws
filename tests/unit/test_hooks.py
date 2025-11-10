@@ -70,6 +70,9 @@ class TestHandleErrorResponse:
 
         await _handle_error_response(response)
 
+        # Verify response was read (content should be settled)
+        assert response.is_stream_consumed
+
     @pytest.mark.asyncio
     async def test_handle_error_response_with_non_json_error(self):
         """Test error handling with non-JSON error response."""
@@ -84,6 +87,9 @@ class TestHandleErrorResponse:
 
         await _handle_error_response(response)
 
+        # Verify response was read
+        assert response.is_stream_consumed
+
     @pytest.mark.asyncio
     async def test_handle_error_response_with_success_response(self):
         """Test that successful responses don't raise errors."""
@@ -97,6 +103,9 @@ class TestHandleErrorResponse:
         )
 
         await _handle_error_response(response)
+
+        # Verify function completes without error for success responses
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_read_failure(self):
@@ -118,6 +127,10 @@ class TestHandleErrorResponse:
 
         await _handle_error_response(response)
 
+        # Verify it handled the read failure gracefully (no exception raised)
+        # The aread() was attempted (would have been called)
+        response.aread.assert_called_once()
+
     @pytest.mark.asyncio
     async def test_handle_error_response_with_invalid_json(self):
         """Test error handling with invalid JSON response."""
@@ -131,6 +144,9 @@ class TestHandleErrorResponse:
         )
 
         await _handle_error_response(response)
+
+        # Verify response was read despite invalid JSON
+        assert response.is_stream_consumed
 
 
 class TestMetadataInjectionHook:
