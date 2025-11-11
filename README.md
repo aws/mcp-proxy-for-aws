@@ -79,7 +79,7 @@ docker build -t mcp-proxy-for-aws .
 |----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|---	|
 | `endpoint`	          | MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	                                                                                                                                                            | N/A	                                                                        |Yes	|
 | ---	                 | ---	                                                                                                                                                                                                                                    | ---	                                                                        |---	|
-| `--service`	         | AWS service name for SigV4 signing	                                                                                                                                                                                                     | Inferred from endpoint if not provided	                                     |No	|
+| `--service`	         | AWS service name for SigV4 signing, if omitted we try to infer this from the url	                                                                                                                                                       | Inferred from endpoint if not provided	                                     |No	|
 | `--profile`	         | AWS profile for AWS credentials to use	                                                                                                                                                                                                 | Uses `AWS_PROFILE` environment variable if not set                          |No	|
 | `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	 |No	|
 | `--metadata`	        | Metadata to inject into MCP requests as key=value pairs (e.g., `--metadata KEY1=value1 KEY2=value2`)                                                                                                                                    | `AWS_REGION` is automatically injected based on `--region` if not provided    |No	|
@@ -278,6 +278,15 @@ uv sync
 ```
 
 ---
+
+## Troubleshooting
+
+### Handling `Authentication error - Invalid credentials`
+We try to autodetect the service from the url, sometimes this fails, ensure that `--service` is set correctly to the
+service you are attempting to connect to.
+Otherwise the SigV4 signing will not be able to be verified by the service you connect to, resulting in this error.
+Also ensure that you have valid IAM credentials on your machine before retrying.
+
 
 ## Development & Contributing
 
