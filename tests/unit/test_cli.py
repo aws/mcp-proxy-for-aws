@@ -140,3 +140,49 @@ class TestParseArgs:
         """Test parsing fails with negative timeout (within_range validation)."""
         with pytest.raises(SystemExit):
             parse_args()
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://example.com', '--metadata', 'KEY1=value1', 'KEY2=value2'],
+    )
+    def test_parse_metadata_argument(self):
+        """Test parsing metadata key=value pairs."""
+        args = parse_args()
+        assert args.metadata == {'KEY1': 'value1', 'KEY2': 'value2'}
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://example.com', '--metadata', 'AWS_REGION=us-west-2'],
+    )
+    def test_parse_metadata_single_pair(self):
+        """Test parsing single metadata key=value pair."""
+        args = parse_args()
+        assert args.metadata == {'AWS_REGION': 'us-west-2'}
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://example.com', '--metadata', 'KEY=value with spaces'],
+    )
+    def test_parse_metadata_with_spaces_in_value(self):
+        """Test parsing metadata with spaces in value."""
+        args = parse_args()
+        assert args.metadata == {'KEY': 'value with spaces'}
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://example.com', '--metadata'])
+    def test_parse_metadata_no_values(self):
+        """Test parsing --metadata flag with no values results in empty dict."""
+        args = parse_args()
+        # When --metadata is provided with no values (nargs='*'), it should be empty dict
+        # This is handled by KeyValueAction which sets an empty dict when values is None
+        assert args.metadata == {} or args.metadata is None, (
+            f'Expected empty dict or None, got {args.metadata}'
+        )
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://example.com', '--metadata', 'INVALID'])
+    def test_parse_metadata_invalid_format(self):
+        """Test that invalid metadata format raises an error."""
+        import argparse
+
+        with pytest.raises((SystemExit, argparse.ArgumentTypeError)):
+            # argparse may call sys.exit or raise ArgumentTypeError
+            parse_args()

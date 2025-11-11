@@ -39,9 +39,12 @@ class TestCreateTransportWithSigv4:
         service = 'test-service'
         profile = 'test-profile'
         region = 'us-east-1'
+        metadata = {'AWS_REGION': 'us-west-2', 'CUSTOM_KEY': 'custom_value'}
         custom_timeout = Timeout(30.0)
 
-        result = create_transport_with_sigv4(url, service, region, custom_timeout, profile)
+        result = create_transport_with_sigv4(
+            url, service, region, metadata, custom_timeout, profile
+        )
 
         # Verify result is StreamableHttpTransport
         assert isinstance(result, StreamableHttpTransport)
@@ -61,6 +64,7 @@ class TestCreateTransportWithSigv4:
                 headers={'test': 'header'},
                 timeout=custom_timeout,
                 auth=None,
+                metadata=metadata,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -74,9 +78,10 @@ class TestCreateTransportWithSigv4:
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
         region = 'test-region'
+        metadata = {'AWS_REGION': 'test-forwarding-region'}
         custom_timeout = Timeout(60.0)
 
-        result = create_transport_with_sigv4(url, service, region, custom_timeout)
+        result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
@@ -91,6 +96,7 @@ class TestCreateTransportWithSigv4:
                 headers=None,
                 timeout=custom_timeout,
                 auth=None,
+                metadata=metadata,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
