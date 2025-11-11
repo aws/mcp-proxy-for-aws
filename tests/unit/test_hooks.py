@@ -18,7 +18,7 @@ import httpx
 import json
 import pytest
 from functools import partial
-from mcp_proxy_for_aws.hooks import (
+from mcp_proxy_for_aws.sigv4_helper import (
     _handle_error_response,
     _inject_metadata_hook,
     _sign_request_hook,
