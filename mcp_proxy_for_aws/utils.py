@@ -21,7 +21,7 @@ import os
 import re
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 
@@ -32,6 +32,7 @@ def create_transport_with_sigv4(
     url: str,
     service: str,
     region: str,
+    metadata: Dict[str, Any],
     custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
 ) -> StreamableHttpTransport:
@@ -41,6 +42,7 @@ def create_transport_with_sigv4(
         url: The endpoint URL
         service: AWS service name for SigV4 signing
         region: AWS region to use
+        metadata: Metadata dictionary to inject into MCP requests
         custom_timeout: httpx.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
 
@@ -60,6 +62,7 @@ def create_transport_with_sigv4(
             region=region,
             headers=headers,
             timeout=custom_timeout,
+            metadata=metadata,
             auth=auth,
         )
 

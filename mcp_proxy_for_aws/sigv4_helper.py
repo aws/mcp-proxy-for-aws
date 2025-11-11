@@ -16,10 +16,12 @@
 
 import boto3
 import httpx
+import json
 import logging
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
+from functools import partial
 from typing import Any, Dict, Generator, Optional
 
 
@@ -69,6 +71,90 @@ class SigV4HTTPXAuth(httpx.Auth):
         request.headers.update(dict(aws_request.headers))
 
         yield request
+
+
+def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
+    """Create an AWS session with optional profile.
+
+    Args:
+        profile: AWS profile to use (optional)
+
+    Returns:
+        boto3.Session instance
+
+    Raises:
+        ValueError: If session creation fails or no credentials found
+    """
+    try:
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    except Exception as e:
+        raise ValueError(f"Failed to create AWS session with profile '{profile}': {e}")
+
+    # Verify credentials are available
+    credentials = session.get_credentials()
+    if not credentials:
+        profile_msg = f" with profile '{profile}'" if profile else ''
+        raise ValueError(
+            f'No AWS credentials found{profile_msg}. '
+            "Please configure your AWS credentials using 'aws configure' or environment variables."
+        )
+
+    return session
+
+
+def create_sigv4_client(
+    service: str,
+    region: str,
+    timeout: Optional[httpx.Timeout] = None,
+    profile: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> httpx.AsyncClient:
+    """Create an httpx.AsyncClient with SigV4 authentication.
+
+    Args:
+        service: AWS service name for SigV4 signing
+        profile: AWS profile to use (optional)
+        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
+        timeout: Timeout configuration for the HTTP client
+        headers: Headers to include in requests
+        metadata: Metadata to inject into MCP _meta field
+        **kwargs: Additional arguments to pass to httpx.AsyncClient
+
+    Returns:
+        httpx.AsyncClient with SigV4 authentication
+    """
+    # Create a copy of kwargs to avoid modifying the passed dict
+    client_kwargs = {
+        'follow_redirects': True,
+        'timeout': timeout,
+        'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
+        **kwargs,
+    }
+
+    # Add headers if provided
+    default_headers = {'Accept': 'application/json, text/event-stream'}
+    if headers is not None:
+        default_headers.update(headers)
+    client_kwargs['headers'] = default_headers
+
+    logger.info(
+        'Creating httpx.AsyncClient with custom headers: %s', client_kwargs.get('headers', {})
+    )
+
+    logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
+
+    return httpx.AsyncClient(
+        **client_kwargs,
+        event_hooks={
+            'response': [_handle_error_response],
+            'request': [
+                partial(_inject_metadata_hook, metadata or {}),
+                partial(_sign_request_hook, region, service, profile),
+            ],
+        },
+    )
 
 
 async def _handle_error_response(response: httpx.Response) -> None:
@@ -121,113 +207,95 @@ async def _handle_error_response(response: httpx.Response) -> None:
                 )
 
 
-def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
-    """Create an AWS session with optional profile.
+async def _sign_request_hook(
+    region: str,
+    service: str,
+    profile: Optional[str],
+    request: httpx.Request,
+) -> None:
+    """Request hook to sign HTTP requests with AWS SigV4.
+
+    This hook signs the request with AWS SigV4 credentials and adds signature headers.
+
+    This should be the last hook called to ensure the signature includes any modifications.
 
     Args:
-        profile: AWS profile to use (optional)
-
-    Returns:
-        boto3.Session instance
-
-    Raises:
-        ValueError: If session creation fails or no credentials found
-    """
-    try:
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-    except Exception as e:
-        raise ValueError(f"Failed to create AWS session with profile '{profile}': {e}")
-
-    # Verify credentials are available
-    credentials = session.get_credentials()
-    if not credentials:
-        profile_msg = f" with profile '{profile}'" if profile else ''
-        raise ValueError(
-            f'No AWS credentials found{profile_msg}. '
-            "Please configure your AWS credentials using 'aws configure' or environment variables."
-        )
-
-    return session
-
-
-def create_sigv4_auth(service: str, region: str, profile: Optional[str] = None) -> SigV4HTTPXAuth:
-    """Create SigV4 authentication for AWS requests.
-
-    Args:
+        region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
         profile: AWS profile to use (optional)
-        region: AWS region (defaults to AWS_REGION env var or us-east-1)
-
-    Returns:
-        SigV4HTTPXAuth instance
-
-    Raises:
-        ValueError: If credentials cannot be obtained
+        request: The HTTP request object to sign (modified in-place)
     """
-    # Create session and get credentials
+    # Set Content-Length for signing
+    request.headers['Content-Length'] = str(len(request.content))
+
+    # Get AWS credentials
     session = create_aws_session(profile)
     credentials = session.get_credentials()
+    logger.info('Signing request with credentials for access key: %s', credentials.access_key)
 
-    # Create SigV4Auth with explicit credentials
-    sigv4_auth = SigV4HTTPXAuth(
-        credentials=credentials,
-        service=service,
-        region=region,
-    )
+    # Create SigV4 auth and use its signing logic
+    auth = SigV4HTTPXAuth(credentials, service, region)
 
-    logger.info("Created SigV4 authentication for service '%s' in region '%s'", service, region)
-    return sigv4_auth
+    # Call auth_flow to sign the request (it modifies request in-place)
+    auth_flow = auth.auth_flow(request)
+    next(auth_flow)  # Execute the generator to perform signing
+
+    logger.debug('Request headers after signing: %s', request.headers)
 
 
-def create_sigv4_client(
-    service: str,
-    region: str,
-    timeout: Optional[httpx.Timeout] = None,
-    profile: Optional[str] = None,
-    headers: Optional[Dict[str, str]] = None,
-    auth: Optional[httpx.Auth] = None,
-    **kwargs: Any,
-) -> httpx.AsyncClient:
-    """Create an httpx.AsyncClient with SigV4 authentication.
+async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request) -> None:
+    """Request hook to inject metadata into MCP calls.
 
     Args:
-        service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional)
-        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
-        timeout: Timeout configuration for the HTTP client
-        headers: Headers to include in requests
-        auth: Auth parameter (ignored as we provide our own)
-        **kwargs: Additional arguments to pass to httpx.AsyncClient
-
-    Returns:
-        httpx.AsyncClient with SigV4 authentication
+        metadata: Dictionary of metadata to inject into _meta field
+        request: The HTTP request object
     """
-    # Create a copy of kwargs to avoid modifying the passed dict
-    client_kwargs = {
-        'follow_redirects': True,
-        'timeout': timeout,
-        'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
-        **kwargs,
-    }
+    logger.info('=== Outgoing Request ===')
+    logger.info('URL: %s', request.url)
+    logger.info('Method: %s', request.method)
 
-    # Add headers if provided
-    default_headers = {'Accept': 'application/json, text/event-stream'}
-    if headers is not None:
-        default_headers.update(headers)
-    client_kwargs['headers'] = default_headers
+    # Try to inject metadata if it's a JSON-RPC/MCP request
+    if request.content and metadata:
+        try:
+            # Parse the request body
+            body = json.loads(await request.aread())
 
-    logger.info(
-        'Creating httpx.AsyncClient with custom headers: %s', client_kwargs.get('headers', {})
-    )
+            # Check if it's a JSON-RPC request
+            if isinstance(body, dict) and 'jsonrpc' in body:
+                # Ensure _meta exists in params
+                if '_meta' not in body['params']:
+                    body['params']['_meta'] = {}
 
-    # Create SigV4 auth
-    sigv4_auth = create_sigv4_auth(service, region, profile)
+                # Get existing metadata
+                existing_meta = body['params']['_meta']
 
-    # Create the client with SigV4 auth and error handling event hook
-    logger.info("Creating httpx.AsyncClient with SigV4 authentication for service '%s'", service)
+                # Merge metadata (existing takes precedence)
+                if isinstance(existing_meta, dict):
+                    # Check for conflicting keys before merge
+                    conflicting_keys = set(metadata.keys()) & set(existing_meta.keys())
+                    if conflicting_keys:
+                        for key in conflicting_keys:
+                            logger.warning(
+                                'Metadata key "%s" already exists in _meta. '
+                                'Keeping existing value "%s", ignoring injected value "%s"',
+                                key,
+                                existing_meta[key],
+                                metadata[key],
+                            )
+                    body['params']['_meta'] = {**metadata, **existing_meta}
+                else:
+                    logger.info('Replacing non-dict _meta value with injected metadata')
+                    body['params']['_meta'] = metadata
 
-    return httpx.AsyncClient(
-        auth=sigv4_auth,
-        **client_kwargs,
-        event_hooks={'response': [_handle_error_response]},
-    )
+                # Create new content with updated metadata
+                new_content = json.dumps(body).encode('utf-8')
+
+                # Update the request with new content
+                request.stream = httpx.ByteStream(new_content)
+                request._content = new_content
+
+                logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            # Not a JSON request or invalid format, skip metadata injection
+            logger.error('Skipping metadata injection: %s', e)

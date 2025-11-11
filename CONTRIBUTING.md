@@ -4,6 +4,9 @@ Thank you for your interest in contributing to the MCP Proxy for AWS! We welcome
 
 ## Quick Start
 
+> [!NOTE]
+> Before implementing new features, please create an issue first to ensure your contribution aligns with the project roadmap.
+
 1. **Fork the repository** on GitHub
 2. **Set up your development environment** - see [DEVELOPMENT.md](DEVELOPMENT.md) for detailed setup instructions
 3. **Create a feature branch** from `main`

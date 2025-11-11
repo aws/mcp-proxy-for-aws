@@ -56,6 +56,7 @@ class TestServer:
         mock_args.profile = None
         mock_args.read_only = True
         mock_args.retries = 1
+        mock_args.metadata = None
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -86,8 +87,9 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        # call_args[0][3] is the Timeout object
-        assert call_args[0][4] is None  # profile
+        assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
+        # call_args[0][4] is the Timeout object
+        assert call_args[0][5] is None  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
@@ -116,6 +118,7 @@ class TestServer:
         mock_args.profile = 'test-profile'
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
+        mock_args.metadata = {'AWS_REGION': 'eu-west-1', 'CUSTOM_KEY': 'custom_value'}
         # Add timeout parameters
         mock_args.timeout = 180.0
         mock_args.connect_timeout = 60.0
@@ -146,11 +149,115 @@ class TestServer:
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
         assert call_args[0][2] == 'us-east-1'
-        # call_args[0][3] is the Timeout object
-        assert call_args[0][4] == 'test-profile'  # profile
+        assert call_args[0][3] == {
+            'AWS_REGION': 'eu-west-1',
+            'CUSTOM_KEY': 'custom_value',
+        }  # metadata
+        # call_args[0][4] is the Timeout object
+        assert call_args[0][5] == 'test-profile'  # profile
         mock_as_proxy.assert_called_once_with(mock_transport)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()
+
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    async def test_setup_mcp_mode_no_metadata_injects_aws_region(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
+        """Test that AWS_REGION is automatically injected when no metadata is provided."""
+        # Arrange
+        local_mcp = Mock(spec=FastMCP)
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'ap-southeast-1'
+        mock_args.profile = None
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = None  # No metadata provided
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'ap-southeast-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_as_proxy.return_value = mock_proxy
+
+        # Act
+        await setup_mcp_mode(local_mcp, mock_args)
+
+        # Assert - verify AWS_REGION was automatically injected
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        metadata = call_args[0][3]
+        assert metadata == {'AWS_REGION': 'ap-southeast-1'}
+
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    async def test_setup_mcp_mode_metadata_without_aws_region_injects_it(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_as_proxy,
+        mock_create_transport,
+    ):
+        """Test that AWS_REGION is injected even when other metadata is provided."""
+        # Arrange
+        local_mcp = Mock(spec=FastMCP)
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'us-west-1'
+        mock_args.profile = None
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = {'CUSTOM_KEY': 'custom_value', 'ANOTHER_KEY': 'another_value'}
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-west-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_as_proxy.return_value = mock_proxy
+
+        # Act
+        await setup_mcp_mode(local_mcp, mock_args)
+
+        # Assert - verify AWS_REGION was injected along with custom metadata
+        assert mock_create_transport.call_count == 1
+        call_args = mock_create_transport.call_args
+        metadata = call_args[0][3]
+        assert metadata == {
+            'AWS_REGION': 'us-west-1',
+            'CUSTOM_KEY': 'custom_value',
+            'ANOTHER_KEY': 'another_value',
+        }
 
     def test_add_tool_filtering_middleware(self):
         """Test that tool filtering middleware is added correctly."""
@@ -262,41 +369,37 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
     @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
-    @patch('mcp_proxy_for_aws.sigv4_helper.SigV4Auth')
-    def test_create_sigv4_client(self, mock_sigv4_auth, mock_async_client, mock_session):
-        """Test creating SigV4 authenticated client with HTTPX auth."""
-        # Arrange
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = 'test_token'
+    def test_create_sigv4_client(self, mock_async_client):
+        """Test creating SigV4 authenticated client with request hooks.
 
-        mock_session_instance = Mock()
-        mock_session_instance.get_credentials.return_value = mock_credentials
-        mock_session.return_value = mock_session_instance
-
+        Note: Session creation and signing now happens in sign_request_hook,
+        not during client creation.
+        """
         # Act
         create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
 
         # Assert
-        mock_session.assert_called_once_with(profile_name='test-profile')
-        mock_sigv4_auth.assert_called_once_with(mock_credentials, 'test-service', 'us-west-2')
-        mock_async_client.assert_called_once()
+        # Verify AsyncClient was called (signing happens via hooks)
+        assert mock_async_client.call_count == 1
+        call_args = mock_async_client.call_args
+        # Verify hooks are registered
+        assert 'event_hooks' in call_args[1]
+        assert 'request' in call_args[1]['event_hooks']
+        assert 'response' in call_args[1]['event_hooks']
+        # Should have metadata injection + sign hooks
+        assert len(call_args[1]['event_hooks']['request']) == 2
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.boto3.Session')
-    def test_create_sigv4_client_no_credentials(self, mock_session):
-        """Test creating SigV4 client with no credentials."""
-        # Arrange
-        mock_session_instance = Mock()
-        mock_session_instance.get_credentials.return_value = None
-        mock_session.return_value = mock_session_instance
+    def test_create_sigv4_client_no_credentials(self):
+        """Test that credential check happens in sign_request_hook, not during client creation.
 
-        # Act & Assert
-        with pytest.raises(ValueError) as exc_info:
-            create_sigv4_client(service='test-service', region='test-region')
-        assert 'No AWS credentials found' in str(exc_info.value)
+        Note: With the refactoring, client creation no longer validates credentials.
+        Credential validation now happens in sign_request_hook when the request is signed.
+        """
+        # Client creation should succeed even without credentials
+        # (credentials are checked when signing happens)
+        client = create_sigv4_client(service='test-service', region='test-region')
+        assert client is not None
 
     def test_main_module_execution(self):
         """Test that main is called when module is executed directly."""
