@@ -15,6 +15,7 @@
 """Unit tests for the client, parameterized by internal call."""
 
 import pytest
+from botocore.credentials import Credentials
 from datetime import timedelta
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from unittest.mock import AsyncMock, Mock, patch
@@ -210,3 +211,71 @@ async def test_context_manager_cleanup(mock_session, mock_streams):
                 pass
 
             assert cleanup_called
+
+
+@pytest.mark.asyncio
+async def test_credentials_parameter_with_region(mock_streams):
+    """Test using provided credentials with aws_region."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    creds = Credentials('test_key', 'test_secret', 'test_token')
+
+    with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auth_cls:
+        with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+            mock_auth = Mock()
+            mock_auth_cls.return_value = mock_auth
+            mock_stream_client.return_value.__aenter__ = AsyncMock(
+                return_value=(mock_read, mock_write, mock_get_session)
+            )
+            mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            async with aws_iam_streamablehttp_client(
+                endpoint='https://test.example.com/mcp',
+                aws_service='bedrock-agentcore',
+                aws_region='us-east-1',
+                credentials=creds,
+            ):
+                pass
+
+            mock_auth_cls.assert_called_once_with(creds, 'bedrock-agentcore', 'us-east-1')
+
+
+@pytest.mark.asyncio
+async def test_credentials_parameter_without_region_raises_error():
+    """Test that using credentials without aws_region raises ValueError."""
+    creds = Credentials('test_key', 'test_secret', 'test_token')
+
+    with pytest.raises(
+        ValueError,
+        match='AWS region must be specified via aws_region parameter when using credentials',
+    ):
+        async with aws_iam_streamablehttp_client(
+            endpoint='https://test.example.com/mcp',
+            aws_service='bedrock-agentcore',
+            credentials=creds,
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_credentials_parameter_bypasses_boto3_session(mock_streams):
+    """Test that providing credentials bypasses boto3.Session creation."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    creds = Credentials('test_key', 'test_secret', 'test_token')
+
+    with patch('boto3.Session') as mock_boto:
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth'):
+            with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    aws_region='us-west-2',
+                    credentials=creds,
+                ):
+                    pass
+
+                mock_boto.assert_not_called()

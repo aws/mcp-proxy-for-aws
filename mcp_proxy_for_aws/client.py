@@ -15,6 +15,7 @@
 import boto3
 import logging
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
 from mcp.client.streamable_http import GetSessionIdCallback, streamablehttp_client
@@ -32,6 +33,7 @@ def aws_iam_streamablehttp_client(
     aws_service: str,
     aws_region: Optional[str] = None,
     aws_profile: Optional[str] = None,
+    credentials: Optional[Credentials] = None,
     headers: Optional[dict[str, str]] = None,
     timeout: float | timedelta = 30,
     sse_read_timeout: float | timedelta = 60 * 5,
@@ -55,6 +57,7 @@ def aws_iam_streamablehttp_client(
         aws_service: The name of the AWS service the MCP server is hosted on, e.g. "bedrock-agentcore".
         aws_region: The AWS region name of the MCP server, e.g. "us-west-2".
         aws_profile: The AWS profile to use for authentication.
+        credentials: Optional AWS credentials from boto3/botocore. If provided, takes precedence over aws_profile.
         headers: Optional additional HTTP headers to include in requests.
         timeout: Request timeout in seconds or timedelta object. Defaults to 30 seconds.
         sse_read_timeout: Server-sent events read timeout in seconds or timedelta object.
@@ -78,28 +81,37 @@ def aws_iam_streamablehttp_client(
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 
-    kwargs = {}
-    if aws_profile is not None:
-        kwargs['profile_name'] = aws_profile
-    if aws_region is not None:
-        kwargs['region_name'] = aws_region
+    if credentials is not None:
+        creds = credentials
+        region = aws_region
+        if not region:
+            raise ValueError(
+                'AWS region must be specified via aws_region parameter when using credentials.'
+            )
+        logger.debug('Using provided AWS credentials')
+    else:
+        kwargs = {}
+        if aws_profile is not None:
+            kwargs['profile_name'] = aws_profile
+        if aws_region is not None:
+            kwargs['region_name'] = aws_region
 
-    session = boto3.Session(**kwargs)
+        session = boto3.Session(**kwargs)
+        creds = session.get_credentials()
+        region = session.region_name
 
-    profile = session.profile_name
-    region = session.region_name
+        if not region:
+            raise ValueError(
+                'AWS region must be specified via aws_region parameter,  AWS_REGION environment variable, or AWS config.'
+            )
 
-    if not region:
-        raise ValueError(
-            'AWS region must be specified via aws_region parameter, AWS_PROFILE environment variable, or AWS config.'
-        )
+        logger.debug('AWS profile: %s', session.profile_name)
 
-    logger.debug('AWS profile: %s', profile)
     logger.debug('AWS region: %s', region)
     logger.debug('AWS service: %s', aws_service)
 
     # Create a SigV4 authentication handler with AWS credentials
-    auth = SigV4HTTPXAuth(session.get_credentials(), aws_service, region)
+    auth = SigV4HTTPXAuth(creds, aws_service, region)
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
     return streamablehttp_client(
