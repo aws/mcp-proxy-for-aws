@@ -136,6 +136,20 @@ class TestValidateRequiredArgs:
         result = determine_service_name(endpoint)
         assert result == 'service'
 
+    def test_validate_service_name_bedrock_agentcore(self):
+        """Test parsing service name for bedrock-agentcore endpoints."""
+        # Test various bedrock-agentcore endpoint formats
+        test_cases = [
+            'https://my-agent.gateway.bedrock-agentcore.us-west-2.amazonaws.com',  # Clean gateway
+            'https://bedrock-agentcore.us-east-1.amazonaws.com',  # Clean runtime
+            'https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/arn%3Aaws%3Abedrock-agentcore%3Aus-east-1%3A216123456714%3Aruntime%2Fhosted_agent_99wdf-hYKYrgAHVr/invocations',
+            'https://gateway-quick-start-242206-rsdehprct2.gateway.bedrock-agentcore.eu-central-1.amazonaws.com/mcp',
+        ]
+
+        for endpoint in test_cases:
+            result = determine_service_name(endpoint)
+            assert result == 'bedrock-agentcore', f'Failed for endpoint: {endpoint}'
+
     def test_validate_service_name_service_parsing_simple_hostname(self):
         """Test parsing service from simple hostname."""
         endpoint = 'https://myservice'
