@@ -24,6 +24,8 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/python-integ.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
     secrets: inherit
 
   build:

@@ -12,6 +12,8 @@ jobs:
       pull-requests: read
       security-events: write
       actions: read
+    with:
+      ref: ${{ github.event.release.target_commitish }}
     uses: ./.github/workflows/python.yml
 
   call-integ-tests:
@@ -20,6 +22,8 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/python-integ.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
     secrets: inherit
 
   build:
