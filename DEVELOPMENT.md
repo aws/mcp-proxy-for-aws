@@ -379,12 +379,96 @@ export LOG_LEVEL=DEBUG
 uv run mcp_proxy_for_aws/server.py <endpoint>
 ```
 
+## Releasing to PyPI
+
+The project uses automated PyPI publishing through GitHub Actions. Releases are triggered by creating a GitHub Release.
+
+### Release Process
+
+1. **Ensure all changes are merged to main branch**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+
+2. **Create GitHub Release**
+
+   Go to the [Releases page](https://github.com/aws/mcp-proxy-for-aws/releases) and click "Draft a new release", then fill in:
+
+   - **Tag**: `v1.10.0` (must start with 'v' and follow semantic versioning)
+   - **Target**: `main`
+   - **Title**: `v1.10.0`
+   - **Description**: Click "Generate release notes" for auto-generated notes
+
+   Click **"Publish release"** (not "Save draft")
+
+3. **Automated Publishing**
+
+   Once the release is published, GitHub Actions will automatically:
+   - Run all tests and linting checks
+   - Build distribution packages (wheel and source)
+   - Publish to PyPI using Trusted Publishing
+
+   Monitor the workflow at: [Actions tab](https://github.com/aws/mcp-proxy-for-aws/actions)
+
+### Version Numbering
+
+Follow [Semantic Versioning](https://semver.org/):
+- **MAJOR** (v2.0.0): Breaking changes
+- **MINOR** (v1.10.0): New features, backward compatible
+- **PATCH** (v1.10.1): Bug fixes, backward compatible
+
+Version is managed in `pyproject.toml`: `version = "1.10.0"`
+
+Use Commitizen to bump versions automatically:
+```bash
+# Bump version based on conventional commits
+uv run cz bump
+
+# This will update both files and create a git tag
+```
+
+### Testing Releases
+
+Before creating a production release, you can test with TestPyPI:
+
+```bash
+# Create a test tag
+git tag v1.10.0-beta
+git push origin v1.10.0-beta
+
+# This triggers the TestPyPI workflow
+# Monitor at: https://github.com/aws/mcp-proxy-for-aws/actions
+```
+
+### Troubleshooting Releases
+
+**Release workflow failed:**
+- Check the Actions tab for error details
+- Ensure all tests pass locally: `uv run pytest`
+- Verify the tag follows semantic versioning format
+
+**Version already exists on PyPI:**
+- PyPI doesn't allow re-uploading the same version
+- Create a new patch version (e.g., v1.10.1)
+- Delete and recreate the tag if needed:
+  ```bash
+  git tag -d v1.10.0
+  git push origin --delete v1.10.0
+  ```
+
+**Trusted Publishing authentication failed:**
+- Verify PyPI Trusted Publisher is configured correctly
+- Check that the workflow file name matches the PyPI configuration
+- Ensure the environment name is set to `pypi`
+
 ## Additional Resources
 
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
 - [FastMCP Documentation](https://fastmcp.readthedocs.io/)
 - [AWS SDK for Python (Boto3)](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
 - [Project README](README.md)
+- [PyPI Publishing Guide](https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/)
 
 ---
 
