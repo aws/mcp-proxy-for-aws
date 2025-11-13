@@ -1,0 +1,73 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types:
+      - published
+
+permissions: {}
+
+jobs:
+  call-test:
+    permissions:
+      contents: read
+      pull-requests: read
+      security-events: write
+      actions: read
+    uses: ./.github/workflows/python.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+
+  call-integ-tests:
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    uses: ./.github/workflows/python-integ.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+    secrets: inherit
+
+  build:
+    needs: [call-test, call-integ-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build distribution packages
+        run: uv build
+
+      - name: Upload distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcp-proxy-for-aws
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v5
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Publish to PyPI
+        run: uv publish
