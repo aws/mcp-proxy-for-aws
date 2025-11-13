@@ -250,9 +250,9 @@ async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request
         metadata: Dictionary of metadata to inject into _meta field
         request: The HTTP request object
     """
-    logger.info('=== Outgoing Request ===')
-    logger.info('URL: %s', request.url)
-    logger.info('Method: %s', request.method)
+    logger.debug('=== Outgoing Request ===')
+    logger.debug('URL: %s', request.url)
+    logger.debug('Method: %s', request.method)
 
     # Try to inject metadata if it's a JSON-RPC/MCP request
     if request.content and metadata:
@@ -284,7 +284,7 @@ async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request
                             )
                     body['params']['_meta'] = {**metadata, **existing_meta}
                 else:
-                    logger.info('Replacing non-dict _meta value with injected metadata')
+                    logger.debug('Overwriting _meta value with injected metadata')
                     body['params']['_meta'] = metadata
 
                 # Create new content with updated metadata
@@ -298,4 +298,4 @@ async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             # Not a JSON request or invalid format, skip metadata injection
-            logger.error('Skipping metadata injection: %s', e)
+            logger.debug('Skipping metadata injection: %s', e)
