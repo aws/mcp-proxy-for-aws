@@ -25,6 +25,7 @@ This server provides a unified interface to backend servers by:
 import asyncio
 import httpx
 import logging
+from fastmcp import Client
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
@@ -83,16 +84,16 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint, service, region, metadata, timeout, profile
     )
+    async with Client(transport=transport) as client:
+        # Create proxy with the transport
+        proxy = FastMCP.as_proxy(client)
+        add_logging_middleware(proxy, args.log_level)
+        add_tool_filtering_middleware(proxy, args.read_only)
 
-    # Create proxy with the transport
-    proxy = FastMCP.as_proxy(transport)
-    add_logging_middleware(proxy, args.log_level)
-    add_tool_filtering_middleware(proxy, args.read_only)
+        if args.retries:
+            add_retry_middleware(proxy, args.retries)
 
-    if args.retries:
-        add_retry_middleware(proxy, args.retries)
-
-    await proxy.run_async()
+        await proxy.run_async()
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
