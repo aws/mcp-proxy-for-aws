@@ -99,7 +99,7 @@ class TestServer:
         assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
-        mock_client_class.assert_called_once_with(transport=mock_transport)
+        mock_client_class.assert_called_once_with(transport=mock_transport, auto_initialize=False)
         mock_as_proxy.assert_called_once_with(mock_client)
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
@@ -173,7 +173,7 @@ class TestServer:
         }  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
-        mock_client_class.assert_called_once_with(transport=mock_transport)
+        mock_client_class.assert_called_once_with(transport=mock_transport, auto_initialize=False)
         mock_as_proxy.assert_called_once_with(mock_client)
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()
