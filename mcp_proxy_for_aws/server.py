@@ -84,7 +84,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint, service, region, metadata, timeout, profile
     )
-    async with Client(transport=transport) as client:
+    async with Client(transport=transport, auto_initialize=False) as client:
         # Create proxy with the transport
         proxy = FastMCP.as_proxy(client)
         add_logging_middleware(proxy, args.log_level)
