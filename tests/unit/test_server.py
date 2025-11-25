@@ -22,7 +22,7 @@ from mcp_proxy_for_aws.server import (
     add_tool_filtering_middleware,
     main,
     parse_args,
-    setup_mcp_mode,
+    run_proxy,
 )
 from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
 from mcp_proxy_for_aws.utils import determine_service_name
@@ -85,7 +85,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(local_mcp, mock_args)
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
@@ -156,7 +156,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(local_mcp, mock_args)
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
@@ -226,7 +226,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(local_mcp, mock_args)
 
         # Assert - verify AWS_REGION was automatically injected
         assert mock_create_transport.call_count == 1
@@ -282,7 +282,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(local_mcp, mock_args)
 
         # Assert - verify AWS_REGION was injected along with custom metadata
         assert mock_create_transport.call_count == 1

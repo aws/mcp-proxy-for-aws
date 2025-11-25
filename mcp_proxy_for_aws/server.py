@@ -23,12 +23,17 @@ This server provides a unified interface to backend servers by:
 """
 
 import asyncio
+import contextlib
 import httpx
 import logging
+import sys
 from fastmcp import Client
+from fastmcp.client import ClientTransport
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
+from mcp import JSONRPCError, JSONRPCResponse, McpError
+from mcp.types import JSONRPCMessage
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
@@ -37,13 +42,53 @@ from mcp_proxy_for_aws.utils import (
     determine_aws_region,
     determine_service_name,
 )
-from typing import Any
 
 
 logger = logging.getLogger(__name__)
 
 
-async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
+@contextlib.asynccontextmanager
+async def _initialize_client(transport: ClientTransport):
+    """Handle the exceptions for during client initialize."""
+    # line = sys.stdin.readline()
+    # logger.debug('First line from kiro %s', line)
+    async with contextlib.AsyncExitStack() as stack:
+        try:
+            client = await stack.enter_async_context(Client(transport))
+        except httpx.HTTPStatusError as http_error:
+            logger.error('HTTP Error during initialize %s', http_error)
+            response = http_error.response
+            try:
+                body = await response.aread()
+                jsonrpc_msg = JSONRPCMessage.model_validate_json(body).root
+                if isinstance(jsonrpc_msg, (JSONRPCError, JSONRPCResponse)):
+                    line = jsonrpc_msg.model_dump_json(
+                        by_alias=True,
+                        exclude_none=True,
+                    )
+                    logger.debug('Writing the unhandled http error to stdout %s', http_error)
+                    print(line, file=sys.stdout)
+                else:
+                    logger.debug('Ignoring jsonrpc message type=%s', type(jsonrpc_msg))
+            except Exception as _:
+                logger.debug('Cannot read HTTP response body')
+            raise http_error
+        except Exception as e:
+            logger.error('Error during initialize %s', e)
+            cause = e.__cause__
+            if isinstance(cause, McpError):
+                jsonrpc_error = JSONRPCError(jsonrpc='2.0', id=0, error=cause.error)
+                line = jsonrpc_error.model_dump_json(
+                    by_alias=True,
+                    exclude_none=True,
+                )
+                print(line, file=sys.stdout)
+            raise e
+        logger.debug('Initialized MCP client')
+        yield client
+
+
+async def run_proxy(args) -> None:
     """Set up the server in MCP mode."""
     logger.info('Setting up server in MCP mode')
 
@@ -84,16 +129,25 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint, service, region, metadata, timeout, profile
     )
-    async with Client(transport=transport) as client:
-        # Create proxy with the transport
-        proxy = FastMCP.as_proxy(client)
-        add_logging_middleware(proxy, args.log_level)
-        add_tool_filtering_middleware(proxy, args.read_only)
+    async with _initialize_client(transport) as client:
+        try:
+            proxy = FastMCP.as_proxy(
+                client,
+                name='MCP Proxy for AWS',
+                instructions=(
+                    'MCP Proxy for AWS Server that provides access to backend servers through a single interface. '
+                    'This proxy handles authentication and request routing to the appropriate backend services.'
+                ),
+            )
+            add_logging_middleware(proxy, args.log_level)
+            add_tool_filtering_middleware(proxy, args.read_only)
 
-        if args.retries:
-            add_retry_middleware(proxy, args.retries)
-
-        await proxy.run_async(transport='stdio')
+            if args.retries:
+                add_retry_middleware(proxy, args.retries)
+            await proxy.run_async(transport='stdio')
+        except Exception as e:
+            logger.error('Cannot start proxy server: %s', e)
+            raise e
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
@@ -146,27 +200,8 @@ def main():
     configure_logging(args.log_level)
     logger.info('Starting MCP Proxy for AWS Server')
 
-    # Create FastMCP instance
-    mcp = FastMCP[Any](
-        name='MCP Proxy',
-        instructions=(
-            'MCP Proxy for AWS Server that provides access to backend servers through a single interface. '
-            'This proxy handles authentication and request routing to the appropriate backend services.'
-        ),
-    )
-
-    async def setup_and_run():
-        try:
-            await setup_mcp_mode(mcp, args)
-
-            logger.info('Server setup complete, starting MCP server')
-
-        except Exception as e:
-            logger.error('Failed to start server: %s', e)
-            raise
-
     # Run the server
-    asyncio.run(setup_and_run())
+    asyncio.run(run_proxy(args))
 
 
 if __name__ == '__main__':
