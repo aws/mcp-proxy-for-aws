@@ -93,7 +93,7 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
         if args.retries:
             add_retry_middleware(proxy, args.retries)
 
-        await proxy.run_async()
+        await proxy.run_async(transport='stdio')
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
