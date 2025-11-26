@@ -28,6 +28,7 @@ import logging
 from fastmcp import Client
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
+from fastmcp.server.proxy import FastMCPProxy
 from fastmcp.server.server import FastMCP
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
@@ -85,8 +86,17 @@ async def setup_mcp_mode(local_mcp: FastMCP, args) -> None:
         args.endpoint, service, region, metadata, timeout, profile
     )
     async with Client(transport=transport) as client:
-        # Create proxy with the transport
-        proxy = FastMCP.as_proxy(client)
+
+        async def client_factory():
+            nonlocal client
+            if not client.is_connected():
+                logger.debug('Reinitialize client')
+                client = client.new()
+                await client._connect()
+            return client
+
+        proxy = FastMCPProxy(client_factory=client_factory)
+
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
