@@ -233,7 +233,7 @@ def main():
         asyncio.run(run_proxy(args))
     except Exception:
         logger.exception('Error launching MCP proxy for aws')
-        raise
+        return 1
 
 
 if __name__ == '__main__':

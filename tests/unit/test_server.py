@@ -14,7 +14,6 @@
 
 """Tests for the mcp-proxy-for-aws Server."""
 
-import pytest
 from fastmcp.client.transports import ClientTransport
 from mcp_proxy_for_aws.server import (
     add_retry_middleware,
@@ -383,9 +382,8 @@ class TestServer:
         mock_asyncio_run.side_effect = Exception('Test error')
 
         # Act & Assert
-        with pytest.raises(Exception) as exc_info:
-            main()
-        assert 'Test error' in str(exc_info.value)
+        assert 1 == main()
+        mock_asyncio_run.assert_called_once()
 
     def test_validate_service_name_service_parsing(self):
         """Test parsing service name from endpoint URL via validate_service_name."""
