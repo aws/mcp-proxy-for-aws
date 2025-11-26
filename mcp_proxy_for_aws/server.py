@@ -163,7 +163,7 @@ async def run_proxy(args) -> None:
                 client,
                 name='MCP Proxy for AWS',
                 instructions=(
-                    'MCP Proxy for AWS Server that provides access to backend servers through a single interface. '
+                    'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '
                     'This proxy handles authentication and request routing to the appropriate backend services.'
                 ),
             )
