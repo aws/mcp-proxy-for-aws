@@ -58,6 +58,9 @@ The MCP Proxy serves as a lightweight, client-side bridge between MCP clients (A
 uvx mcp-proxy-for-aws@latest <SigV4 MCP endpoint URL>
 ```
 
+**Note:** The first run may take tens of seconds as `uvx` downloads and caches dependencies. Subsequent runs will start in seconds. Actual startup time depends on your network and hardware.
+
+
 #### Using a local repository
 
 ```bash
