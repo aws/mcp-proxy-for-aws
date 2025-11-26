@@ -56,8 +56,6 @@ logger = logging.getLogger(__name__)
 @contextlib.asynccontextmanager
 async def _initialize_client(transport: ClientTransport):
     """Handle the exceptions for during client initialize."""
-    # line = sys.stdin.readline()
-    # logger.debug('First line from kiro %s', line)
     async with contextlib.AsyncExitStack() as stack:
         try:
             client = await stack.enter_async_context(ProxyClient(transport))
