@@ -32,8 +32,14 @@ from fastmcp.client import ClientTransport
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
-from mcp import JSONRPCError, JSONRPCResponse, McpError
-from mcp.types import JSONRPCMessage
+from mcp import McpError
+from mcp.types import (
+    CONNECTION_CLOSED,
+    ErrorData,
+    JSONRPCError,
+    JSONRPCMessage,
+    JSONRPCResponse,
+)
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
@@ -55,6 +61,14 @@ async def _initialize_client(transport: ClientTransport):
     async with contextlib.AsyncExitStack() as stack:
         try:
             client = await stack.enter_async_context(Client(transport))
+            if client.initialize_result:
+                print(
+                    client.initialize_result.model_dump_json(
+                        by_alias=True,
+                        exclude_none=True,
+                    ),
+                    file=sys.stdout,
+                )
         except httpx.HTTPStatusError as http_error:
             logger.error('HTTP Error during initialize %s', http_error)
             response = http_error.response
@@ -74,15 +88,29 @@ async def _initialize_client(transport: ClientTransport):
                 logger.debug('Cannot read HTTP response body')
             raise http_error
         except Exception as e:
-            logger.error('Error during initialize %s', e)
             cause = e.__cause__
             if isinstance(cause, McpError):
+                logger.error('MCP Error during initialize %s', cause.error)
                 jsonrpc_error = JSONRPCError(jsonrpc='2.0', id=0, error=cause.error)
                 line = jsonrpc_error.model_dump_json(
                     by_alias=True,
                     exclude_none=True,
                 )
-                print(line, file=sys.stdout)
+            else:
+                logger.error('Error during initialize %s', e)
+                jsonrpc_error = JSONRPCError(
+                    jsonrpc='2.0',
+                    id=0,
+                    error=ErrorData(
+                        code=CONNECTION_CLOSED,
+                        message=str(e),
+                    ),
+                )
+                line = jsonrpc_error.model_dump_json(
+                    by_alias=True,
+                    exclude_none=True,
+                )
+            print(line, file=sys.stdout)
             raise e
         logger.debug('Initialized MCP client')
         yield client
@@ -201,7 +229,11 @@ def main():
     logger.info('Starting MCP Proxy for AWS Server')
 
     # Run the server
-    asyncio.run(run_proxy(args))
+    try:
+        asyncio.run(run_proxy(args))
+    except Exception:
+        logger.exception('Error launching MCP proxy for aws')
+        raise
 
 
 if __name__ == '__main__':

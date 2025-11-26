@@ -170,4 +170,5 @@ async def test_generic_error_without_mcp_error_cause(capsys):
                 pass
 
         captured = capsys.readouterr()
-        assert captured.out.strip() == ''
+        assert 'Generic error' in captured.out
+        assert '"code":-32000' in captured.out
