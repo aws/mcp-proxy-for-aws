@@ -79,8 +79,10 @@ async def elicit_for_my_name(elicitation_expected: str, ctx: Context):
 @mcp.tool
 def echo_metadata(ctx: Context):
     """MCP Tool that echoes back the _meta field from the request."""
-    meta = ctx.request_context.meta
-    return {'received_meta': meta}
+    if ctx.request_context:
+        meta = ctx.request_context.meta
+        return {'received_meta': meta}
+    raise RuntimeError('No request context received')
 
 
 #### Server Setup
