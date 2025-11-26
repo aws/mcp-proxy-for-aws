@@ -15,29 +15,19 @@
 """Tests for the main function in server.py."""
 
 from mcp_proxy_for_aws.server import main
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 
 class TestMain:
     """Tests for the main function."""
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
-    @patch('mcp_proxy_for_aws.server.setup_mcp_mode')
-    @patch('mcp_proxy_for_aws.server.FastMCP')
+    @patch('mcp_proxy_for_aws.server.run_proxy')
     @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
-    def test_main_default(self, mock_fastmcp, mock_setup_mcp, mock_asyncio_run):
+    def test_main_default(self, mock_run_proxy, mock_asyncio_run):
         """Test main function with default arguments."""
-        # Create mock FastMCP instance
-        mock_mcp_instance = Mock()
-        mock_mcp_instance.run_async = AsyncMock()
-
-        # Mock the FastMCP class - need to handle the type annotation
-        mock_fastmcp_typed = Mock()
-        mock_fastmcp_typed.return_value = mock_mcp_instance
-        mock_fastmcp.__getitem__.return_value = mock_fastmcp_typed
-
-        # Mock setup_mcp_mode as async
-        mock_setup_mcp.return_value = AsyncMock()
+        # Mock run_proxy as async
+        mock_run_proxy.return_value = AsyncMock()
 
         # Mock asyncio.run to avoid actual execution
         mock_asyncio_run.return_value = None
@@ -45,9 +35,6 @@ class TestMain:
         # Call the main function
         main()
 
-        # Check that FastMCP was accessed with type annotation
-        mock_fastmcp.__getitem__.assert_called_once()
-        mock_fastmcp_typed.assert_called_once()
         # Check that asyncio.run was called
         mock_asyncio_run.assert_called_once()
 
