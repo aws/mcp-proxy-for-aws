@@ -14,15 +14,13 @@
 
 """Tests for the mcp-proxy-for-aws Server."""
 
-import pytest
 from fastmcp.client.transports import ClientTransport
-from fastmcp.server.server import FastMCP
 from mcp_proxy_for_aws.server import (
     add_retry_middleware,
     add_tool_filtering_middleware,
     main,
     parse_args,
-    setup_mcp_mode,
+    run_proxy,
 )
 from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
 from mcp_proxy_for_aws.utils import determine_service_name
@@ -51,7 +49,6 @@ class TestServer:
     ):
         """Test that MCP mode is set up correctly."""
         # Arrange
-        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
@@ -85,7 +82,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(mock_args)
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
@@ -99,8 +96,9 @@ class TestServer:
         assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
-        mock_client_class.assert_called_once_with(transport=mock_transport)
-        mock_as_proxy.assert_called_once_with(mock_client)
+        mock_client_class.assert_called_once_with(mock_transport)
+        mock_as_proxy.assert_called_once()
+        assert mock_as_proxy.call_args[0][0] == mock_client
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
         mock_proxy.run_async.assert_called_once()
@@ -122,7 +120,6 @@ class TestServer:
     ):
         """Test that MCP mode setup without retries doesn't add retry middleware."""
         # Arrange
-        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
@@ -156,7 +153,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(mock_args)
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
@@ -173,8 +170,9 @@ class TestServer:
         }  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
-        mock_client_class.assert_called_once_with(transport=mock_transport)
-        mock_as_proxy.assert_called_once_with(mock_client)
+        mock_client_class.assert_called_once_with(mock_transport)
+        mock_as_proxy.assert_called_once()
+        assert mock_as_proxy.call_args[0][0] == mock_client
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once()
 
@@ -195,7 +193,6 @@ class TestServer:
     ):
         """Test that AWS_REGION is automatically injected when no metadata is provided."""
         # Arrange
-        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
@@ -226,7 +223,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(mock_args)
 
         # Assert - verify AWS_REGION was automatically injected
         assert mock_create_transport.call_count == 1
@@ -251,7 +248,6 @@ class TestServer:
     ):
         """Test that AWS_REGION is injected even when other metadata is provided."""
         # Arrange
-        local_mcp = Mock(spec=FastMCP)
         mock_args = Mock()
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
@@ -282,7 +278,7 @@ class TestServer:
         mock_as_proxy.return_value = mock_proxy
 
         # Act
-        await setup_mcp_mode(local_mcp, mock_args)
+        await run_proxy(mock_args)
 
         # Assert - verify AWS_REGION was injected along with custom metadata
         assert mock_create_transport.call_count == 1
@@ -386,9 +382,8 @@ class TestServer:
         mock_asyncio_run.side_effect = Exception('Test error')
 
         # Act & Assert
-        with pytest.raises(Exception) as exc_info:
-            main()
-        assert 'Test error' in str(exc_info.value)
+        assert 1 == main()
+        mock_asyncio_run.assert_called_once()
 
     def test_validate_service_name_service_parsing(self):
         """Test parsing service name from endpoint URL via validate_service_name."""
