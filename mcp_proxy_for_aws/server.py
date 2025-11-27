@@ -56,19 +56,9 @@ logger = logging.getLogger(__name__)
 @contextlib.asynccontextmanager
 async def _initialize_client(transport: ClientTransport):
     """Handle the exceptions for during client initialize."""
-    # line = sys.stdin.readline()
-    # logger.debug('First line from kiro %s', line)
     async with contextlib.AsyncExitStack() as stack:
         try:
             client = await stack.enter_async_context(ProxyClient(transport))
-            if client.initialize_result:
-                print(
-                    client.initialize_result.model_dump_json(
-                        by_alias=True,
-                        exclude_none=True,
-                    ),
-                    file=sys.stdout,
-                )
         except httpx.HTTPStatusError as http_error:
             logger.error('HTTP Error during initialize %s', http_error)
             response = http_error.response
