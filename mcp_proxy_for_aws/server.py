@@ -27,10 +27,10 @@ import contextlib
 import httpx
 import logging
 import sys
-from fastmcp import Client
 from fastmcp.client import ClientTransport
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
+from fastmcp.server.proxy import FastMCPProxy, ProxyClient
 from fastmcp.server.server import FastMCP
 from mcp import McpError
 from mcp.types import (
@@ -60,7 +60,7 @@ async def _initialize_client(transport: ClientTransport):
     # logger.debug('First line from kiro %s', line)
     async with contextlib.AsyncExitStack() as stack:
         try:
-            client = await stack.enter_async_context(Client(transport))
+            client = await stack.enter_async_context(ProxyClient(transport))
             if client.initialize_result:
                 print(
                     client.initialize_result.model_dump_json(
@@ -157,10 +157,20 @@ async def run_proxy(args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint, service, region, metadata, timeout, profile
     )
+
     async with _initialize_client(transport) as client:
+
+        async def client_factory():
+            nonlocal client
+            if not client.is_connected():
+                logger.debug('Reinitialize client')
+                client = ProxyClient(transport)
+                await client._connect()
+            return client
+
         try:
-            proxy = FastMCP.as_proxy(
-                client,
+            proxy = FastMCPProxy(
+                client_factory=client_factory,
                 name='MCP Proxy for AWS',
                 instructions=(
                     'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '

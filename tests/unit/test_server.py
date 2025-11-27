@@ -30,9 +30,9 @@ from unittest.mock import AsyncMock, Mock, patch
 class TestServer:
     """Tests for the server module."""
 
-    @patch('mcp_proxy_for_aws.server.Client')
+    @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -43,7 +43,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_as_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_class,
     ):
@@ -73,13 +73,15 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client = Mock()
+        mock_client.initialize_result = None
+        mock_client.is_connected = Mock(return_value=True)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
-        mock_as_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -97,15 +99,14 @@ class TestServer:
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
         mock_client_class.assert_called_once_with(mock_transport)
-        mock_as_proxy.assert_called_once()
-        assert mock_as_proxy.call_args[0][0] == mock_client
+        mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
-        mock_proxy.run_async.assert_called_once()
+        mock_proxy.run_async.assert_called_once_with(transport='stdio')
 
-    @patch('mcp_proxy_for_aws.server.Client')
+    @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -114,7 +115,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_as_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_class,
     ):
@@ -144,13 +145,15 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client = Mock()
+        mock_client.initialize_result = None
+        mock_client.is_connected = Mock(return_value=True)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
-        mock_as_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -171,14 +174,13 @@ class TestServer:
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
         mock_client_class.assert_called_once_with(mock_transport)
-        mock_as_proxy.assert_called_once()
-        assert mock_as_proxy.call_args[0][0] == mock_client
+        mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
-        mock_proxy.run_async.assert_called_once()
+        mock_proxy.run_async.assert_called_once_with(transport='stdio')
 
-    @patch('mcp_proxy_for_aws.server.Client')
+    @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -187,7 +189,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_as_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_class,
     ):
@@ -214,13 +216,15 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client = Mock()
+        mock_client.initialize_result = None
+        mock_client.is_connected = Mock(return_value=True)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
-        mock_as_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -231,9 +235,9 @@ class TestServer:
         metadata = call_args[0][3]
         assert metadata == {'AWS_REGION': 'ap-southeast-1'}
 
-    @patch('mcp_proxy_for_aws.server.Client')
+    @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.FastMCP.as_proxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -242,7 +246,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_as_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_class,
     ):
@@ -269,13 +273,15 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client = Mock()
+        mock_client.initialize_result = None
+        mock_client.is_connected = Mock(return_value=True)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_class.return_value = mock_client
 
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
-        mock_as_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
