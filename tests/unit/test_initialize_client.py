@@ -28,7 +28,7 @@ async def test_successful_initialization():
     mock_transport = Mock()
     mock_client = Mock()
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -48,7 +48,7 @@ async def test_http_error_with_jsonrpc_error(capsys):
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=http_error)
 
         with pytest.raises(httpx.HTTPStatusError):
@@ -70,7 +70,7 @@ async def test_http_error_with_jsonrpc_response(capsys):
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=http_error)
 
         with pytest.raises(httpx.HTTPStatusError):
@@ -91,7 +91,7 @@ async def test_http_error_with_invalid_json():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=http_error)
 
         with pytest.raises(httpx.HTTPStatusError):
@@ -109,7 +109,7 @@ async def test_http_error_with_non_jsonrpc_message():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=http_error)
 
         with pytest.raises(httpx.HTTPStatusError):
@@ -127,7 +127,7 @@ async def test_http_error_response_read_failure():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=http_error)
 
         with pytest.raises(httpx.HTTPStatusError):
@@ -144,7 +144,7 @@ async def test_generic_error_with_mcp_error_cause(capsys):
     generic_error = Exception('Wrapper error')
     generic_error.__cause__ = mcp_error
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=generic_error)
 
         with pytest.raises(Exception):
@@ -162,7 +162,7 @@ async def test_generic_error_without_mcp_error_cause(capsys):
     mock_transport = Mock()
     generic_error = Exception('Generic error')
 
-    with patch('mcp_proxy_for_aws.server.Client') as mock_client_class:
+    with patch('mcp_proxy_for_aws.server.ProxyClient') as mock_client_class:
         mock_client_class.return_value.__aenter__ = AsyncMock(side_effect=generic_error)
 
         with pytest.raises(Exception):
