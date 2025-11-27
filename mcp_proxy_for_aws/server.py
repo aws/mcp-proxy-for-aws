@@ -27,11 +27,10 @@ import contextlib
 import httpx
 import logging
 import sys
-from fastmcp import Client
 from fastmcp.client import ClientTransport
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
-from fastmcp.server.proxy import FastMCPProxy
+from fastmcp.server.proxy import FastMCPProxy, ProxyClient
 from fastmcp.server.server import FastMCP
 from mcp import McpError
 from mcp.types import (
@@ -61,7 +60,7 @@ async def _initialize_client(transport: ClientTransport):
     # logger.debug('First line from kiro %s', line)
     async with contextlib.AsyncExitStack() as stack:
         try:
-            client = await stack.enter_async_context(Client(transport))
+            client = await stack.enter_async_context(ProxyClient(transport))
             if client.initialize_result:
                 print(
                     client.initialize_result.model_dump_json(
@@ -165,7 +164,7 @@ async def run_proxy(args) -> None:
             nonlocal client
             if not client.is_connected():
                 logger.debug('Reinitialize client')
-                client = client.new()
+                client = ProxyClient(transport)
                 await client._connect()
             return client
 
