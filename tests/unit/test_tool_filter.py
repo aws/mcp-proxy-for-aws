@@ -40,7 +40,6 @@ class TestToolFilteringMiddleware:
 
         # Assert
         assert middleware.read_only is False
-        assert middleware.logger is not None
 
     def test_constructor_read_only_true(self):
         """Test constructor with read_only=True."""
@@ -49,7 +48,6 @@ class TestToolFilteringMiddleware:
 
         # Assert
         assert middleware.read_only is True
-        assert middleware.logger is not None
 
 
 class TestOnListTools:

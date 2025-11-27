@@ -19,13 +19,15 @@ from fastmcp.tools.tool import Tool
 from typing import Sequence
 
 
+logger = logging.getLogger(__name__)
+
+
 class ToolFilteringMiddleware(Middleware):
     """Middleware to filter tools based on read only flag."""
 
-    def __init__(self, read_only: bool, logger: logging.Logger | None = None):
+    def __init__(self, read_only: bool):
         """Initialize the middleware."""
         self.read_only = read_only
-        self.logger = logger or logging.getLogger(__name__)
 
     async def on_list_tools(
         self,
@@ -35,7 +37,7 @@ class ToolFilteringMiddleware(Middleware):
         """Filter tools based on read only flag."""
         # Get list of FastMCP Components
         tools = await call_next(context)
-        self.logger.info('Filtering tools for read only: %s', self.read_only)
+        logger.info('Filtering tools for read only: %s', self.read_only)
 
         # If not read only, return the list of tools as is
         if not self.read_only:
@@ -50,7 +52,7 @@ class ToolFilteringMiddleware(Middleware):
             read_only_hint = getattr(annotations, 'readOnlyHint', False)
             if not read_only_hint:
                 # Skip tools that don't have readOnlyHint=True
-                self.logger.info('Skipping tool %s needing write permissions', tool.name)
+                logger.info('Skipping tool %s needing write permissions', tool.name)
                 continue
 
             filtered_tools.append(tool)

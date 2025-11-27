@@ -435,3 +435,44 @@ class TestSignRequestHook:
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
         mock_create_session.assert_called_once_with(profile)
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_sets_user_agent_from_client_info(self, mock_create_session):
+        """Test that sign_request_hook sets User-Agent from client_info context."""
+        from mcp.types import Implementation
+        from mcp_proxy_for_aws import __version__
+        from mcp_proxy_for_aws.context import set_client_info
+
+        mock_create_session.return_value = create_mock_session()
+
+        # Set client_info in context
+        info = Implementation(name='test-client', version='2.5.0')
+        set_client_info(info)
+
+        request = httpx.Request('POST', 'https://example.com/mcp', content=b'test')
+        await _sign_request_hook('us-east-1', 'bedrock-agentcore', None, request)
+
+        assert (
+            request.headers['user-agent'] == f'test-client/2.5.0 mcp-proxy-for-aws/{__version__}'
+        )
+
+        # Clean up
+        set_client_info(None)
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_without_client_info(self, mock_create_session):
+        """Test that sign_request_hook works without client_info."""
+        from mcp_proxy_for_aws.context import set_client_info
+
+        mock_create_session.return_value = create_mock_session()
+
+        # Ensure client_info is None
+        set_client_info(None)
+
+        request = httpx.Request('POST', 'https://example.com/mcp', content=b'test')
+        await _sign_request_hook('us-east-1', 'bedrock-agentcore', None, request)
+
+        assert 'user-agent' not in request.headers
+        assert 'authorization' in request.headers
