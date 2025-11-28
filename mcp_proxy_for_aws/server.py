@@ -172,7 +172,7 @@ async def run_proxy(args) -> None:
 
             if args.retries:
                 add_retry_middleware(proxy, args.retries)
-            await proxy.run_async(transport='stdio')
+            await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
         except Exception as e:
             logger.error('Cannot start proxy server: %s', e)
             raise e

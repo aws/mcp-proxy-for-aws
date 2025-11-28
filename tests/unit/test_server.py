@@ -102,7 +102,9 @@ class TestServer:
         mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
-        mock_proxy.run_async.assert_called_once_with(transport='stdio')
+        mock_proxy.run_async.assert_called_once_with(
+            transport='stdio', show_banner=False, log_level='INFO'
+        )
 
     @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
@@ -176,7 +178,9 @@ class TestServer:
         mock_client_class.assert_called_once_with(mock_transport)
         mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
-        mock_proxy.run_async.assert_called_once_with(transport='stdio')
+        mock_proxy.run_async.assert_called_once_with(
+            transport='stdio', show_banner=False, log_level='INFO'
+        )
 
     @patch('mcp_proxy_for_aws.server.ProxyClient')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
