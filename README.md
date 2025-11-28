@@ -146,6 +146,9 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 }
 ```
 
+> [!NOTE]
+> Cline users should not use `--log-level` argument because Cline checks the log messages in stderr for text "error" (case insensitive).
+
 #### Using Docker
 
 ```json
