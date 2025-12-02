@@ -23,26 +23,16 @@ This server provides a unified interface to backend servers by:
 """
 
 import asyncio
-import contextlib
 import httpx
 import logging
-import sys
-from fastmcp.client import ClientTransport
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
-from fastmcp.server.proxy import FastMCPProxy, ProxyClient
 from fastmcp.server.server import FastMCP
-from mcp import McpError
-from mcp.types import (
-    CONNECTION_CLOSED,
-    ErrorData,
-    JSONRPCError,
-    JSONRPCMessage,
-    JSONRPCResponse,
-)
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
+from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
+from mcp_proxy_for_aws.proxy import AWSMCPProxy, AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -53,62 +43,9 @@ from mcp_proxy_for_aws.utils import (
 logger = logging.getLogger(__name__)
 
 
-@contextlib.asynccontextmanager
-async def _initialize_client(transport: ClientTransport):
-    """Handle the exceptions for during client initialize."""
-    async with contextlib.AsyncExitStack() as stack:
-        try:
-            client = await stack.enter_async_context(ProxyClient(transport))
-        except httpx.HTTPStatusError as http_error:
-            logger.error('HTTP Error during initialize %s', http_error)
-            response = http_error.response
-            try:
-                body = await response.aread()
-                jsonrpc_msg = JSONRPCMessage.model_validate_json(body).root
-                if isinstance(jsonrpc_msg, (JSONRPCError, JSONRPCResponse)):
-                    line = jsonrpc_msg.model_dump_json(
-                        by_alias=True,
-                        exclude_none=True,
-                    )
-                    logger.debug('Writing the unhandled http error to stdout %s', http_error)
-                    print(line, file=sys.stdout)
-                else:
-                    logger.debug('Ignoring jsonrpc message type=%s', type(jsonrpc_msg))
-            except Exception as _:
-                logger.debug('Cannot read HTTP response body')
-            raise http_error
-        except Exception as e:
-            cause = e.__cause__
-            if isinstance(cause, McpError):
-                logger.error('MCP Error during initialize %s', cause.error)
-                jsonrpc_error = JSONRPCError(jsonrpc='2.0', id=0, error=cause.error)
-                line = jsonrpc_error.model_dump_json(
-                    by_alias=True,
-                    exclude_none=True,
-                )
-            else:
-                logger.error('Error during initialize %s', e)
-                jsonrpc_error = JSONRPCError(
-                    jsonrpc='2.0',
-                    id=0,
-                    error=ErrorData(
-                        code=CONNECTION_CLOSED,
-                        message=str(e),
-                    ),
-                )
-                line = jsonrpc_error.model_dump_json(
-                    by_alias=True,
-                    exclude_none=True,
-                )
-            print(line, file=sys.stdout)
-            raise e
-        logger.debug('Initialized MCP client')
-        yield client
-
-
 async def run_proxy(args) -> None:
     """Set up the server in MCP mode."""
-    logger.info('Setting up server in MCP mode')
+    logger.info('Setting up mcp proxy server to %s', args.endpoint)
 
     # Validate and determine service
     service = determine_service_name(args.endpoint, args.service)
@@ -134,7 +71,6 @@ async def run_proxy(args) -> None:
         metadata,
         profile,
     )
-    logger.info('Running in MCP mode')
 
     timeout = httpx.Timeout(
         args.timeout,
@@ -147,35 +83,29 @@ async def run_proxy(args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint, service, region, metadata, timeout, profile
     )
+    client_factory = AWSMCPProxyClientFactory(transport)
 
-    async with _initialize_client(transport) as client:
+    try:
+        proxy = AWSMCPProxy(
+            client_factory=client_factory,
+            name='MCP Proxy for AWS',
+            instructions=(
+                'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '
+                'This proxy handles authentication and request routing to the appropriate backend services.'
+            ),
+        )
+        proxy.add_middleware(InitializeMiddleware(client_factory))
+        add_logging_middleware(proxy, args.log_level)
+        add_tool_filtering_middleware(proxy, args.read_only)
 
-        async def client_factory():
-            nonlocal client
-            if not client.is_connected():
-                logger.debug('Reinitialize client')
-                client = ProxyClient(transport)
-                await client._connect()
-            return client
-
-        try:
-            proxy = FastMCPProxy(
-                client_factory=client_factory,
-                name='MCP Proxy for AWS',
-                instructions=(
-                    'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '
-                    'This proxy handles authentication and request routing to the appropriate backend services.'
-                ),
-            )
-            add_logging_middleware(proxy, args.log_level)
-            add_tool_filtering_middleware(proxy, args.read_only)
-
-            if args.retries:
-                add_retry_middleware(proxy, args.retries)
-            await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
-        except Exception as e:
-            logger.error('Cannot start proxy server: %s', e)
-            raise e
+        if args.retries:
+            add_retry_middleware(proxy, args.retries)
+        await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
+    except Exception as e:
+        logger.error('Cannot start proxy server: %s', e)
+        raise e
+    finally:
+        await client_factory.disconnect_all()
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
