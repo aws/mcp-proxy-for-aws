@@ -106,6 +106,13 @@ class AWSMCPProxyClient(_ProxyClient):
                 raise McpError(error=jsonrpc_msg.error) from http_error
             else:
                 raise http_error
+        except RuntimeError:
+            try:
+                logger.warning('encountered runtime error, try force disconnect.')
+                await self._disconnect(force=True)
+            except Exception:
+                logger.warning('encountered another error, raising the previous runtime error.')
+            return await self._connect()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """The MCP Proxy for AWS project is a proxy from stdio to http (sigv4).
