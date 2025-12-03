@@ -110,7 +110,7 @@ class AWSMCPProxyClient(_ProxyClient):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """The MCP Proxy for AWS project is a proxy from stdio to http (sigv4).
 
-        We want the client to remain connected in the until the stdio connection is closed.
+        We want the client to remain connected until the stdio connection is closed.
 
         https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#stdio
 
@@ -120,7 +120,6 @@ class AWSMCPProxyClient(_ProxyClient):
         There is no equivalent of the streamble-http DELETE concept in stdio to terminate a session.
         Hence the connection will be terminated only at program exit.
         """
-        # return await super().__aexit__(exc_type, exc_val, exc_tb)
         pass
 
 
