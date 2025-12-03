@@ -150,7 +150,7 @@ def test_client_factory_initialization():
     factory = AWSMCPProxyClientFactory(mock_transport)
 
     assert factory._transport == mock_transport
-    assert isinstance(factory._client, AWSMCPProxyClient)
+    assert factory._client is None
     assert factory._initialize_request is None
 
 
@@ -171,10 +171,11 @@ async def test_client_factory_get_client_when_connected():
     mock_transport = Mock(spec=ClientTransport)
     factory = AWSMCPProxyClientFactory(mock_transport)
 
-    factory._client.is_connected = Mock(return_value=True)
+    mock_client = Mock(spec=AWSMCPProxyClient)
+    factory._client = mock_client
 
     client = await factory.get_client()
-    assert client == factory._client
+    assert client == mock_client
 
 
 @pytest.mark.asyncio
@@ -183,12 +184,9 @@ async def test_client_factory_get_client_when_disconnected():
     mock_transport = Mock(spec=ClientTransport)
     factory = AWSMCPProxyClientFactory(mock_transport)
 
-    old_client = factory._client
-    factory._client.is_connected = Mock(return_value=False)
-
     client = await factory.get_client()
-    assert client != old_client
     assert isinstance(client, AWSMCPProxyClient)
+    assert factory._client == client
 
 
 @pytest.mark.asyncio
@@ -197,45 +195,35 @@ async def test_client_factory_callable_interface():
     mock_transport = Mock(spec=ClientTransport)
     factory = AWSMCPProxyClientFactory(mock_transport)
 
-    factory._client.is_connected = Mock(return_value=True)
-
     client = await factory()
-    assert client == factory._client
+    assert isinstance(client, AWSMCPProxyClient)
 
 
 @pytest.mark.asyncio
 async def test_client_factory_disconnect_all():
-    """Test disconnect_all disconnects all clients."""
+    """Test disconnect disconnects the client."""
     mock_transport = Mock(spec=ClientTransport)
     factory = AWSMCPProxyClientFactory(mock_transport)
 
-    mock_client1 = Mock()
-    mock_client1._disconnect = AsyncMock()
-    mock_client2 = Mock()
-    mock_client2._disconnect = AsyncMock()
+    mock_client = Mock()
+    mock_client._disconnect = AsyncMock()
+    factory._client = mock_client
 
-    factory._clients = [mock_client1, mock_client2]
+    await factory.disconnect()
 
-    await factory.disconnect_all()
-
-    mock_client1._disconnect.assert_called_once_with(force=True)
-    mock_client2._disconnect.assert_called_once_with(force=True)
+    mock_client._disconnect.assert_called_once_with(force=True)
 
 
 @pytest.mark.asyncio
 async def test_client_factory_disconnect_all_handles_exceptions():
-    """Test disconnect_all handles exceptions gracefully."""
+    """Test disconnect handles exceptions gracefully."""
     mock_transport = Mock(spec=ClientTransport)
     factory = AWSMCPProxyClientFactory(mock_transport)
 
-    mock_client1 = Mock()
-    mock_client1._disconnect = AsyncMock(side_effect=Exception('Disconnect failed'))
-    mock_client2 = Mock()
-    mock_client2._disconnect = AsyncMock()
+    mock_client = Mock()
+    mock_client._disconnect = AsyncMock(side_effect=Exception('Disconnect failed'))
+    factory._client = mock_client
 
-    factory._clients = [mock_client1, mock_client2]
+    await factory.disconnect()
 
-    await factory.disconnect_all()
-
-    mock_client1._disconnect.assert_called_once_with(force=True)
-    mock_client2._disconnect.assert_called_once_with(force=True)
+    mock_client._disconnect.assert_called_once_with(force=True)

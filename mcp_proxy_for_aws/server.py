@@ -105,7 +105,7 @@ async def run_proxy(args) -> None:
         logger.error('Cannot start proxy server: %s', e)
         raise e
     finally:
-        await client_factory.disconnect_all()
+        await client_factory.disconnect()
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:

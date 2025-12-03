@@ -73,7 +73,7 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client_factory = Mock()
-        mock_client_factory.disconnect_all = AsyncMock()
+        mock_client_factory.disconnect = AsyncMock()
         mock_client_factory_class.return_value = mock_client_factory
 
         mock_proxy = Mock()
@@ -145,7 +145,7 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client_factory = Mock()
-        mock_client_factory.disconnect_all = AsyncMock()
+        mock_client_factory.disconnect = AsyncMock()
         mock_client_factory_class.return_value = mock_client_factory
 
         mock_proxy = Mock()
@@ -216,7 +216,7 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client_factory = Mock()
-        mock_client_factory.disconnect_all = AsyncMock()
+        mock_client_factory.disconnect = AsyncMock()
         mock_client_factory_class.return_value = mock_client_factory
 
         mock_proxy = Mock()
@@ -271,7 +271,7 @@ class TestServer:
         mock_create_transport.return_value = mock_transport
 
         mock_client_factory = Mock()
-        mock_client_factory.disconnect_all = AsyncMock()
+        mock_client_factory.disconnect = AsyncMock()
         mock_client_factory_class.return_value = mock_client_factory
 
         mock_proxy = Mock()

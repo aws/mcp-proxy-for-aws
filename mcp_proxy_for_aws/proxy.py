@@ -140,8 +140,7 @@ class AWSMCPProxyClientFactory:
     def __init__(self, transport: ClientTransport) -> None:
         """Initialize a client factory with transport."""
         self._transport = transport
-        self._client = AWSMCPProxyClient(transport)
-        self._clients: list[AWSMCPProxyClient] = []
+        self._client: AWSMCPProxyClient | None = None
         self._initialize_request: InitializeRequest | None = None
 
     def set_init_params(self, initialize_request: InitializeRequest):
@@ -150,7 +149,7 @@ class AWSMCPProxyClientFactory:
 
     async def get_client(self) -> Client:
         """Get client."""
-        if not self._client.is_connected():
+        if self._client is None:
             self._client = AWSMCPProxyClient(self._transport)
 
         return self._client
@@ -159,10 +158,10 @@ class AWSMCPProxyClientFactory:
         """Implement the callable factory interface."""
         return await self.get_client()
 
-    async def disconnect_all(self):
+    async def disconnect(self):
         """Disconnect all the clients (no throw)."""
-        for client in reversed(self._clients):
-            try:
-                await client._disconnect(force=True)
-            except Exception:
-                logger.exception('Failed to disconnect client.')
+        try:
+            if self._client:
+                await self._client._disconnect(force=True)
+        except Exception:
+            logger.exception('Failed to disconnect client.')
