@@ -22,6 +22,8 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
 from functools import partial
+from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.context import get_client_info
 from typing import Any, Dict, Generator, Optional
 
 
@@ -227,6 +229,13 @@ async def _sign_request_hook(
     """
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
+
+    # Build User-Agent from client_info if available
+    info = get_client_info()
+    if info:
+        user_agent = f'{info.name}/{info.version} mcp-proxy-for-aws/{__version__}'
+        request.headers['User-Agent'] = user_agent
+        logger.info('Set User-Agent header: %s', user_agent)
 
     # Get AWS credentials
     session = create_aws_session(profile)

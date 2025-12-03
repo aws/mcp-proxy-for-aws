@@ -42,6 +42,7 @@ from mcp.types import (
 )
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
+from mcp_proxy_for_aws.middleware.client_info import ClientInfoMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
@@ -167,6 +168,7 @@ async def run_proxy(args) -> None:
                     'This proxy handles authentication and request routing to the appropriate backend services.'
                 ),
             )
+            add_client_info_middleware(proxy)
             add_logging_middleware(proxy, args.log_level)
             add_tool_filtering_middleware(proxy, args.read_only)
 
@@ -178,6 +180,16 @@ async def run_proxy(args) -> None:
             raise e
 
 
+def add_client_info_middleware(mcp: FastMCP) -> None:
+    """Add client info middleware to capture client_info from initialize.
+
+    Args:
+        mcp: The FastMCP instance to add client info middleware to
+    """
+    logger.info('Adding client info middleware')
+    mcp.add_middleware(ClientInfoMiddleware())
+
+
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
     """Add tool filtering middleware to target MCP server.
 
@@ -186,11 +198,7 @@ def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None
         read_only: Whether or not to filter out tools that require write permissions
     """
     logger.info('Adding tool filtering middleware')
-    mcp.add_middleware(
-        ToolFilteringMiddleware(
-            read_only=read_only,
-        )
-    )
+    mcp.add_middleware(ToolFilteringMiddleware(read_only))
 
 
 def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
