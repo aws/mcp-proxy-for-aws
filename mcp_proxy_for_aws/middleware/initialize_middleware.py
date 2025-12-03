@@ -23,7 +23,7 @@ class InitializeMiddleware(Middleware):
         call_next: CallNext[mt.InitializeRequest, None],
     ) -> None:
         try:
-            logger.debug('Received initiqlize request %s.', context.message)
+            logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
             return await call_next(context)
         except Exception:
