@@ -111,7 +111,11 @@ class AWSMCPProxyClient(_ProxyClient):
                 logger.warning('encountered runtime error, try force disconnect.')
                 await self._disconnect(force=True)
             except Exception:
-                logger.warning('encountered another error, raising the previous runtime error.')
+                # _disconnect awaits on the session_task,
+                # which raises the timeout error that caused the client session to be terminated.
+                # the error is ignored as long as the counter is force set to 0.
+                # TODO: investigate how timeout error is handled by fastmcp and httpx
+                logger.exception('encountered another error, ignoring.')
             return await self._connect()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
