@@ -25,6 +25,10 @@ class InitializeMiddleware(Middleware):
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
+            client = await self._client_factory.get_client()
+            # connect the http client, fail and don't succeed the stdio connect
+            # if remote client cannot be connected
+            await client._connect()
             return await call_next(context)
         except Exception:
             logger.exception('Initialize failed in middleware.')
