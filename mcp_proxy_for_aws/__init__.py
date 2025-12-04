@@ -16,6 +16,8 @@
 
 from importlib.metadata import version as _metadata_version
 
+import mcp_proxy_for_aws.fastmcp_patch as _fastmcp_patch
+
 
 __all__ = ['__version__']
 __version__ = _metadata_version('mcp-proxy-for-aws')
