@@ -78,12 +78,13 @@ class AWSMCPProxy(_FastMCPProxy):
 class AWSMCPProxyClient(_ProxyClient):
     """Proxy client that handles HTTP errors when connection fails."""
 
-    def __init__(self, transport: ClientTransport, **kwargs):
+    def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
         """Constructor of AutoRefreshProxyCilent."""
         super().__init__(transport, **kwargs)
+        self._max_connect_retry = max_connect_retry
 
     @override
-    async def _connect(self):
+    async def _connect(self, retry=0):
         """Enter as normal && initialize only once."""
         logger.debug('Connecting %s', self)
         try:
@@ -96,27 +97,36 @@ class AWSMCPProxyClient(_ProxyClient):
             try:
                 body = await response.aread()
                 jsonrpc_msg = JSONRPCMessage.model_validate_json(body).root
-            except Exception:
-                logger.debug('HTTP error is not a valid MCP message.')
+            except Exception as e:
+                logger.debug('HTTP error is not a valid MCP message.', exc_info=e)
                 raise http_error
 
             if isinstance(jsonrpc_msg, JSONRPCError):
-                logger.debug('Converting HTTP error to MCP error %s', http_error)
+                logger.debug('Converting HTTP error to MCP error', exc_info=http_error)
                 # raising McpError so that the sdk can handle the exception properly
                 raise McpError(error=jsonrpc_msg.error) from http_error
             else:
                 raise http_error
-        except RuntimeError:
+        except RuntimeError as e:
+            if isinstance(e.__cause__, McpError):
+                raise e.__cause__
+
+            if retry > self._max_connect_retry:
+                raise e
+
             try:
-                logger.warning('encountered runtime error, try force disconnect.')
+                logger.warning('encountered runtime error, try force disconnect.', exc_info=e)
                 await self._disconnect(force=True)
-            except Exception:
+            except httpx.TimeoutException:
                 # _disconnect awaits on the session_task,
                 # which raises the timeout error that caused the client session to be terminated.
                 # the error is ignored as long as the counter is force set to 0.
                 # TODO: investigate how timeout error is handled by fastmcp and httpx
-                logger.exception('encountered another error, ignoring.')
-            return await self._connect()
+                logger.exception(
+                    'Session was terminated due to timeout error, ignore and reconnect'
+                )
+
+            return await self._connect(retry + 1)
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """The MCP Proxy for AWS project is a proxy from stdio to http (sigv4).

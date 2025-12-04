@@ -227,3 +227,72 @@ async def test_client_factory_disconnect_all_handles_exceptions():
     await factory.disconnect()
 
     mock_client._disconnect.assert_called_once_with(force=True)
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_connect_runtime_error_with_mcp_error():
+    """Test connection handles RuntimeError wrapping McpError."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport)
+
+    error_data = ErrorData(code=-32600, message='Invalid Request')
+    mcp_error = McpError(error=error_data)
+    runtime_error = RuntimeError('Connection failed')
+    runtime_error.__cause__ = mcp_error
+
+    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+        with pytest.raises(McpError) as exc_info:
+            await client._connect()
+        assert exc_info.value.error.code == -32600
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_connect_runtime_error_max_retries():
+    """Test connection stops retrying after max_connect_retry."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport, max_connect_retry=2)
+
+    runtime_error = RuntimeError('Connection failed')
+
+    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+        with patch.object(client, '_disconnect', new_callable=AsyncMock) as mock_disconnect:
+            with pytest.raises(RuntimeError):
+                await client._connect()
+            assert mock_disconnect.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_connect_runtime_error_with_timeout():
+    """Test connection handles TimeoutException during disconnect."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport, max_connect_retry=1)
+
+    runtime_error = RuntimeError('Connection failed')
+    call_count = 0
+
+    async def mock_connect_side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:
+            raise runtime_error
+        return 'connected'
+
+    with patch(
+        'mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=mock_connect_side_effect
+    ):
+        with patch.object(
+            client,
+            '_disconnect',
+            new_callable=AsyncMock,
+            side_effect=httpx.TimeoutException('timeout'),
+        ):
+            result = await client._connect()
+            assert result == 'connected'
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_max_connect_retry_default():
+    """Test default max_connect_retry is 3."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport)
+    assert client._max_connect_retry == 3
