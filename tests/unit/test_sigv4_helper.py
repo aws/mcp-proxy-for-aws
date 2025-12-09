@@ -160,17 +160,27 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
+    def test_create_sigv4_client_with_custom_service_and_region(
+        self, mock_client_class, mock_create_session
+    ):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+
+        # Mock session creation
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = Mock(access_key='test-key')
+        mock_create_session.return_value = mock_session
 
         # Test client creation with custom parameters
         result = create_sigv4_client(
             service='custom-service', profile='test-profile', region='us-east-1'
         )
 
+        # Verify session was created with profile
+        mock_create_session.assert_called_once_with('test-profile')
         # Verify client was created
         assert result == mock_client
 
