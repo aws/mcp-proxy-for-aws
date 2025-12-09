@@ -2,6 +2,9 @@ name: Python Integration Tests
 
 
 on:
+  pull_request:
+    branches: main
+    types: ready_for_review
   workflow_dispatch:
   push:
     branches: main
