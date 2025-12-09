@@ -315,3 +315,6 @@ Licensed under the Apache License, Version 2.0 (the "License").
 ## Disclaimer
 
 LLMs are non-deterministic and they make mistakes, we advise you to always thoroughly test and follow the best practices of your organization before using these tools on customer facing accounts. Users of this package are solely responsible for implementing proper security controls and MUST use AWS Identity and Access Management (IAM) to manage access to AWS resources. You are responsible for configuring appropriate IAM policies, roles, and permissions, and any security vulnerabilities resulting from improper IAM configuration are your sole responsibility. By using this package, you acknowledge that you have read and understood this disclaimer and agree to use the package at your own risk.
+
+<!-- mcp-name: io.github.aws/mcp-proxy-for-aws -->
+<!-- mcp-name: io.github.aws/aws-mcp -->

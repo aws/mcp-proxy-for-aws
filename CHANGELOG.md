@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.1.4 (2025-12-04)
+
+### Fix
+
+- do not call initialize for q dev cli / kiro cli
+- patch fastmcp lowlevel session method
+- connect remote mcp client immediately in the initialize middleware
+
+## v1.1.3 (2025-12-04)
+
+### Fix
+
+- avoid infinite recursion (#111)
+- init client and show errors in all clients (#108)
+- set the fastmcp log level to be the same as the proxy (#101)
+
 ## v1.1.2 (2025-11-27)
 
 ### Fix
