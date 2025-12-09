@@ -31,12 +31,6 @@ Example .env file:
 MCP_SERVER_URL=https://example.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
 MCP_SERVER_AWS_SERVICE=bedrock-agentcore
 MCP_SERVER_REGION=us-west-2
-
-Example .env file:
-==================
-MCP_SERVER_URL=https://example.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp
-MCP_SERVER_AWS_SERVICE=bedrock-agentcore
-MCP_SERVER_REGION=us-west-2
 """
 
 import asyncio

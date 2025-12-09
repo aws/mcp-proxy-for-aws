@@ -90,3 +90,15 @@ def _build_endpoint_environment_remote_configuration():
         endpoint=remote_endpoint_url,
         region_name=region_name,
     )
+
+
+@pytest_asyncio.fixture(loop_scope="module", scope="module")
+async def aws_mcp_client():
+    """Create MCP Client for AWS MCP Server."""
+    client = build_mcp_client(
+        endpoint="https://aws-mcp.us-east-1.api.aws/mcp",
+        region_name="us-east-1",
+    )
+
+    async with client:
+        yield client
