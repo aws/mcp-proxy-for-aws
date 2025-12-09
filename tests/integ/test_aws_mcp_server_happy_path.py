@@ -1,28 +1,28 @@
 """Happy path integration tests for AWS MCP Server at https://aws-mcp.us-east-1.api.aws/mcp."""
 
 import fastmcp
+import json
 import logging
 import pytest
 from fastmcp.client.client import CallToolResult
-
 from tests.integ.test_proxy_simple_mcp_server import get_text_content
-import json
 
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_ping(aws_mcp_client: fastmcp.Client):
     """Test ping to AWS MCP Server."""
     await aws_mcp_client.ping()
 
-@pytest.mark.asyncio(loop_scope="module")
+
+@pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_list_tools(aws_mcp_client: fastmcp.Client):
     """Test list tools from AWS MCP Server."""
     tools = await aws_mcp_client.list_tools()
 
-    assert len(tools) > 0, f"AWS MCP Server should have tools (got {len(tools)})"
+    assert len(tools) > 0, f'AWS MCP Server should have tools (got {len(tools)})'
 
 
 def verify_response_content(response: CallToolResult):
@@ -37,15 +37,16 @@ def verify_response_content(response: CallToolResult):
     Raises:
         AssertionError: If response indicates an error or has empty content
     """
-    assert (
-        response.is_error is False
-    ), f"is_error returned true. Returned response body: {response}."
-    assert len(response.content) > 0, f"Empty result list in response. Response: {response}"
+    assert response.is_error is False, (
+        f'is_error returned true. Returned response body: {response}.'
+    )
+    assert len(response.content) > 0, f'Empty result list in response. Response: {response}'
 
     response_text = get_text_content(response)
-    assert len(response_text) > 0, f"Empty response text. Response: {response}"
+    assert len(response_text) > 0, f'Empty response text. Response: {response}'
 
     return response_text
+
 
 def verify_json_response(response: CallToolResult):
     """Verify that a tool call response is successful and contains valid JSON data.
@@ -63,76 +64,77 @@ def verify_json_response(response: CallToolResult):
     try:
         response_data = json.loads(response_text)
     except json.JSONDecodeError:
-        raise AssertionError(f"Response text is not valid JSON. Response text: {response_text}")
+        raise AssertionError(f'Response text is not valid JSON. Response text: {response_text}')
 
-    assert len(response_data) > 0, f"Empty JSON content in response. Response: {response}"
+    assert len(response_data) > 0, f'Empty JSON content in response. Response: {response}'
 
 
 @pytest.mark.parametrize(
-    "tool_name,params",
+    'tool_name,params',
     [
-        ("aws___list_regions", {}),
-        ("aws___suggest_aws_commands", {"query": "how to list my lambda functions"}),
-        ("aws___search_documentation", {"search_phrase": "S3 bucket versioning"}),
+        ('aws___list_regions', {}),
+        ('aws___suggest_aws_commands', {'query': 'how to list my lambda functions'}),
+        ('aws___search_documentation', {'search_phrase': 'S3 bucket versioning'}),
         (
-            "aws___recommend",
-            {"url": "https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html"},
+            'aws___recommend',
+            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
         ),
         (
-            "aws___read_documentation",
-            {"url": "https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html"},
+            'aws___read_documentation',
+            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
         ),
         (
-            "aws___get_regional_availability",
-            {"resource_type": "cfn", "region": "us-east-1"},
+            'aws___get_regional_availability',
+            {'resource_type': 'cfn', 'region': 'us-east-1'},
         ),
-        ("aws___call_aws", {"cli_command": "aws s3 ls", "max_results": 10}),
+        ('aws___call_aws', {'cli_command': 'aws s3 ls', 'max_results': 10}),
     ],
     ids=[
-        "list_regions",
-        "suggest_aws_commands",
-        "search_documentation",
-        "recommend",
-        "read_documentation",
-        "get_regional_availability",
-        "call_aws",
+        'list_regions',
+        'suggest_aws_commands',
+        'search_documentation',
+        'recommend',
+        'read_documentation',
+        'get_regional_availability',
+        'call_aws',
     ],
 )
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_tools(aws_mcp_client: fastmcp.Client, tool_name: str, params: dict):
     """Test AWS MCP tools with minimal valid params."""
     response = await aws_mcp_client.call_tool(tool_name, params)
     verify_json_response(response)
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_tools_retrieve_agent_sop(aws_mcp_client: fastmcp.Client):
     """Test aws___retrieve_agent_sop by retrieving the list of available SOPs."""
-
     # Step 1: Call retrieve_agent_sop with empty params to get list of available SOPs
-    list_sops_response = await aws_mcp_client.call_tool("aws___retrieve_agent_sop")
+    list_sops_response = await aws_mcp_client.call_tool('aws___retrieve_agent_sop')
 
     list_sops_response_text = verify_response_content(list_sops_response)
 
     # Parse SOP names from text (format: "* sop_name : description")
     sop_names = []
-    for line in list_sops_response_text.split("\n"):
+    for line in list_sops_response_text.split('\n'):
         line = line.strip()
-        if line.startswith("*") and ":" in line:
+        if line.startswith('*') and ':' in line:
             # Extract the SOP name between '*' and ':'
-            sop_name = line.split("*", 1)[1].split(":", 1)[0].strip()
+            sop_name = line.split('*', 1)[1].split(':', 1)[0].strip()
             if sop_name:
                 sop_names.append(sop_name)
 
-    assert (
-        len(sop_names) > 0
-    ), f"No SOPs found in response. Response: {list_sops_response_text[:200]}..."
-    logger.info(f"Found {len(sop_names)} SOPs: {sop_names}")
+    assert len(sop_names) > 0, (
+        f'No SOPs found in response. Response: {list_sops_response_text[:200]}...'
+    )
+    logger.info('Found %d SOPs: %s', len(sop_names), sop_names)
 
     # Step 2: Test retrieving the first SOP
     test_script = sop_names[0]
-    logger.info(f"Testing with SOP: {test_script}")
+    logger.info('Testing with SOP: %s', test_script)
 
-    response = await aws_mcp_client.call_tool("aws___retrieve_agent_sop", {"sop_name": test_script})
+    response = await aws_mcp_client.call_tool(
+        'aws___retrieve_agent_sop', {'sop_name': test_script}
+    )
 
     verify_response_content(response)
