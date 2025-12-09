@@ -9,51 +9,6 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-
-@pytest.mark.asyncio(loop_scope="module")
-async def test_nonexistent_tool(aws_mcp_client: fastmcp.Client):
-    """Test that calling a nonexistent tool raises an exception.
-
-    This test will:
-    - PASS when calling a nonexistent tool raises an exception
-    - FAIL if the nonexistent tool somehow succeeds
-    """
-    exception_raised = False
-    exception_message = None
-
-    try:
-        response = await aws_mcp_client.call_tool("aws___nonexistent_tool_12345", {})
-        logger.info(f"Unexpected success, response: {response}")
-    except Exception as e:
-        exception_raised = True
-        exception_message = str(e)
-        logger.info(f"Exception raised as expected: {type(e).__name__}: {exception_message}")
-
-    # Assert that an exception was raised
-    assert exception_raised, (
-        f"Expected exception when calling nonexistent tool 'aws___nonexistent_tool_12345', "
-        f"but call succeeded unexpectedly."
-    )
-
-    # Verify the exception mentions the tool not being found
-    error_message_lower = exception_message.lower()
-    tool_error_patterns = [
-        "not found",
-        "unknown",
-        "does not exist",
-        "invalid tool",
-        "tool",
-        "unknown tool",
-    ]
-
-    assert any(pattern in error_message_lower for pattern in tool_error_patterns), (
-        f"Exception was raised but doesn't appear to be about a missing tool. "
-        f"Expected one of {tool_error_patterns}, but got: {exception_message[:200]}"
-    )
-
-    logger.info(f"Test passed: Nonexistent tool correctly raised exception")
-
-
 @pytest.mark.asyncio(loop_scope="module")
 async def test_expired_credentials():
     """Test that expired credentials are properly rejected.

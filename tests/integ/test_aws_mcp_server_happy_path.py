@@ -1,4 +1,4 @@
-"""Integration tests for AWS MCP Server at https://aws-mcp.us-east-1.api.aws/mcp."""
+"""Happy path integration tests for AWS MCP Server at https://aws-mcp.us-east-1.api.aws/mcp."""
 
 import fastmcp
 import logging
@@ -76,7 +76,7 @@ def verify_json_response(response: CallToolResult):
         ("aws___search_documentation", {"search_phrase": "S3 bucket versioning"}),
         (
             "aws___recommend",
-            {"url": "bad_url"},
+            {"url": "https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html"},
         ),
         (
             "aws___read_documentation",
@@ -86,7 +86,7 @@ def verify_json_response(response: CallToolResult):
             "aws___get_regional_availability",
             {"resource_type": "cfn", "region": "us-east-1"},
         ),
-        ("aws___call_aws", {"cli_command": "aws s3 ls", "max_results": 50}),
+        ("aws___call_aws", {"cli_command": "aws s3 ls", "max_results": 10}),
     ],
     ids=[
         "list_regions",
