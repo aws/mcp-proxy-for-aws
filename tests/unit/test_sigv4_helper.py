@@ -119,11 +119,14 @@ class TestCreateAwsSession:
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(self, mock_client_class):
+    def test_create_sigv4_client_default(self, mock_client_class, mock_create_session):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
 
         # Test client creation
         result = create_sigv4_client(service='test-service', region='test-region')
@@ -139,11 +142,14 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_headers(self, mock_client_class):
+    def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_session):
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
@@ -160,25 +166,38 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
+    def test_create_sigv4_client_with_custom_service_and_region(
+        self, mock_client_class, mock_create_session
+    ):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+
+        # Mock session creation
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = Mock(access_key='test-key')
+        mock_create_session.return_value = mock_session
 
         # Test client creation with custom parameters
         result = create_sigv4_client(
             service='custom-service', profile='test-profile', region='us-east-1'
         )
 
+        # Verify session was created with profile
+        mock_create_session.assert_called_once_with('test-profile')
         # Verify client was created
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_kwargs(self, mock_client_class):
+    def test_create_sigv4_client_with_kwargs(self, mock_client_class, mock_create_session):
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
@@ -194,8 +213,9 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_prompt_context(self, mock_client_class):
+    def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_session):
         """Test creating SigV4 client when prompts exist in the system context.
 
         This test simulates the scenario where the sigv4_helper is used in a context
@@ -204,6 +224,8 @@ class TestCreateSigv4Client:
         """
         mock_client = Mock()
         mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
 
         # Test client creation with headers that might be used when prompts exist
         prompt_context_headers = {
