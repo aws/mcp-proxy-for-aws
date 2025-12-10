@@ -23,7 +23,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     _inject_metadata_hook,
     _sign_request_hook,
 )
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 
 def create_request_with_sigv4_headers(
@@ -343,23 +343,21 @@ class TestMetadataInjectionHook:
 class TestSignRequestHook:
     """Test cases for sign_request_hook function."""
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_sign_request_hook_signs_request(self, mock_create_session):
+    async def test_sign_request_hook_signs_request(self):
         """Test that sign_request_hook properly signs requests."""
         # Setup mocks
-        mock_create_session.return_value = create_mock_session()
+        mock_session = create_mock_session()
 
         region = 'us-east-1'
         service = 'bedrock-agentcore'
-        profile = None
 
         # Create request without signature headers
         request_body = json.dumps({'test': 'data'}).encode('utf-8')
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
         # Call the hook
-        await _sign_request_hook(region, service, profile, request)
+        await _sign_request_hook(region, service, mock_session, request)
 
         # Verify signature headers were added
         assert 'authorization' in request.headers
@@ -367,63 +365,54 @@ class TestSignRequestHook:
         assert 'x-amz-security-token' in request.headers
         assert request.headers['content-length'] == str(len(request_body))
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_sign_request_hook_with_profile(self, mock_create_session):
-        """Test that sign_request_hook uses profile when provided."""
+    async def test_sign_request_hook_with_profile(self):
+        """Test that sign_request_hook uses session when provided."""
         # Setup mocks
-        mock_create_session.return_value = create_mock_session()
+        mock_session = create_mock_session()
 
         region = 'us-west-2'
         service = 'execute-api'
-        profile = 'test-profile'
 
         request_body = b'test content'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
         # Call the hook
-        await _sign_request_hook(region, service, profile, request)
-
-        # Verify session was created with profile
-        mock_create_session.assert_called_once_with(profile)
+        await _sign_request_hook(region, service, mock_session, request)
 
         # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_sign_request_hook_sets_content_length(self, mock_create_session):
+    async def test_sign_request_hook_sets_content_length(self):
         """Test that sign_request_hook sets Content-Length header."""
         # Setup mocks
-        mock_create_session.return_value = create_mock_session()
+        mock_session = create_mock_session()
 
         region = 'eu-west-1'
         service = 'lambda'
-        profile = None
 
         # Create request
         request_body = b'test content with specific length'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _sign_request_hook(region, service, profile, request)
+        await _sign_request_hook(region, service, mock_session, request)
 
         # Verify Content-Length was set correctly
         assert request.headers['content-length'] == str(len(request_body))
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @pytest.mark.asyncio
-    async def test_sign_request_hook_with_partial_application(self, mock_create_session):
+    async def test_sign_request_hook_with_partial_application(self):
         """Test that sign_request_hook works with functools.partial."""
         # Setup mocks
-        mock_create_session.return_value = create_mock_session()
+        mock_session = create_mock_session()
 
         region = 'ap-southeast-1'
         service = 'execute-api'
-        profile = 'prod-profile'
 
         # Create curried function using partial
-        curried_hook = partial(_sign_request_hook, region, service, profile)
+        curried_hook = partial(_sign_request_hook, region, service, mock_session)
 
         request_body = b'request data'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -434,4 +423,3 @@ class TestSignRequestHook:
         # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
-        mock_create_session.assert_called_once_with(profile)

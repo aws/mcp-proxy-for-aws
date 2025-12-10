@@ -107,6 +107,7 @@ def create_sigv4_client(
     region: str,
     timeout: Optional[httpx.Timeout] = None,
     profile: Optional[str] = None,
+    session: Optional[boto3.Session] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
@@ -115,7 +116,8 @@ def create_sigv4_client(
 
     Args:
         service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional)
+        profile: AWS profile to use (optional, only used if session is not provided)
+        session: AWS boto3 session to use (optional, takes precedence over profile)
         region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
@@ -125,6 +127,10 @@ def create_sigv4_client(
     Returns:
         httpx.AsyncClient with SigV4 authentication
     """
+    # Create or use provided AWS session
+    if session is None:
+        session = create_aws_session(profile)
+
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': True,
@@ -151,7 +157,7 @@ def create_sigv4_client(
             'response': [_handle_error_response],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                partial(_sign_request_hook, region, service, profile),
+                partial(_sign_request_hook, region, service, session),
             ],
         },
     )
@@ -210,7 +216,7 @@ async def _handle_error_response(response: httpx.Response) -> None:
 async def _sign_request_hook(
     region: str,
     service: str,
-    profile: Optional[str],
+    session: boto3.Session,
     request: httpx.Request,
 ) -> None:
     """Request hook to sign HTTP requests with AWS SigV4.
@@ -222,14 +228,13 @@ async def _sign_request_hook(
     Args:
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional)
+        session: AWS boto3 session to use for credentials
         request: The HTTP request object to sign (modified in-place)
     """
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
 
-    # Get AWS credentials
-    session = create_aws_session(profile)
+    # Get AWS credentials from the session
     credentials = session.get_credentials()
     logger.info('Signing request with credentials for access key: %s', credentials.access_key)
 
