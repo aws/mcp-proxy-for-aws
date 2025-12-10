@@ -401,17 +401,25 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
-    def test_create_sigv4_client(self, mock_async_client):
+    def test_create_sigv4_client(self, mock_async_client, mock_create_session):
         """Test creating SigV4 authenticated client with request hooks.
 
         Note: Session creation and signing now happens in sign_request_hook,
         not during client creation.
         """
+        # Mock session creation
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = Mock(access_key='test-key')
+        mock_create_session.return_value = mock_session
+
         # Act
         create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
 
         # Assert
+        # Verify session was created with profile
+        mock_create_session.assert_called_once_with('test-profile')
         # Verify AsyncClient was called (signing happens via hooks)
         assert mock_async_client.call_count == 1
         call_args = mock_async_client.call_args
@@ -422,12 +430,16 @@ class TestServer:
         # Should have metadata injection + sign hooks
         assert len(call_args[1]['event_hooks']['request']) == 2
 
-    def test_create_sigv4_client_no_credentials(self):
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_create_sigv4_client_no_credentials(self, mock_create_session):
         """Test that credential check happens in sign_request_hook, not during client creation.
 
         Note: With the refactoring, client creation no longer validates credentials.
         Credential validation now happens in sign_request_hook when the request is signed.
         """
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
+
         # Client creation should succeed even without credentials
         # (credentials are checked when signing happens)
         client = create_sigv4_client(service='test-service', region='test-region')
