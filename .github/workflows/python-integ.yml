@@ -4,7 +4,7 @@ name: Python Integration Tests
 on:
   pull_request:
     branches: main
-    types: ready_for_review
+    types: [opened, synchronize, ready_for_review]
   workflow_dispatch:
   push:
     branches: main
