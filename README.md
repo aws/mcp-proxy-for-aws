@@ -71,6 +71,20 @@ uv run mcp_proxy_for_aws/server.py <SigV4 MCP endpoint URL>
 
 #### Using Docker
 
+Docker images are published to the [public AWS ECR registry](https://gallery.ecr.aws/awslabs-mcp).
+
+You can use the pre-built image:
+
+```bash
+# Pull the latest image
+docker pull public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:latest
+
+# Or pull a specific version
+docker pull public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:1.1.4
+```
+
+Or build the image locally:
+
 ```bash
 # Build the Docker image
 docker build -t mcp-proxy-for-aws .
@@ -150,6 +164,29 @@ Add the following configuration to your MCP client config file (e.g., for Amazon
 > Cline users should not use `--log-level` argument because Cline checks the log messages in stderr for text "error" (case insensitive).
 
 #### Using Docker
+
+Using the pre-built public ECR image:
+
+```json
+{
+  "mcpServers": {
+    "<mcp server name>": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--volume",
+        "/full/path/to/.aws:/app/.aws:ro",
+        "public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:latest",
+        "<SigV4 MCP endpoint URL>"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+Or using a locally built image:
 
 ```json
 {

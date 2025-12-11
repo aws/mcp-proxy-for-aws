@@ -59,7 +59,13 @@ jobs:
       url: https://pypi.org/p/mcp-proxy-for-aws
     permissions:
       id-token: write
+      contents: read
     steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
       - name: Download distribution packages
         uses: actions/download-artifact@v5
         with:
@@ -67,7 +73,41 @@ jobs:
           path: dist/
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a # v7.1.5
+
+      - name: Get version from package
+        id: get-package-version
+        run: |
+          set -euo pipefail
+
+          # Get version from uv
+          VERSION="$(uv tree 2>/dev/null | grep mcp-proxy-for-aws | sed -e 's/^.*[[:space:]]v\(.*\)/\1/g' | head -1)"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Failed to extract version from package" >&2
+            exit 1
+          fi
+
+          # Validate version format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "::debug::Package version: $VERSION"
 
       - name: Publish to PyPI
-        run: uv publish
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          print-hash: true
+
+      - name: Build and Publish Container
+        id: build-and-publish
+        uses: ./.github/actions/build-and-push-container-image
+        with:
+          image: mcp-proxy-for-aws
+          version: ${{ steps.get-package-version.outputs.version }}
+          public-ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          public-ecr-registry-alias: awslabs-mcp
+          public-ecr-aws-region: us-east-1
