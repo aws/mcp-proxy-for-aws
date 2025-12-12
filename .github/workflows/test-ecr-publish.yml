@@ -1,35 +1,11 @@
-name: Publish to PyPI
+name: Test ECR Publish
 
-on:
-  release:
-    types:
-      - published
+on: workflow_dispatch
 
 permissions: {}
 
 jobs:
-  call-test:
-    permissions:
-      contents: read
-      pull-requests: read
-      security-events: write
-      actions: read
-    uses: ./.github/workflows/python.yml
-    with:
-      ref: ${{ github.event.release.target_commitish }}
-
-  call-integ-tests:
-    permissions:
-      id-token: write
-      contents: read
-      actions: read
-    uses: ./.github/workflows/python-integ.yml
-    with:
-      ref: ${{ github.event.release.target_commitish }}
-    secrets: inherit
-
   build:
-    needs: [call-test, call-integ-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,12 +27,9 @@ jobs:
           name: python-package-distributions
           path: dist/
 
-  deploy:
+  test-container-build:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/mcp-proxy-for-aws
     permissions:
       id-token: write
       contents: read
@@ -97,17 +70,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "::debug::Package version: $VERSION"
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
-        with:
-          print-hash: true
-
-      - name: Build and Publish Container
+      - name: Build and Publish Container to Private ECR
         id: build-and-publish
-        uses: ./.github/actions/build-and-push-container-image
+        uses: ./.github/actions/build-and-push-container-image-test
         with:
-          image: mcp-proxy-for-aws
+          image: mcp-proxy-for-aws-test
           version: ${{ steps.get-package-version.outputs.version }}
-          public-ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          public-ecr-registry-alias: awslabs-mcp
-          public-ecr-aws-region: us-east-1
+          ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ecr-repository: mcp-proxy-for-aws-test
+          ecr-aws-region: eu-north-1

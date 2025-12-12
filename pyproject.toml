@@ -14,7 +14,7 @@ version = "1.1.4"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 dependencies = [
     "fastmcp>=2.13.1",
     "boto3>=1.41.0",
@@ -35,6 +35,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.urls]
