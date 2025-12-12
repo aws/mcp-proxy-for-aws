@@ -1,0 +1,84 @@
+name: Test ECR Publish
+
+on:
+  push:
+    branches:
+      - test-publish-container-image
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build distribution packages
+        run: uv build
+
+      - name: Upload distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  test-container-build:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download distribution packages
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@ed21f2f24f8dd64503750218de024bcf64c7250a # v7.1.5
+
+      - name: Get version from package
+        id: get-package-version
+        run: |
+          set -euo pipefail
+
+          # Get version from uv
+          VERSION="$(uv tree 2>/dev/null | grep mcp-proxy-for-aws | sed -e 's/^.*[[:space:]]v\(.*\)/\1/g' | head -1)"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Failed to extract version from package" >&2
+            exit 1
+          fi
+
+          # Validate version format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "::debug::Package version: $VERSION"
+
+      - name: Build and Publish Container to Private ECR
+        id: build-and-publish
+        uses: ./.github/actions/build-and-push-container-image-test
+        with:
+          image: mcp-proxy-for-aws-test
+          version: ${{ steps.get-package-version.outputs.version }}
+          ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          ecr-repository: mcp-proxy-for-aws-test
+          ecr-aws-region: eu-north-1

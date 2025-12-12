@@ -33,16 +33,30 @@ ENV UV_FROZEN=true
 # Copy the required files first
 COPY pyproject.toml uv.lock ./
 
+# Python optimization and uv configuration
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies and Python package manager
+RUN apk update && \
+    apk add --no-cache --virtual .build-deps \
+        build-base \
+        gcc \
+        musl-dev \
+        libffi-dev \
+        openssl-dev \
+        cargo
+
 # Install the project's dependencies using the lockfile and settings
 RUN --mount=type=cache,target=/root/.cache/uv \
     pip install uv && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
+    uv sync --python 3.14 --frozen --no-install-project --no-dev --no-editable
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
+    uv sync --python 3.14 --frozen --no-dev --no-editable
 
 # Make the directory just in case it doesn't exist
 RUN mkdir -p /root/.local
@@ -51,19 +65,17 @@ RUN mkdir -p /root/.local
 FROM public.ecr.aws/docker/library/python:3.14.0-alpine3.22@sha256:8373231e1e906ddfb457748bfc032c4c06ada8c759b7b62d9c73ec2a3c56e710
 
 # Place executables in the environment at the front of the path and include other binaries
-ENV PATH="/app/.venv/bin:$PATH:/usr/sbin"
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
 
-# Install lsof for the healthcheck
-# Install other tools as needed for the MCP server
-# Add non-root user and ability to change directory into /root
+# Install runtime dependencies and create application user
 RUN apk update && \
-    apk --no-cache add lsof && \
+    apk add --no-cache ca-certificates libgcc && \
+    update-ca-certificates && \
     addgroup -S app && \
-    adduser -S app -G app -h /app && \
-    chmod o+x /root
+    adduser -S app -G app -h /app
 
-# Get the project from the uv layer
-COPY --from=uv --chown=app:app /root/.local /root/.local
+# Copy application artifacts from build stage
 COPY --from=uv --chown=app:app /app/.venv /app/.venv
 
 # Get healthcheck script
@@ -73,5 +85,5 @@ COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
 USER app
 
 # When running the container, add --db-path and a bind mount to the host's db file
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "docker-healthcheck.sh" ]
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
 ENTRYPOINT ["mcp-proxy-for-aws"]
