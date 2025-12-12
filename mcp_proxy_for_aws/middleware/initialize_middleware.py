@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class InitializeMiddleware(Middleware):
-    """Intecept MCP initialize request and initialize the proxy client."""
+    """Intercept MCP initialize request and initialize the proxy client."""
 
     def __init__(self, client_factory: AWSMCPProxyClientFactory) -> None:
         """Create a middleware with client factory."""
