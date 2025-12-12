@@ -1,9 +1,6 @@
 name: Test ECR Publish
 
-on:
-  push:
-    branches:
-      - test-publish-container-image
+on: workflow_dispatch
 
 permissions: {}
 
