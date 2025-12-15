@@ -117,6 +117,40 @@ class TestCreateTransportWithSigv4:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
 
+    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_create_transport_with_sigv4_kwargs_passthrough(
+        self, mock_create_sigv4_client, mock_create_session
+    ):
+        """Test that kwargs are passed through to create_sigv4_client."""
+        from httpx import Timeout
+
+        mock_session = MagicMock()
+        mock_create_session.return_value = mock_session
+
+        url = 'https://test-service.us-west-2.api.aws/mcp'
+        service = 'test-service'
+        region = 'test-region'
+        metadata = {'AWS_REGION': 'test-region'}
+        custom_timeout = Timeout(60.0)
+
+        result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
+
+        assert hasattr(result, 'httpx_client_factory')
+        factory = result.httpx_client_factory
+        factory(headers=None, timeout=None, auth=None, follow_redirects=True)
+
+        mock_create_sigv4_client.assert_called_once_with(
+            service=service,
+            session=mock_session,
+            region=region,
+            headers=None,
+            timeout=custom_timeout,
+            auth=None,
+            metadata=metadata,
+            follow_redirects=True,
+        )
+
 
 class TestValidateRequiredArgs:
     """Test cases for validate_service_name function."""
