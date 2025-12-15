@@ -16,7 +16,7 @@ description = "MCP Proxy for AWS"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "fastmcp (>=2.13.1,<2.14.1)",
+    "fastmcp>=2.13.1,<2.14.2",
     "boto3>=1.41.0",
     "botocore[crt]>=1.41.0",
 ]
