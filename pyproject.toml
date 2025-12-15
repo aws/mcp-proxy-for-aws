@@ -10,7 +10,7 @@ members = [
 name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
-version = "1.1.4"
+version = "1.1.5"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"
