@@ -139,6 +139,20 @@ runs:
         docker buildx imagetools inspect $REGISTRY/$REPOSITORY:$VERSION
       shell: bash
 
+    - name: Generate SBOM with Syft
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ steps.meta.outputs.version }}
+        format: spdx-json
+        output-file: sbom.spdx.json
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ inputs.image }}-${{ steps.meta.outputs.version }}
+        path: sbom.spdx.json
+        retention-days: 90
+
     - name: Get version
       id: get-version
       run: |
