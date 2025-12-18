@@ -43,8 +43,12 @@ echo "Generating CycloneDX SBOM..."
 syft scan "${IMAGE_NAME}" -o cyclonedx-json > "${OUTPUT_DIR}/sbom.cyclonedx.json"
 
 # Generate human-readable table format
-echo "Generating human-readable SBOM..."
-syft scan "${IMAGE_NAME}" -o table > "${OUTPUT_DIR}/sbom.txt"
+if command -v cyclonedx &> /dev/null; then
+    cyclonedx convert --input-file "${OUTPUT_DIR}/sbom.cyclonedx.json" --input-format json --output-format csv --output-file "${OUTPUT_DIR}/SBOM.csv"
+else
+    echo "Warning: cyclonedx CLI not found. Skipping CSV generation."
+    echo "Install from: https://github.com/CycloneDX/cyclonedx-cli/releases"
+fi
 
 echo "SBOM generation complete!"
 echo "Files created in ${OUTPUT_DIR}:"
