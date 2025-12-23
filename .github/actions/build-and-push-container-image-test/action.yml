@@ -28,11 +28,6 @@ inputs:
     type: string
     required: false
 
-outputs:
-  version:
-    description: 'The version uploaded'
-    value: ${{ steps.get-version.outputs.version }}
-
 runs:
   using: "composite"
   steps:
@@ -109,20 +104,13 @@ runs:
         touch "${{ runner.temp }}/digests/${{ inputs.image }}/${digest#sha256:}"
       shell: bash
 
-    - name: Upload digest
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      with:
-        name: digests-${{ inputs.image }}
-        path: ${{ runner.temp }}/digests/${{ inputs.image }}/*
-        if-no-files-found: error
-        retention-days: 1
-
     - name: Create manifest list and push
       working-directory: ${{ runner.temp }}/digests/${{ inputs.image }}
       env:
         IMAGE: ${{ inputs.image }}
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         REPOSITORY: ${{ inputs.ecr-repository }}
+        DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
       run: |
         echo "DOCKER_METADATA_OUTPUT_JSON=$DOCKER_METADATA_OUTPUT_JSON"
         docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
@@ -137,24 +125,4 @@ runs:
         VERSION: ${{ steps.meta.outputs.version }}
       run: |
         docker buildx imagetools inspect $REGISTRY/$REPOSITORY:$VERSION
-      shell: bash
-
-    - name: Generate SBOM with Syft
-      uses: anchore/sbom-action@v0
-      with:
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}:${{ steps.meta.outputs.version }}
-        format: spdx-json
-        output-file: sbom.spdx.json
-
-    - name: Upload SBOM artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: sbom-${{ inputs.image }}-${{ steps.meta.outputs.version }}
-        path: sbom.spdx.json
-        retention-days: 90
-
-    - name: Get version
-      id: get-version
-      run: |
-        echo version="${{ steps.meta.outputs.version }}" >>"$GITHUB_OUTPUT"
       shell: bash

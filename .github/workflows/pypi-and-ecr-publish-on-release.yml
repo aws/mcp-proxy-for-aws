@@ -1,14 +1,38 @@
-name: Test ECR Publish
+name: Publish to PyPI
 
-on: workflow_dispatch
+on:
+  release:
+    types:
+      - published
 
 permissions: {}
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  call-test:
     permissions:
       contents: read
+      pull-requests: read
+      security-events: write
+      actions: read
+    uses: ./.github/workflows/python.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+
+  call-integ-tests:
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    uses: ./.github/workflows/python-integ.yml
+    with:
+      ref: ${{ github.event.release.target_commitish }}
+    secrets: inherit
+
+  build:
+    needs: [call-test, call-integ-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.get-package-version.outputs.version }}
     steps:
@@ -88,9 +112,40 @@ jobs:
           path: SBOM-${{ steps.get-package-version.outputs.version }}.csv
           retention-days: 90
 
-  test-container-build:
+      - name: Upload SBOM to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SBOM-${{ steps.get-package-version.outputs.version }}.csv
+          tag_name: ${{ github.event.release.tag_name }}
+
+  deploy:
     needs: build
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcp-proxy-for-aws
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v5
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Publish to PyPI
+        run: uv publish
+
+  deploy-ecr:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ecr
+      url: https://gallery.ecr.aws/awslabs-mcp/awslabs/mcp-proxy-for-aws
     permissions:
       id-token: write
       contents: read
@@ -100,11 +155,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build and push to Private ECR
-        uses: ./.github/actions/build-and-push-container-image-test
+      - name: Build and Publish Container
+        id: build-and-publish
+        uses: ./.github/actions/build-and-push-container-image
         with:
-          image: mcp-proxy-for-aws-test
+          image: mcp-proxy-for-aws
           version: ${{ needs.build.outputs.version }}
-          ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          ecr-repository: mcp-proxy-for-aws-test
-          ecr-aws-region: eu-north-1
+          public-ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          public-ecr-registry-alias: awslabs-mcp
+          public-ecr-aws-region: us-east-1
