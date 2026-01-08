@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import boto3
+import httpx
 import logging
+import warnings
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
-from mcp.client.streamable_http import GetSessionIdCallback, streamablehttp_client
+from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
@@ -28,7 +30,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def aws_iam_streamablehttp_client(
+def aws_iam_streamable_http_client(
     endpoint: str,
     aws_service: str,
     aws_region: Optional[str] = None,
@@ -60,7 +62,7 @@ def aws_iam_streamablehttp_client(
         credentials: Optional AWS credentials from boto3/botocore. If provided, takes precedence over aws_profile.
         headers: Optional additional HTTP headers to include in requests.
         timeout: Request timeout in seconds or timedelta object. Defaults to 30 seconds.
-        sse_read_timeout: Server-sent events read timeout in seconds or timedelta object.
+        sse_read_timeout: Deprecated. This parameter is no longer used and will be removed in version 2.0.0.
         terminate_on_close: Whether to terminate the connection on close.
         httpx_client_factory: Factory function for creating HTTPX clients.
 
@@ -71,7 +73,7 @@ def aws_iam_streamablehttp_client(
             - get_session_id: Callback function to retrieve the current session ID
 
     Example:
-        async with aws_iam_mcp_client(
+        async with aws_iam_streamable_http_client(
             endpoint="https://example.com/mcp",
             aws_service="bedrock-agentcore",
             aws_region="us-west-2"
@@ -80,6 +82,13 @@ def aws_iam_streamablehttp_client(
             pass
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
+
+    # Warn if sse_read_timeout is set to a non-default value
+    if sse_read_timeout != 60 * 5:
+        logger.warning(
+            'sse_read_timeout parameter is deprecated and will be removed in version 2.0.0. '
+            'The value is ignored in the current implementation.'
+        )
 
     if credentials is not None:
         creds = credentials
@@ -113,13 +122,74 @@ def aws_iam_streamablehttp_client(
     # Create a SigV4 authentication handler with AWS credentials
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
+    # Convert timeout to httpx.Timeout if it's a number or timedelta
+    httpx_timeout = None
+    if timeout is not None:
+        if isinstance(timeout, (int, float)):
+            httpx_timeout = httpx.Timeout(timeout)
+        elif isinstance(timeout, timedelta):
+            httpx_timeout = httpx.Timeout(timeout.total_seconds())
+        else:
+            httpx_timeout = timeout
+
+    # Create HTTP client using the factory with authentication and custom headers
+    http_client = httpx_client_factory(
+        auth=auth,
+        timeout=httpx_timeout,
+        headers=headers,
+    )
+
     # Return the streamable HTTP client context manager with AWS IAM authentication
-    return streamablehttp_client(
+    return streamable_http_client(
         url=endpoint,
+        http_client=http_client,
+        terminate_on_close=terminate_on_close,
+    )
+
+
+def aws_iam_streamablehttp_client(
+    endpoint: str,
+    aws_service: str,
+    aws_region: Optional[str] = None,
+    aws_profile: Optional[str] = None,
+    credentials: Optional[Credentials] = None,
+    headers: Optional[dict[str, str]] = None,
+    timeout: float | timedelta = 30,
+    sse_read_timeout: float | timedelta = 60 * 5,
+    terminate_on_close: bool = True,
+    httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
+) -> _AsyncGeneratorContextManager[
+    tuple[
+        MemoryObjectReceiveStream[SessionMessage | Exception],
+        MemoryObjectSendStream[SessionMessage],
+        GetSessionIdCallback,
+    ],
+    None,
+]:
+    """Create an AWS IAM-authenticated MCP streamable HTTP client.
+
+    .. deprecated:: 1.2.0
+        Use :func:`aws_iam_streamable_http_client` instead.
+        This function will be removed in version 2.0.0.
+
+    This is a deprecated alias for aws_iam_streamable_http_client.
+    Please update your code to use aws_iam_streamable_http_client instead.
+    """
+    warnings.warn(
+        "aws_iam_streamablehttp_client is deprecated and will be removed in version 2.0.0. "
+        "Use aws_iam_streamable_http_client instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return aws_iam_streamable_http_client(
+        endpoint=endpoint,
+        aws_service=aws_service,
+        aws_region=aws_region,
+        aws_profile=aws_profile,
+        credentials=credentials,
         headers=headers,
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
         terminate_on_close=terminate_on_close,
         httpx_client_factory=httpx_client_factory,
-        auth=auth,
     )

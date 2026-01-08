@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.2.0 (2026-01-08)
+
+### Added
+
+- New `aws_iam_streamable_http_client` function to replace deprecated `aws_iam_streamablehttp_client`
+
+### Changed
+
+- Updated minimum `fastmcp` version to 2.14.2 to support `streamable_http_client` function from mcp>=1.25.0
+
+### Deprecated
+
+- `aws_iam_streamablehttp_client` is now deprecated in favor of `aws_iam_streamable_http_client` 
+  to align with upstream MCP package naming conventions. The old function will be removed in version 2.0.0.
+- `sse_read_timeout` parameter in `aws_iam_streamable_http_client` is deprecated and will be removed in version 2.0.0
+
 ## v1.1.5 (2025-12-15)
 
 ### Fix
