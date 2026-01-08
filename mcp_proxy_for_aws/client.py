@@ -15,33 +15,32 @@
 import boto3
 import httpx
 import logging
-import warnings
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
-from contextlib import _AsyncGeneratorContextManager
+from collections.abc import AsyncGenerator
 from datetime import timedelta
 from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
-from typing import Optional
+from typing_extensions import deprecated
+from contextlib import asynccontextmanager
 
 
 logger = logging.getLogger(__name__)
 
 
-def aws_iam_streamable_http_client(
+@asynccontextmanager
+async def aws_iam_streamable_http_client(
     endpoint: str,
     aws_service: str,
-    aws_region: Optional[str] = None,
-    aws_profile: Optional[str] = None,
-    credentials: Optional[Credentials] = None,
-    headers: Optional[dict[str, str]] = None,
-    timeout: float | timedelta = 30,
-    sse_read_timeout: float | timedelta = 60 * 5,
+    aws_region: str | None = None,
+    aws_profile: str | None = None,
+    credentials: Credentials | None = None,
+    *,
+    http_client: httpx.AsyncClient | None = None,
     terminate_on_close: bool = True,
-    httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
-) -> _AsyncGeneratorContextManager[
+) -> AsyncGenerator[
     tuple[
         MemoryObjectReceiveStream[SessionMessage | Exception],
         MemoryObjectSendStream[SessionMessage],
@@ -60,14 +59,11 @@ def aws_iam_streamable_http_client(
         aws_region: The AWS region name of the MCP server, e.g. "us-west-2".
         aws_profile: The AWS profile to use for authentication.
         credentials: Optional AWS credentials from boto3/botocore. If provided, takes precedence over aws_profile.
-        headers: Optional additional HTTP headers to include in requests.
-        timeout: Request timeout in seconds or timedelta object. Defaults to 30 seconds.
-        sse_read_timeout: Deprecated. This parameter is no longer used and will be removed in version 2.0.0.
+        http_client: Optional pre-configured httpx.AsyncClient. If not provided, one will be created with SigV4 auth.
         terminate_on_close: Whether to terminate the connection on close.
-        httpx_client_factory: Factory function for creating HTTPX clients.
 
     Returns:
-        An async generator context manager that yields a tuple of transport components:
+        An async generator yielding a tuple containing:
             - read_stream: MemoryObjectReceiveStream for reading server responses
             - write_stream: MemoryObjectSendStream for sending requests to server
             - get_session_id: Callback function to retrieve the current session ID
@@ -83,13 +79,18 @@ def aws_iam_streamable_http_client(
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 
-    # Warn if sse_read_timeout is set to a non-default value
-    if sse_read_timeout != 60 * 5:
-        logger.warning(
-            'sse_read_timeout parameter is deprecated and will be removed in version 2.0.0. '
-            'The value is ignored in the current implementation.'
-        )
+    # If http_client is provided, use it directly
+    if http_client is not None:
+        logger.debug('Using provided http_client')
+        async with streamable_http_client(
+            url=endpoint,
+            http_client=http_client,
+            terminate_on_close=terminate_on_close,
+        ) as streams:
+            yield streams
+        return
 
+    # Otherwise, create http_client with AWS IAM authentication
     if credentials is not None:
         creds = credentials
         region = aws_region
@@ -122,43 +123,35 @@ def aws_iam_streamable_http_client(
     # Create a SigV4 authentication handler with AWS credentials
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
-    # Convert timeout to httpx.Timeout if it's a number or timedelta
-    httpx_timeout = None
-    if timeout is not None:
-        if isinstance(timeout, (int, float)):
-            httpx_timeout = httpx.Timeout(timeout)
-        elif isinstance(timeout, timedelta):
-            httpx_timeout = httpx.Timeout(timeout.total_seconds())
-        else:
-            httpx_timeout = timeout
-
-    # Create HTTP client using the factory with authentication and custom headers
-    http_client = httpx_client_factory(
+    # Create HTTP client with AWS IAM authentication
+    client = httpx.AsyncClient(
         auth=auth,
-        timeout=httpx_timeout,
-        headers=headers,
+        headers={'Accept': 'application/json, text/event-stream'},
     )
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
-    return streamable_http_client(
+    async with streamable_http_client(
         url=endpoint,
-        http_client=http_client,
+        http_client=client,
         terminate_on_close=terminate_on_close,
-    )
+    ) as streams:
+        yield streams
 
 
-def aws_iam_streamablehttp_client(
+@asynccontextmanager
+@deprecated("Use `aws_iam_streamable_http_client` instead.")
+async def aws_iam_streamablehttp_client(
     endpoint: str,
     aws_service: str,
-    aws_region: Optional[str] = None,
-    aws_profile: Optional[str] = None,
-    credentials: Optional[Credentials] = None,
-    headers: Optional[dict[str, str]] = None,
+    aws_region: str | None = None,
+    aws_profile: str | None = None,
+    credentials: Credentials | None = None,
+    headers: dict[str, str] | None = None,
     timeout: float | timedelta = 30,
     sse_read_timeout: float | timedelta = 60 * 5,
     terminate_on_close: bool = True,
     httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
-) -> _AsyncGeneratorContextManager[
+) -> AsyncGenerator[
     tuple[
         MemoryObjectReceiveStream[SessionMessage | Exception],
         MemoryObjectSendStream[SessionMessage],
@@ -168,28 +161,68 @@ def aws_iam_streamablehttp_client(
 ]:
     """Create an AWS IAM-authenticated MCP streamable HTTP client.
 
-    .. deprecated:: 1.2.0
-        Use :func:`aws_iam_streamable_http_client` instead.
-        This function will be removed in version 2.0.0.
-
     This is a deprecated alias for aws_iam_streamable_http_client.
     Please update your code to use aws_iam_streamable_http_client instead.
+
+    This function maintains backward compatibility by accepting the legacy parameters
+    and creating a properly configured httpx.AsyncClient to pass to the new implementation.
     """
-    warnings.warn(
-        "aws_iam_streamablehttp_client is deprecated and will be removed in version 2.0.0. "
-        "Use aws_iam_streamable_http_client instead.",
-        DeprecationWarning,
-        stacklevel=2,
+    # Resolve credentials and region
+    if credentials is not None:
+        creds = credentials
+        region = aws_region
+        if not region:
+            raise ValueError(
+                'AWS region must be specified via aws_region parameter when using credentials.'
+            )
+    else:
+        kwargs = {}
+        if aws_profile is not None:
+            kwargs['profile_name'] = aws_profile
+        if aws_region is not None:
+            kwargs['region_name'] = aws_region
+
+        session = boto3.Session(**kwargs)
+        creds = session.get_credentials()
+        region = session.region_name
+
+        if not region:
+            raise ValueError(
+                'AWS region must be specified via aws_region parameter,  AWS_REGION environment variable, or AWS config.'
+            )
+
+    # Create SigV4 authentication
+    auth = SigV4HTTPXAuth(creds, aws_service, region)
+
+    # Convert timeout to httpx.Timeout
+    if isinstance(timeout, timedelta):
+        timeout_seconds = timeout.total_seconds()
+    else:
+        timeout_seconds = timeout
+
+    if isinstance(sse_read_timeout, timedelta):
+        sse_timeout_seconds = sse_read_timeout.total_seconds()
+    else:
+        sse_timeout_seconds = sse_read_timeout
+
+    httpx_timeout = httpx.Timeout(timeout_seconds, read=sse_timeout_seconds)
+
+    # Create httpx client using the factory with legacy parameters
+    http_client = httpx_client_factory(
+        headers=headers,
+        timeout=httpx_timeout,
+        auth=auth,
     )
-    return aws_iam_streamable_http_client(
+
+    # Delegate to the new function with the configured client
+    async with aws_iam_streamable_http_client(
         endpoint=endpoint,
         aws_service=aws_service,
-        aws_region=aws_region,
+        aws_region=region,
         aws_profile=aws_profile,
-        credentials=credentials,
-        headers=headers,
-        timeout=timeout,
-        sse_read_timeout=sse_read_timeout,
+        credentials=creds,
+        http_client=http_client,
         terminate_on_close=terminate_on_close,
-        httpx_client_factory=httpx_client_factory,
-    )
+    ) as streams:
+        # Yield the streams tuple - @asynccontextmanager handles the rest
+        yield streams

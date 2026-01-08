@@ -17,7 +17,7 @@
 import pytest
 from botocore.credentials import Credentials
 from datetime import timedelta
-from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client, aws_iam_streamable_http_client
 from unittest.mock import AsyncMock, Mock, patch
 
 
@@ -176,9 +176,13 @@ async def test_streamable_client_parameters(
                 expected_timeout = timeout_value.total_seconds()
             else:
                 expected_timeout = timeout_value
-            # httpx.Timeout sets all timeout types (connect, read, write, pool) to the same value
+            if isinstance(sse_value, timedelta):
+                expected_sse_timeout = sse_value.total_seconds()
+            else:
+                expected_sse_timeout = sse_value
+            # httpx.Timeout - all except read should be timeout_value, read should be sse_read_timeout
             assert factory_kwargs['timeout'].connect == expected_timeout
-            assert factory_kwargs['timeout'].read == expected_timeout
+            assert factory_kwargs['timeout'].read == expected_sse_timeout
             assert factory_kwargs['timeout'].write == expected_timeout
             assert factory_kwargs['timeout'].pool == expected_timeout
             
@@ -311,3 +315,265 @@ async def test_credentials_parameter_bypasses_boto3_session(mock_streams):
                     pass
 
                 mock_boto.assert_not_called()
+
+
+# Tests for the new aws_iam_streamable_http_client function
+
+
+@pytest.mark.asyncio
+async def test_new_client_with_http_client_provided(mock_streams):
+    """Test that providing http_client uses it directly without creating auth."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    mock_http_client = Mock()
+
+    with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+        with patch('boto3.Session') as mock_boto:
+            with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auth_cls:
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamable_http_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    aws_region='us-west-2',
+                    http_client=mock_http_client,
+                ):
+                    pass
+
+                # Should not create boto3 session or auth when http_client is provided
+                mock_boto.assert_not_called()
+                mock_auth_cls.assert_not_called()
+                
+                # Should pass the provided client to streamable_http_client
+                assert mock_stream_client.call_args[1]['http_client'] is mock_http_client
+                assert mock_stream_client.call_args[1]['url'] == 'https://test.example.com/mcp'
+
+
+@pytest.mark.asyncio
+async def test_new_client_with_credentials_and_region(mock_streams):
+    """Test the new client with provided credentials and region."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    creds = Credentials('new_key', 'new_secret', 'new_token')
+
+    with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auth_cls:
+        with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+            with patch('httpx.AsyncClient') as mock_client_cls:
+                mock_auth = Mock()
+                mock_auth_cls.return_value = mock_auth
+                mock_client = Mock()
+                mock_client_cls.return_value = mock_client
+                
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamable_http_client(
+                    endpoint='https://new.example.com/mcp',
+                    aws_service='execute-api',
+                    aws_region='eu-west-1',
+                    credentials=creds,
+                ):
+                    pass
+
+                # Should create auth with provided credentials
+                mock_auth_cls.assert_called_once_with(creds, 'execute-api', 'eu-west-1')
+                
+                # Should create httpx client with auth and default headers
+                mock_client_cls.assert_called_once_with(
+                    auth=mock_auth,
+                    headers={'Accept': 'application/json, text/event-stream'}
+                )
+                
+                # Should pass the created client to streamable_http_client
+                assert mock_stream_client.call_args[1]['http_client'] is mock_client
+
+
+@pytest.mark.asyncio
+async def test_new_client_without_credentials_uses_boto3(mock_streams):
+    """Test that new client without credentials uses boto3.Session."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    
+    # Create a custom mock session for this test
+    mock_session = Mock()
+    credentials = Mock()
+    credentials.access_key = 'test_access_key'
+    credentials.secret_key = 'test_secret_key'
+    credentials.token = 'test_token'
+    mock_session.get_credentials.return_value = credentials
+    mock_session.profile_name = 'test-profile'
+    mock_session.region_name = 'ap-south-1'  # Use the region we're testing with
+
+    with patch('boto3.Session', return_value=mock_session) as mock_boto:
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auth_cls:
+            with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+                with patch('httpx.AsyncClient'):
+                    mock_auth = Mock()
+                    mock_auth_cls.return_value = mock_auth
+                    
+                    mock_stream_client.return_value.__aenter__ = AsyncMock(
+                        return_value=(mock_read, mock_write, mock_get_session)
+                    )
+                    mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                    async with aws_iam_streamable_http_client(
+                        endpoint='https://test.example.com/mcp',
+                        aws_service='bedrock-agentcore',
+                        aws_region='ap-south-1',
+                        aws_profile='test-profile',
+                    ):
+                        pass
+
+                    # Should create boto3 session with region and profile
+                    mock_boto.assert_called_once_with(
+                        region_name='ap-south-1',
+                        profile_name='test-profile'
+                    )
+                    
+                    # Should use credentials from session
+                    mock_auth_cls.assert_called_once_with(
+                        mock_session.get_credentials.return_value,
+                        'bedrock-agentcore',
+                        'ap-south-1'
+                    )
+
+
+@pytest.mark.asyncio
+async def test_new_client_credentials_without_region_raises():
+    """Test that new client with credentials but no region raises ValueError."""
+    creds = Credentials('key', 'secret', 'token')
+
+    with pytest.raises(
+        ValueError,
+        match='AWS region must be specified via aws_region parameter when using credentials'
+    ):
+        async with aws_iam_streamable_http_client(
+            endpoint='https://test.example.com/mcp',
+            aws_service='bedrock-agentcore',
+            credentials=creds,
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_new_client_without_region_in_session_raises():
+    """Test that new client raises when region cannot be determined from session."""
+    mock_session = Mock()
+    mock_session.get_credentials.return_value = Mock()
+    mock_session.region_name = None
+
+    with pytest.raises(
+        ValueError,
+        match='AWS region must be specified via aws_region parameter,  AWS_REGION environment variable, or AWS config'
+    ):
+        with patch('boto3.Session', return_value=mock_session):
+            async with aws_iam_streamable_http_client(
+                endpoint='https://test.example.com/mcp',
+                aws_service='bedrock-agentcore',
+            ):
+                pass
+
+
+@pytest.mark.asyncio
+async def test_new_client_terminate_on_close_parameter(mock_streams):
+    """Test that terminate_on_close parameter is passed correctly."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    mock_http_client = Mock()
+
+    with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+        mock_stream_client.return_value.__aenter__ = AsyncMock(
+            return_value=(mock_read, mock_write, mock_get_session)
+        )
+        mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        # Test with terminate_on_close=False
+        async with aws_iam_streamable_http_client(
+            endpoint='https://test.example.com/mcp',
+            aws_service='bedrock-agentcore',
+            aws_region='us-west-2',
+            http_client=mock_http_client,
+            terminate_on_close=False,
+        ):
+            pass
+
+        assert mock_stream_client.call_args[1]['terminate_on_close'] is False
+
+
+@pytest.mark.asyncio
+async def test_new_client_returns_streams_tuple(mock_session, mock_streams):
+    """Test that new client returns the correct streams tuple."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+            with patch('httpx.AsyncClient'):
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamable_http_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                ) as (read_stream, write_stream, get_session_id):
+                    assert read_stream is mock_read
+                    assert write_stream is mock_write
+                    assert get_session_id is mock_get_session
+
+
+@pytest.mark.asyncio
+async def test_new_client_logging_debug_messages(mock_session, mock_streams):
+    """Test that new client logs appropriate debug messages."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+            with patch('httpx.AsyncClient'):
+                with patch('mcp_proxy_for_aws.client.logger') as mock_logger:
+                    mock_stream_client.return_value.__aenter__ = AsyncMock(
+                        return_value=(mock_read, mock_write, mock_get_session)
+                    )
+                    mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                    async with aws_iam_streamable_http_client(
+                        endpoint='https://test.example.com/mcp',
+                        aws_service='my-service',
+                        aws_region='my-region',
+                    ):
+                        pass
+
+                    # Check that debug logging was called
+                    assert mock_logger.debug.called
+                    # Verify specific log messages
+                    debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
+                    assert any('Preparing AWS IAM MCP client' in msg for msg in debug_calls)
+                    assert any('AWS region' in msg for msg in debug_calls)
+                    assert any('AWS service' in msg for msg in debug_calls)
+
+
+@pytest.mark.asyncio
+async def test_new_client_with_provided_http_client_logs_correctly(mock_streams):
+    """Test that providing http_client logs the appropriate message."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    mock_http_client = Mock()
+
+    with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+        with patch('mcp_proxy_for_aws.client.logger') as mock_logger:
+            mock_stream_client.return_value.__aenter__ = AsyncMock(
+                return_value=(mock_read, mock_write, mock_get_session)
+            )
+            mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            async with aws_iam_streamable_http_client(
+                endpoint='https://test.example.com/mcp',
+                aws_service='bedrock-agentcore',
+                aws_region='us-west-2',
+                http_client=mock_http_client,
+            ):
+                pass
+
+            # Should log about using provided http_client
+            debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
+            assert any('Using provided http_client' in msg for msg in debug_calls)
