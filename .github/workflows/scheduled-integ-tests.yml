@@ -1,0 +1,18 @@
+name: Scheduled Integration Tests
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  call-integ-tests:
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    uses: ./.github/workflows/python-integ.yml
+    secrets: inherit
