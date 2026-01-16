@@ -34,8 +34,8 @@ class InitializeMiddleware(Middleware):
     async def on_initialize(
         self,
         context: MiddlewareContext[mt.InitializeRequest],
-        call_next: CallNext[mt.InitializeRequest, None],
-    ) -> None:
+        call_next: CallNext[mt.InitializeRequest, mt.InitializeResult | None],
+    ) -> mt.InitializeResult | None:
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
