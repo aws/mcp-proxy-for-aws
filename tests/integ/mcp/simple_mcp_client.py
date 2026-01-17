@@ -69,8 +69,11 @@ def _build_mcp_config(endpoint: str, region_name: str, metadata: Optional[Dict[s
         'AWS_REGION': region_name,
         'AWS_ACCESS_KEY_ID': credentials.access_key,
         'AWS_SECRET_ACCESS_KEY': credentials.secret_key,
-        'AWS_SESSION_TOKEN': credentials.token,
     }
+    
+    # Only include AWS_SESSION_TOKEN if it's not None (e.g., for temporary credentials)
+    if credentials.token:
+        environment_variables['AWS_SESSION_TOKEN'] = credentials.token
 
     args = _build_args(endpoint, region_name, metadata)
 
