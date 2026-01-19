@@ -138,7 +138,8 @@ class TestCreateTransportWithSigv4:
 
         assert hasattr(result, 'httpx_client_factory')
         factory = result.httpx_client_factory
-        factory(headers=None, timeout=None, auth=None, follow_redirects=True)
+        assert factory is not None
+        factory(headers=None, timeout=None, auth=None, follow_redirects=True)  # type: ignore[call-arg]
 
         mock_create_sigv4_client.assert_called_once_with(
             service=service,
