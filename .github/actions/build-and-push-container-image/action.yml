@@ -97,6 +97,7 @@ runs:
         outputs: type=image,push-by-digest=true,name-canonical=true,push=true
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        sbom: true
 
     - name: Export digest
       run: |
