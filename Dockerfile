@@ -38,7 +38,6 @@ ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies and Python 3.13
-# All packages from official Amazon Linux repositories for SBOM compliance
 RUN yum update -y && \
     yum install -y \
         python3.13 \

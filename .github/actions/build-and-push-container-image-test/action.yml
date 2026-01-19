@@ -18,10 +18,6 @@ inputs:
     description: 'The ECR role to use to push the image'
     type: string
     required: true
-  ecr-repository:
-    description: 'The ECR repository name'
-    type: string
-    required: true
   ecr-aws-region:
     default: 'us-east-1'
     description: 'The region to login'
@@ -50,7 +46,7 @@ runs:
       uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
       with:
         images: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ inputs.image }}
         # Disable all but the raw and sha
         tags: |
           type=schedule,enable=false
@@ -89,7 +85,7 @@ runs:
       with:
         platforms: 'linux/amd64,linux/arm64'
         labels: ${{ steps.meta.outputs.labels }}
-        tags: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }}
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.image }}
         context: .
         file: ./Dockerfile
         push: true
@@ -110,20 +106,18 @@ runs:
       env:
         IMAGE: ${{ inputs.image }}
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        REPOSITORY: ${{ inputs.ecr-repository }}
         DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
       run: |
         echo "DOCKER_METADATA_OUTPUT_JSON=$DOCKER_METADATA_OUTPUT_JSON"
         docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-          $(printf ''$REGISTRY'/'$REPOSITORY'@sha256:%s ' *)
+          $(printf ''$REGISTRY'/'$IMAGE'@sha256:%s ' *)
       shell: bash
 
     - name: Inspect image
       env:
         IMAGE: ${{ inputs.image }}
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        REPOSITORY: ${{ inputs.ecr-repository }}
         VERSION: ${{ steps.meta.outputs.version }}
       run: |
-        docker buildx imagetools inspect $REGISTRY/$REPOSITORY:$VERSION
+        docker buildx imagetools inspect $REGISTRY/$IMAGE:$VERSION
       shell: bash

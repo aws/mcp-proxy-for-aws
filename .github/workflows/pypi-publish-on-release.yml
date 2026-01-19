@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI and ECR
 
 on:
   release:
@@ -145,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ecr
-      url: https://gallery.ecr.aws/awslabs-mcp/awslabs/mcp-proxy-for-aws
+      url: https://gallery.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws
     permissions:
       id-token: write
       contents: read
@@ -161,6 +161,6 @@ jobs:
         with:
           image: mcp-proxy-for-aws
           version: ${{ needs.build.outputs.version }}
-          public-ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          public-ecr-registry-alias: awslabs-mcp
+          public-ecr-role-to-assume: ${{ secrets.PublishPublicECRArn }}
+          public-ecr-registry-alias: mcp-proxy-for-aws
           public-ecr-aws-region: us-east-1

@@ -1,6 +1,7 @@
 name: Test ECR Publish
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
 
 permissions: {}
 
@@ -103,8 +104,7 @@ jobs:
       - name: Build and push to Private ECR
         uses: ./.github/actions/build-and-push-container-image-test
         with:
-          image: mcp-proxy-for-aws-test
+          image: mcp-proxy-for-aws
           version: ${{ needs.build.outputs.version }}
-          ecr-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          ecr-repository: mcp-proxy-for-aws-test
-          ecr-aws-region: eu-north-1
+          ecr-role-to-assume: ${{ secrets.PublishPublicECRArn }}
+          ecr-aws-region: us-east-1

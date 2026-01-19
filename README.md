@@ -71,16 +71,16 @@ uv run mcp_proxy_for_aws/server.py <SigV4 MCP endpoint URL>
 
 #### Using Docker
 
-Docker images are published to the [public AWS ECR registry](https://gallery.ecr.aws/awslabs-mcp).
+Docker images are published to the [public AWS ECR registry](https://gallery.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws).
 
 You can use the pre-built image:
 
 ```bash
 # Pull the latest image
-docker pull public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:latest
+docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest
 
 # Or pull a specific version
-docker pull public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:1.1.4
+docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.5
 ```
 
 Or build the image locally:
@@ -177,7 +177,7 @@ Using the pre-built public ECR image:
         "--rm",
         "--volume",
         "/full/path/to/.aws:/app/.aws:ro",
-        "public.ecr.aws/awslabs-mcp/aws/mcp-proxy-for-aws:latest",
+        "public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest",
         "<SigV4 MCP endpoint URL>"
       ],
       "env": {}
