@@ -318,5 +318,4 @@ LLMs are non-deterministic and they make mistakes, we advise you to always thoro
 
 <!-- mcp-name: io.github.aws/mcp-proxy-for-aws -->
 <!-- mcp-name: io.github.aws/aws-mcp -->
-<!-- mcp-name: io.github.awslabs/eks-mcp-server -->
-<!-- mcp-name: io.github.awslabs/ecs-mcp-server -->
+<!-- mcp-name: aws.api.us-east-1.eks-mcp/server -->
