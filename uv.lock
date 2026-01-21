@@ -2433,7 +2433,7 @@ requires-dist = [
 
 [[package]]
 name = "mcp-proxy-for-aws"
-version = "1.1.4"
+version = "1.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
@@ -2460,7 +2460,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.41.0" },
     { name = "botocore", extras = ["crt"], specifier = ">=1.41.0" },
-    { name = "fastmcp", specifier = ">=2.13.1" },
+    { name = "fastmcp", specifier = ">=2.13.1,<2.14.1" },
 ]
 
 [package.metadata.requires-dev]
