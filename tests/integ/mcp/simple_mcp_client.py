@@ -41,7 +41,7 @@ def build_mcp_client(
             **_build_mcp_config(endpoint=endpoint, region_name=region_name, metadata=metadata)
         ),
         elicitation_handler=_basic_elicitation_handler,
-        timeout=10.0,  # seconds
+        timeout=20.0,  # seconds
     )
 
 
