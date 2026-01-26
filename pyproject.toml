@@ -10,13 +10,13 @@ members = [
 name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
-version = "1.1.5"
+version = "1.2.0"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
 dependencies = [
-    "fastmcp (>=2.13.1,<2.14.1)",
+    "fastmcp>=2.14.2",
     "boto3>=1.41.0",
     "botocore[crt]>=1.41.0",
 ]
