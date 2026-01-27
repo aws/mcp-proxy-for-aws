@@ -1,4 +1,4 @@
-name: Publish to PyPI and ECR
+name: Publish to PyPI
 
 on:
   release:
@@ -33,8 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.get-package-version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,71 +50,6 @@ jobs:
         with:
           name: python-package-distributions
           path: dist/
-
-      - name: Get version from package
-        id: get-package-version
-        run: |
-          set -euo pipefail
-
-          # Get version from uv
-          VERSION="$(uv tree 2>/dev/null | grep mcp-proxy-for-aws | sed -e 's/^.*[[:space:]]v\(.*\)/\1/g' | head -1)"
-
-          if [[ -z "$VERSION" ]]; then
-            echo "::error::Failed to extract version from package" >&2
-            exit 1
-          fi
-
-          # Validate version format
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Invalid version format: $VERSION" >&2
-            exit 1
-          fi
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "::debug::Package version: $VERSION"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
-
-      - name: Build and export to Docker
-        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
-        with:
-          context: .
-          file: ./Dockerfile
-          load: true
-          tags: mcp-proxy-for-aws:${{ steps.get-package-version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Generate CycloneDX SBOM with Syft
-        uses: anchore/sbom-action@v0
-        with:
-          image: mcp-proxy-for-aws:${{ steps.get-package-version.outputs.version }}
-          format: cyclonedx-json
-          output-file: sbom.cyclonedx.json
-
-      - name: Install CycloneDX CLI
-        run: |
-          wget -q https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-x64 -O cyclonedx
-          chmod +x cyclonedx
-          sudo mv cyclonedx /usr/local/bin/
-
-      - name: Convert SBOM to CSV
-        run: |
-          cyclonedx convert --input-file sbom.cyclonedx.json --input-format json --output-format csv --output-file SBOM-${{ steps.get-package-version.outputs.version }}.csv
-
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-${{ steps.get-package-version.outputs.version }}
-          path: SBOM-${{ steps.get-package-version.outputs.version }}.csv
-          retention-days: 90
-
-      - name: Upload SBOM to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: SBOM-${{ steps.get-package-version.outputs.version }}.csv
-          tag_name: ${{ github.event.release.tag_name }}
 
   deploy:
     needs: build
@@ -140,27 +73,9 @@ jobs:
       - name: Publish to PyPI
         run: uv publish
 
-  deploy-ecr:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: ecr
-      url: https://gallery.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws
+  trigger-ecr-publish:
+    needs: [build, deploy]
     permissions:
-      id-token: write
       contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Build and Publish Container
-        id: build-and-publish
-        uses: ./.github/actions/build-and-push-container-image
-        with:
-          image: mcp-proxy-for-aws
-          version: ${{ needs.build.outputs.version }}
-          public-ecr-role-to-assume: ${{ secrets.PublishPublicECRArn }}
-          public-ecr-registry-alias: mcp-proxy-for-aws
-          public-ecr-aws-region: us-east-1
+    uses: ./.github/workflows/ecr-publish-on-release.yml
+    secrets: inherit

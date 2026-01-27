@@ -13,78 +13,28 @@
 # limitations under the License.
 
 # Using Amazon Linux for consistency and compliance
-FROM public.ecr.aws/amazonlinux/amazonlinux:latest AS uv
-
-# Install the project into `/app`
-WORKDIR /app
-
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
-
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Prefer the system python
-ENV UV_PYTHON_PREFERENCE=only-system
-
-# Run without updating the uv.lock file like running with `--frozen`
-ENV UV_FROZEN=true
-
-# Copy the required files first
-COPY pyproject.toml uv.lock ./
-
-# Python optimization and uv configuration
-ENV PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Install system dependencies and Python 3.13
-RUN yum update -y && \
-    yum install -y \
-        python3.13 \
-        python3.13-pip \
-        gcc \
-        gcc-c++ \
-        make \
-        libffi-devel \
-        openssl-devel \
-        rust \
-        cargo && \
-    yum clean all
-
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv \
-    python3.13 -m pip install uv && \
-    uv sync --python 3.13 --frozen --no-install-project --no-dev --no-editable
-
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
-COPY . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --python 3.13 --frozen --no-dev --no-editable
-
-# Make the directory just in case it doesn't exist
-RUN mkdir -p /root/.local
-
-# Using Amazon Linux for consistency and compliance
 FROM public.ecr.aws/amazonlinux/amazonlinux:latest
 
-# Place executables in the environment at the front of the path and include other binaries
-ENV PATH="/app/.venv/bin:/app/.local/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+# Python optimization
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install runtime dependencies and create application user
 RUN yum update -y && \
     yum install -y \
         python3.13 \
+        python3.13-pip \
         ca-certificates \
-        shadow-utils && \
+        shadow-utils \
+        lsof && \
     yum clean all && \
     update-ca-trust && \
     groupadd -r app && \
     useradd -r -g app -d /app app
 
-# Copy application artifacts from build stage
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+# Install mcp-proxy-for-aws from PyPI
+RUN python3.13 -m pip install mcp-proxy-for-aws
 
 # Get healthcheck script
 COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
