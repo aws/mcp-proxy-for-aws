@@ -59,6 +59,7 @@ jobs:
       url: https://pypi.org/p/mcp-proxy-for-aws
     permissions:
       id-token: write
+      contents: read
     steps:
       - name: Download distribution packages
         uses: actions/download-artifact@v5
@@ -71,3 +72,10 @@ jobs:
 
       - name: Publish to PyPI
         run: uv publish
+
+  trigger-ecr-publish:
+    needs: [build, deploy]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ecr-publish-on-release.yml
+    secrets: inherit
