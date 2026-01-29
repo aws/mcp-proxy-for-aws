@@ -4,14 +4,14 @@
 
 The **MCP Proxy for AWS** package provides two ways to connect AI applications to MCP servers on AWS:
 
-1. **Using it as a proxy** - It becomes a lightweight, client-side bridge between MCP clients (AI assistants like Claude Desktop, Amazon Q Developer CLI) and MCP servers on AWS. (See [MCP Proxy](#mcp-proxy))
+1. **Using it as a proxy** - It becomes a lightweight, client-side bridge between MCP clients (AI assistants like Claude Desktop, Kiro CLI) and MCP servers on AWS. (See [MCP Proxy](#mcp-proxy))
 2. **Using it as a library** - Programmatically connect popular AI agent frameworks (LangChain, LlamaIndex, Strands Agents, etc.) to MCP servers on AWS. (See [Programmatic Access](#programmatic-access))
 
 
 ### When Do You Need This Package?
 
 - You want to connect to **MCP servers on AWS** (e.g., using Amazon Bedrock AgentCore) that use AWS IAM authentication (SigV4) instead of OAuth
-- You're using MCP clients (like Claude Desktop, Amazon Q Developer CLI) that don't natively support AWS IAM authentication
+- You're using MCP clients (like Claude Desktop, Kiro CLI) that don't natively support AWS IAM authentication
 - You're building AI agents with popular frameworks like LangChain, Strands Agents, LlamaIndex, etc., that need to connect to MCP servers on AWS
 - You want to avoid building custom SigV4 request signing logic yourself
 
@@ -27,7 +27,7 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 ## Which Feature Should I Use?
 
 **Use as a proxy if you want to:**
-- Connect MCP clients like Claude Desktop or Amazon Q Developer CLI to MCP servers on AWS with IAM credentials
+- Connect MCP clients like Claude Desktop or Kiro CLI to MCP servers on AWS with IAM credentials
 - Add MCP servers on AWS to your AI assistant's configuration
 - Use a command-line tool that runs as a bridge between your MCP client and AWS
 
@@ -127,7 +127,7 @@ export AWS_REGION=<aws_region>
 
 ### Setup Examples
 
-Add the following configuration to your MCP client config file (e.g., for Amazon Q Developer CLI, edit `~/.aws/amazonq/mcp.json`):
+Add the following configuration to your MCP client config file (e.g., for Kiro CLI, edit `~/.kiro/settings/mcp.json`):
 **Note** Add your own endpoint by replacing  `<SigV4 MCP endpoint URL>`
 
 #### Running from local - using uv
@@ -355,3 +355,5 @@ LLMs are non-deterministic and they make mistakes, we advise you to always thoro
 
 <!-- mcp-name: io.github.aws/mcp-proxy-for-aws -->
 <!-- mcp-name: io.github.aws/aws-mcp -->
+<!-- mcp-name: aws.api.us-east-1.eks-mcp/server -->
+<!-- mcp-name: aws.api.us-east-1.ecs-mcp/server -->
