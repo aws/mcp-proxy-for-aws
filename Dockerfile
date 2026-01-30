@@ -12,59 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# dependabot should continue to update this to the latest hash.
-FROM public.ecr.aws/docker/library/python:3.14.0-alpine3.22@sha256:8373231e1e906ddfb457748bfc032c4c06ada8c759b7b62d9c73ec2a3c56e710 AS uv
+# Using Amazon Linux for consistency and compliance
+FROM public.ecr.aws/amazonlinux/amazonlinux:latest
 
-# Install the project into `/app`
-WORKDIR /app
+# Python optimization
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+# Install runtime dependencies and create application user
+RUN yum update -y && \
+    yum install -y \
+        python3.13 \
+        python3.13-pip \
+        ca-certificates \
+        shadow-utils \
+        lsof && \
+    yum clean all && \
+    update-ca-trust && \
+    groupadd -r app && \
+    useradd -r -g app -d /app app
 
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Prefer the system python
-ENV UV_PYTHON_PREFERENCE=only-system
-
-# Run without updating the uv.lock file like running with `--frozen`
-ENV UV_FROZEN=true
-
-# Copy the required files first
-COPY pyproject.toml uv.lock ./
-
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv \
-    pip install uv && \
-    uv sync --frozen --no-install-project --no-dev --no-editable
-
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
-COPY . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-editable
-
-# Make the directory just in case it doesn't exist
-RUN mkdir -p /root/.local
-
-# dependabot should continue to update this to the latest hash.
-FROM public.ecr.aws/docker/library/python:3.14.0-alpine3.22@sha256:8373231e1e906ddfb457748bfc032c4c06ada8c759b7b62d9c73ec2a3c56e710
-
-# Place executables in the environment at the front of the path and include other binaries
-ENV PATH="/app/.venv/bin:$PATH:/usr/sbin"
-
-# Install lsof for the healthcheck
-# Install other tools as needed for the MCP server
-# Add non-root user and ability to change directory into /root
-RUN apk update && \
-    apk --no-cache add lsof && \
-    addgroup -S app && \
-    adduser -S app -G app -h /app && \
-    chmod o+x /root
-
-# Get the project from the uv layer
-COPY --from=uv --chown=app:app /root/.local /root/.local
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+# Install mcp-proxy-for-aws from PyPI
+RUN python3.13 -m pip install mcp-proxy-for-aws
 
 # Get healthcheck script
 COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
@@ -72,6 +42,8 @@ COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
 # Run as non-root
 USER app
 
-# When running the container, add --db-path and a bind mount to the host's db file
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "docker-healthcheck.sh" ]
+# Health check to monitor container status
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
+
+# Application entrypoint
 ENTRYPOINT ["mcp-proxy-for-aws"]
