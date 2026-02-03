@@ -18,7 +18,12 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
-from mcp.client.streamable_http import GetSessionIdCallback, streamablehttp_client
+from mcp.client.streamable_http import GetSessionIdCallback
+
+try:
+    from mcp.client.streamable_http import streamable_http_client
+except ImportError:
+    from mcp.client.streamable_http import streamablehttp_client as streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
@@ -114,7 +119,7 @@ def aws_iam_streamablehttp_client(
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
-    return streamablehttp_client(
+    return streamable_http_client(
         url=endpoint,
         headers=headers,
         timeout=timeout,
