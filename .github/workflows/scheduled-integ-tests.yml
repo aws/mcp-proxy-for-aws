@@ -46,7 +46,7 @@ jobs:
           aws cloudwatch put-metric-data \
             --namespace "GitHubActions/MCPProxy" \
             --metric-name "IntegrationTestFailures" \
-            --dimensions WorkflowName=${{ github.workflow }},Repository=${{ github.repository }},Branch=${{ github.ref_name }} \
+            --dimensions WorkflowName=IntegrationCanary \
             --value $STATUS_VALUE \
             --unit Count \
             --region us-east-1
