@@ -16,3 +16,36 @@ jobs:
       actions: read
     uses: ./.github/workflows/python-integ.yml
     secrets: inherit
+
+  publish-metrics:
+    needs: call-integ-tests
+    if: always()  # Run even if integration tests fail
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Publish CloudWatch Metrics
+        run: |
+          # Determine status value: 0 for success, 1 for failure
+          if [ "${{ needs.call-integ-tests.result }}" == "success" ]; then
+            STATUS_VALUE=0
+          else
+            STATUS_VALUE=1
+          fi
+
+          echo "Publishing metric with status: ${{ needs.call-integ-tests.result }} (value: $STATUS_VALUE)"
+
+          aws cloudwatch put-metric-data \
+            --namespace "GitHubActions/MCPProxy" \
+            --metric-name "IntegrationTestFailures" \
+            --dimensions WorkflowName=${{ github.workflow }},Repository=${{ github.repository }},Branch=${{ github.ref_name }} \
+            --value $STATUS_VALUE \
+            --unit Count \
+            --region us-east-1
