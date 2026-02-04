@@ -24,6 +24,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    environment: Integ
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
