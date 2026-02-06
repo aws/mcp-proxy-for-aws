@@ -27,6 +27,45 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 
+def validate_endpoint_url(endpoint: str, allow_localhost_http: bool = True) -> None:
+    """Validate endpoint URL scheme for secure credential transmission.
+
+    AWS credentials are sent via SigV4 signing headers, so endpoints must use HTTPS
+    to prevent credential interception via man-in-the-middle attacks.
+
+    Args:
+        endpoint: The endpoint URL to validate
+        allow_localhost_http: Whether to allow HTTP for localhost (default: True)
+
+    Raises:
+        ValueError: If URL scheme is not HTTPS (or HTTP for allowed localhost)
+    """
+    parsed = urlparse(endpoint)
+
+    if not parsed.scheme:
+        raise ValueError(
+            f"Invalid endpoint URL '{endpoint}': missing URL scheme. "
+            "Use https:// prefix for secure connections."
+        )
+
+    if parsed.scheme == 'https':
+        return  # Valid
+
+    if parsed.scheme == 'http':
+        if allow_localhost_http and parsed.hostname in ('localhost', '127.0.0.1', '::1'):
+            return  # Allow HTTP for local development
+        raise ValueError(
+            f"Invalid endpoint URL '{endpoint}': HTTP is not allowed for remote endpoints. "
+            "AWS credentials must be transmitted over HTTPS to prevent interception. "
+            "Use https:// instead."
+        )
+
+    raise ValueError(
+        f"Invalid endpoint URL '{endpoint}': unsupported scheme '{parsed.scheme}'. "
+        "Only HTTPS is supported for secure credential transmission."
+    )
+
+
 def create_transport_with_sigv4(
     url: str,
     service: str,
@@ -78,16 +117,23 @@ def get_service_name_and_region_from_endpoint(endpoint: str) -> Tuple[str, str]:
     """Extract service name and region from an endpoint URL.
 
     Args:
-        endpoint: The endpoint URL to parse
+        endpoint: The endpoint URL to parse (must use HTTPS for remote endpoints)
 
     Returns:
         Tuple of (service_name, region). Either value may be empty string if not found.
 
+    Raises:
+        ValueError: If endpoint URL does not use HTTPS (except localhost for development)
+
     Notes:
+        - Validates URL scheme is HTTPS before parsing
         - Matches bedrock-agentcore endpoints (gateway and runtime)
         - Matches AWS API Gateway endpoints (service.region.api.aws)
         - Falls back to extracting first hostname segment as service name
     """
+    # Validate URL scheme for security
+    validate_endpoint_url(endpoint)
+
     # Parse AWS service from endpoint URL
     parsed = urlparse(endpoint)
     hostname = parsed.hostname or ''
