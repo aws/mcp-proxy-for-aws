@@ -20,8 +20,96 @@ from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
+    validate_endpoint_url,
 )
 from unittest.mock import MagicMock, patch
+
+
+class TestValidateEndpointUrl:
+    """Test cases for validate_endpoint_url function."""
+
+    def test_https_url_passes(self):
+        """HTTPS URLs should pass validation."""
+        validate_endpoint_url('https://example.com/mcp')
+        # No exception = pass
+
+    def test_https_with_port_passes(self):
+        """HTTPS URLs with explicit port should pass."""
+        validate_endpoint_url('https://example.com:443/mcp')
+
+    def test_https_aws_endpoints_pass(self):
+        """HTTPS URLs for AWS endpoints should pass."""
+        aws_endpoints = [
+            'https://test-service.us-west-2.api.aws/mcp',
+            'https://bedrock-agentcore.us-east-1.amazonaws.com',
+            'https://gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp',
+        ]
+        for endpoint in aws_endpoints:
+            validate_endpoint_url(endpoint)  # No exception = pass
+
+    def test_http_remote_raises_error(self):
+        """HTTP URLs for remote hosts should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('http://example.com/mcp')
+        assert 'HTTP is not allowed' in str(exc_info.value)
+        assert 'HTTPS' in str(exc_info.value)
+
+    def test_http_remote_error_includes_url(self):
+        """Error message should include the invalid URL."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('http://remote-server.example.com/mcp')
+        assert 'remote-server.example.com' in str(exc_info.value)
+
+    def test_http_localhost_allowed(self):
+        """HTTP URLs for localhost should pass by default."""
+        validate_endpoint_url('http://localhost:8080/mcp')
+        validate_endpoint_url('http://127.0.0.1:8080/mcp')
+        validate_endpoint_url('http://[::1]:8080/mcp')
+
+    def test_http_localhost_without_port_allowed(self):
+        """HTTP URLs for localhost without port should pass."""
+        validate_endpoint_url('http://localhost/mcp')
+        validate_endpoint_url('http://127.0.0.1/mcp')
+
+    def test_http_localhost_disallowed_when_strict(self):
+        """HTTP localhost should fail when allow_localhost_http=False."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('http://localhost:8080/mcp', allow_localhost_http=False)
+        assert 'HTTP is not allowed' in str(exc_info.value)
+
+    def test_missing_scheme_raises_error(self):
+        """URLs without scheme should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('example.com/mcp')
+        assert 'missing URL scheme' in str(exc_info.value)
+
+    def test_unsupported_scheme_ftp_raises_error(self):
+        """FTP scheme should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('ftp://example.com/mcp')
+        assert 'unsupported scheme' in str(exc_info.value)
+        assert 'ftp' in str(exc_info.value)
+
+    def test_unsupported_scheme_file_raises_error(self):
+        """File scheme should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('file:///path/to/file')
+        assert 'unsupported scheme' in str(exc_info.value)
+        assert 'file' in str(exc_info.value)
+
+    def test_unsupported_scheme_ws_raises_error(self):
+        """WebSocket scheme should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('ws://example.com/mcp')
+        assert 'unsupported scheme' in str(exc_info.value)
+        assert 'ws' in str(exc_info.value)
+
+    def test_unsupported_scheme_wss_raises_error(self):
+        """Secure WebSocket scheme should raise ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_endpoint_url('wss://example.com/mcp')
+        assert 'unsupported scheme' in str(exc_info.value)
+        assert 'wss' in str(exc_info.value)
 
 
 class TestCreateTransportWithSigv4:
@@ -183,15 +271,15 @@ class TestValidateRequiredArgs:
         assert '--service argument' in str(exc_info.value)
 
     def test_validate_service_name_invalid_url_failure(self):
-        """Test validation with invalid URL."""
+        """Test validation with invalid URL raises scheme validation error."""
         endpoint = 'not-a-url'
 
         with pytest.raises(ValueError) as exc_info:
             determine_service_name(endpoint)
 
-        assert 'Could not determine AWS service name' in str(exc_info.value)
+        # URL validation now catches this first with a scheme error
+        assert 'missing URL scheme' in str(exc_info.value)
         assert endpoint in str(exc_info.value)
-        assert '--service argument' in str(exc_info.value)
 
 
 class TestDetermineRegion:
