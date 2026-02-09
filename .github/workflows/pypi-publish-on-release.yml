@@ -35,18 +35,18 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
 
       - name: Build distribution packages
         run: uv build
 
       - name: Upload distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: python-package-distributions
           path: dist/
@@ -62,13 +62,13 @@ jobs:
       contents: read
     steps:
       - name: Download distribution packages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: python-package-distributions
           path: dist/
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
 
       - name: Publish to PyPI
         run: uv publish
