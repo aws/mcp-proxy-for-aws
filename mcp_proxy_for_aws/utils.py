@@ -45,7 +45,7 @@ def validate_endpoint_url(endpoint: str, allow_localhost_http: bool = True) -> N
     if not parsed.scheme:
         raise ValueError(
             f"Invalid endpoint URL '{endpoint}': missing URL scheme. "
-            "Use https:// prefix for secure connections."
+            'Use https:// prefix for secure connections.'
         )
 
     if parsed.scheme == 'https':
@@ -56,13 +56,13 @@ def validate_endpoint_url(endpoint: str, allow_localhost_http: bool = True) -> N
             return  # Allow HTTP for local development
         raise ValueError(
             f"Invalid endpoint URL '{endpoint}': HTTP is not allowed for remote endpoints. "
-            "AWS credentials must be transmitted over HTTPS to prevent interception. "
-            "Use https:// instead."
+            'AWS credentials must be transmitted over HTTPS to prevent interception. '
+            'Use https:// instead.'
         )
 
     raise ValueError(
         f"Invalid endpoint URL '{endpoint}': unsupported scheme '{parsed.scheme}'. "
-        "Only HTTPS is supported for secure credential transmission."
+        'Only HTTPS is supported for secure credential transmission.'
     )
 
 
