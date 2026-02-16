@@ -70,20 +70,7 @@ uv run mcp_proxy_for_aws/server.py <SigV4 MCP endpoint URL>
 ```
 
 #### Using Docker
-
-Docker images are published to the [public AWS ECR registry](https://gallery.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws).
-
-You can use the pre-built image:
-
-```bash
-# Pull the latest image
-docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest
-
-# Or pull a specific version
-docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.5
-```
-
-Or build the image locally:
+Build the image locally:
 
 ```bash
 # Build the Docker image
@@ -165,28 +152,7 @@ Add the following configuration to your MCP client config file (e.g., for Kiro C
 
 #### Using Docker
 
-Using the pre-built public ECR image:
-
-```json
-{
-  "mcpServers": {
-    "<mcp server name>": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "--volume",
-        "/full/path/to/.aws:/app/.aws:ro",
-        "public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest",
-        "<SigV4 MCP endpoint URL>"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-Or using a locally built image:
+using a locally built image:
 
 ```json
 {
