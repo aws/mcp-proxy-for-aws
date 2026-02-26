@@ -14,6 +14,7 @@
 
 import logging
 import os
+import time
 import pytest
 import pytest_asyncio
 from .mcp.simple_mcp_client import build_mcp_client
@@ -116,3 +117,10 @@ async def aws_mcp_client():
 
     async with client:
         yield client
+
+
+@pytest.fixture(autouse=True)
+def sleep_between_tests():
+    """Sleep for 1 second before each test to avoid rate limiting."""
+    print("Sleeping for 1 second to avoid rate limiting")
+    time.sleep(1)
