@@ -15,12 +15,12 @@ jobs:
       version: ${{ steps.get-package-version.outputs.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
 
       - name: Get version from package
         id: get-package-version
@@ -45,10 +45,10 @@ jobs:
           echo "::debug::Package version: $VERSION"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build and export to Docker
-        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: ./Dockerfile
@@ -75,7 +75,7 @@ jobs:
           cyclonedx convert --input-file sbom.cyclonedx.json --input-format json --output-format csv --output-file SBOM-${{ steps.get-package-version.outputs.version }}.csv
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sbom-${{ steps.get-package-version.outputs.version }}
           path: SBOM-${{ steps.get-package-version.outputs.version }}.csv
@@ -92,7 +92,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
