@@ -279,3 +279,39 @@ async def test_credentials_parameter_bypasses_boto3_session(mock_streams):
                     pass
 
                 mock_boto.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_http_endpoint_raises_security_error():
+    """Test that HTTP endpoints raise ValueError for security.
+
+    AWS credentials must be transmitted over HTTPS to prevent interception.
+    This test verifies the client rejects HTTP endpoints for remote hosts.
+    """
+    with pytest.raises(ValueError, match='HTTP is not allowed'):
+        async with aws_iam_streamablehttp_client(
+            endpoint='http://example.com/mcp',
+            aws_service='bedrock-agentcore',
+            aws_region='us-west-2',
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_http_localhost_endpoint_allowed(mock_session, mock_streams):
+    """Test that HTTP localhost endpoints are allowed for local development."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.streamablehttp_client') as mock_stream_client:
+            mock_stream_client.return_value.__aenter__ = AsyncMock(
+                return_value=(mock_read, mock_write, mock_get_session)
+            )
+            mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            # Should not raise - localhost HTTP is allowed for development
+            async with aws_iam_streamablehttp_client(
+                endpoint='http://localhost:8080/mcp',
+                aws_service='bedrock-agentcore',
+            ):
+                pass
