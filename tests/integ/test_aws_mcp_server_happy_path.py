@@ -101,7 +101,7 @@ def verify_json_response(response: CallToolResult):
             'aws___get_regional_availability',
             {'resource_type': 'cfn', 'region': 'us-east-1'},
         ),
-        ('aws___call_aws', {'cli_command': 'aws s3 ls', 'max_results': 10}),
+        ('aws___call_aws', {'cli_command': 'aws lambda list-functions', 'max_results': 10}),
     ],
     ids=[
         'list_regions',
@@ -110,7 +110,7 @@ def verify_json_response(response: CallToolResult):
         'recommend',
         'read_documentation',
         'get_regional_availability',
-        'call_aws',
+        'list_lambda_functions',
     ],
 )
 @pytest.mark.asyncio(loop_scope='module')

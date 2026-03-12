@@ -80,7 +80,7 @@ You can use the pre-built image:
 docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest
 
 # Or pull a specific version
-docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.5
+docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.6
 ```
 
 Or build the image locally:
@@ -174,6 +174,7 @@ Using the pre-built public ECR image:
       "command": "docker",
       "args": [
         "run",
+        "-i",
         "--rm",
         "--volume",
         "/full/path/to/.aws:/app/.aws:ro",
