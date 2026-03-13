@@ -131,10 +131,10 @@ class TestOnListTools:
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
-    async def test_read_only_true_filters_no_annotations_tools(
+    async def test_read_only_true_keeps_no_annotations_tools(
         self, mock_context, read_only_tool, no_annotations_tool
     ):
-        """Test that read_only=True filters out tools with no annotations."""
+        """Test that read_only=True keeps tools with no annotations."""
         # Arrange
         tools = [read_only_tool, no_annotations_tool]
         call_next_mock = AsyncMock(return_value=tools)
@@ -144,15 +144,15 @@ class TestOnListTools:
         result = await middleware.on_list_tools(mock_context, call_next_mock)
 
         # Assert
-        assert len(result) == 1
-        assert result[0] == read_only_tool
+        assert len(result) == 2
+        assert result == tools
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
-    async def test_read_only_true_filters_no_hint_tools(
+    async def test_read_only_true_keeps_no_hint_tools(
         self, mock_context, read_only_tool, no_hint_tool
     ):
-        """Test that read_only=True filters out tools without readOnlyHint."""
+        """Test that read_only=True keeps tools without readOnlyHint."""
         # Arrange
         tools = [read_only_tool, no_hint_tool]
         call_next_mock = AsyncMock(return_value=tools)
@@ -162,8 +162,8 @@ class TestOnListTools:
         result = await middleware.on_list_tools(mock_context, call_next_mock)
 
         # Assert
-        assert len(result) == 1
-        assert result[0] == read_only_tool
+        assert len(result) == 2
+        assert result == tools
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
@@ -203,10 +203,10 @@ class TestOnListTools:
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
-    async def test_read_only_true_with_only_write_tools(
+    async def test_read_only_true_with_write_and_no_annotations_tools(
         self, mock_context, write_tool, no_annotations_tool
     ):
-        """Test that read_only=True filters all write tools."""
+        """Test that read_only=True filters write tools but keeps no-annotation tools."""
         # Arrange
         tools = [write_tool, no_annotations_tool]
         call_next_mock = AsyncMock(return_value=tools)
@@ -216,7 +216,8 @@ class TestOnListTools:
         result = await middleware.on_list_tools(mock_context, call_next_mock)
 
         # Assert
-        assert result == []
+        assert len(result) == 1
+        assert result[0] == no_annotations_tool
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
@@ -237,7 +238,7 @@ class TestOnListTools:
         'read_only,expected_count',
         [
             (False, 4),  # All tools pass through
-            (True, 1),  # Only read-only tools pass
+            (True, 3),  # Only explicitly write tools (readOnlyHint=False) are filtered
         ],
     )
     @pytest.mark.asyncio
@@ -263,8 +264,8 @@ class TestOnListTools:
         # Assert
         assert len(result) == expected_count
         if read_only:
-            # Only the read_only_tool should pass
-            assert result == [read_only_tool]
+            # Only write_tool (readOnlyHint=False) should be filtered out
+            assert result == [read_only_tool, no_annotations_tool, no_hint_tool]
         else:
             # All tools should pass
             assert result == tools
