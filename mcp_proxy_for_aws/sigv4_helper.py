@@ -198,10 +198,8 @@ class CredentialProvider:
 def create_sigv4_client(
     service: str,
     region: str,
+    credential_provider: CredentialProvider,
     timeout: Optional[httpx.Timeout] = None,
-    profile: Optional[str] = None,
-    session: Optional[boto3.Session] = None,
-    credential_provider: Optional[CredentialProvider] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
@@ -211,10 +209,8 @@ def create_sigv4_client(
     Args:
         service: AWS service name for SigV4 signing
         region: AWS region for SigV4 signing
+        credential_provider: CredentialProvider for credential management and refresh
         timeout: Timeout configuration for the HTTP client
-        profile: AWS profile to use (only used if session and credential_provider are not provided)
-        session: Fixed boto3 session (takes precedence over credential_provider)
-        credential_provider: CredentialProvider for automatic credential refresh
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
         **kwargs: Additional arguments to pass to httpx.AsyncClient
@@ -242,21 +238,13 @@ def create_sigv4_client(
 
     logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
 
-    # Use credential_provider for signing if available, otherwise fall back to fixed session
-    if credential_provider:
-        sign_hook = partial(_sign_request_hook_with_provider, region, service, credential_provider)
-    else:
-        if session is None:
-            session = create_aws_session(profile)
-        sign_hook = partial(_sign_request_hook, region, service, session)
-
     return httpx.AsyncClient(
         **client_kwargs,
         event_hooks={
             'response': [_handle_error_response],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                sign_hook,
+                partial(_sign_request_hook_with_provider, region, service, credential_provider),
             ],
         },
     )
