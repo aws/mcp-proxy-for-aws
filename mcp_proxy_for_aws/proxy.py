@@ -24,7 +24,8 @@ from fastmcp.server.proxy import ProxyToolManager as _ProxyToolManager
 from fastmcp.tools import Tool
 from mcp import McpError
 from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
-from typing import Any
+from mcp_proxy_for_aws.sigv4_helper import CredentialProvider
+from typing import Any, Optional
 from typing_extensions import override
 
 
@@ -159,20 +160,37 @@ class AWSMCPProxyClient(_ProxyClient):
 
 
 class AWSMCPProxyClientFactory:
-    """Client factory that returns a connected client."""
+    """Client factory that returns a connected client.
 
-    def __init__(self, transport: ClientTransport) -> None:
+    When credentials change, tears down the existing connection and reconnects.
+    """
+
+    def __init__(
+        self,
+        transport: ClientTransport,
+        credential_provider: Optional[CredentialProvider] = None,
+    ) -> None:
         """Initialize a client factory with transport."""
         self._transport = transport
         self._client: AWSMCPProxyClient | None = None
         self._initialize_request: InitializeRequest | None = None
+        self._credential_provider = credential_provider
 
     def set_init_params(self, initialize_request: InitializeRequest):
         """Set client init parameters."""
         self._initialize_request = initialize_request
 
     async def get_client(self) -> Client:
-        """Get client."""
+        """Get client, reconnecting if credentials have changed."""
+        if (
+            self._credential_provider is not None
+            and self._client is not None
+            and self._credential_provider.consume_credentials_changed()
+        ):
+            logger.info('AWS credentials changed, tearing down existing connection')
+            await self.disconnect()
+            self._client = None
+
         if self._client is None:
             self._client = AWSMCPProxyClient(self._transport)
 

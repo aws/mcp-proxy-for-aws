@@ -19,7 +19,7 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import CredentialProvider, create_sigv4_client
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -73,7 +73,7 @@ def create_transport_with_sigv4(
     metadata: Dict[str, Any],
     custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
-) -> StreamableHttpTransport:
+) -> Tuple[StreamableHttpTransport, CredentialProvider]:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
     Args:
@@ -86,11 +86,11 @@ def create_transport_with_sigv4(
 
 
     Returns:
-        StreamableHttpTransport instance with SigV4 authentication
+        Tuple of (StreamableHttpTransport, CredentialProvider)
     """
-    # Create AWS session once and reuse it for all httpx clients
-    logger.debug('Creating AWS session with profile: %s', profile)
-    session = create_aws_session(profile)
+    # Create credential provider that auto-detects credential changes
+    logger.debug('Creating credential provider with profile: %s', profile)
+    credential_provider = CredentialProvider(profile)
 
     def client_factory(
         headers: Optional[Dict[str, str]] = None,
@@ -99,7 +99,7 @@ def create_transport_with_sigv4(
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
             service=service,
-            session=session,
+            credential_provider=credential_provider,
             region=region,
             headers=headers,
             timeout=custom_timeout,
@@ -107,10 +107,11 @@ def create_transport_with_sigv4(
             auth=auth,
         )
 
-    return StreamableHttpTransport(
+    transport = StreamableHttpTransport(
         url=url,
         httpx_client_factory=client_factory,
     )
+    return transport, credential_provider
 
 
 def get_service_name_and_region_from_endpoint(endpoint: str) -> Tuple[str, str]:

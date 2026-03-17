@@ -113,18 +113,18 @@ class TestValidateEndpointUrl:
 
 
 class TestCreateTransportWithSigv4:
-    """Test cases for create_transport_with_sigv4 function (line 129)."""
+    """Test cases for create_transport_with_sigv4 function."""
 
-    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.CredentialProvider')
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
-    def test_create_transport_with_sigv4(self, mock_create_sigv4_client, mock_create_session):
+    def test_create_transport_with_sigv4(self, mock_create_sigv4_client, mock_credential_provider):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
         from httpx import Timeout
 
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
-        mock_session = MagicMock()
-        mock_create_session.return_value = mock_session
+        mock_provider = MagicMock()
+        mock_credential_provider.return_value = mock_provider
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -133,27 +133,27 @@ class TestCreateTransportWithSigv4:
         metadata = {'AWS_REGION': 'us-west-2', 'CUSTOM_KEY': 'custom_value'}
         custom_timeout = Timeout(30.0)
 
-        result = create_transport_with_sigv4(
+        transport, credential_provider = create_transport_with_sigv4(
             url, service, region, metadata, custom_timeout, profile
         )
 
-        # Verify session was created with profile
-        mock_create_session.assert_called_once_with(profile)
+        # Verify credential provider was created with profile
+        mock_credential_provider.assert_called_once_with(profile)
 
         # Verify result is StreamableHttpTransport
-        assert isinstance(result, StreamableHttpTransport)
-        assert result.url == url
+        assert isinstance(transport, StreamableHttpTransport)
+        assert transport.url == url
+        assert credential_provider == mock_provider
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
-        # We need to access the factory through the transport's internal structure
-        if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
-            factory = result.httpx_client_factory
+        if hasattr(transport, 'httpx_client_factory') and transport.httpx_client_factory:
+            factory = transport.httpx_client_factory
             test_kwargs = {'headers': {'test': 'header'}, 'timeout': Timeout(30.0), 'auth': None}
             factory(**test_kwargs)
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                credential_provider=mock_provider,
                 region=region,
                 headers={'test': 'header'},
                 timeout=custom_timeout,
@@ -161,19 +161,18 @@ class TestCreateTransportWithSigv4:
                 metadata=metadata,
             )
         else:
-            # If we can't access the factory directly, just verify the transport was created
-            assert result is not None
+            assert transport is not None
 
-    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.CredentialProvider')
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(
-        self, mock_create_sigv4_client, mock_create_session
+        self, mock_create_sigv4_client, mock_credential_provider
     ):
         """Test creating transport without profile."""
         from httpx import Timeout
 
-        mock_session = MagicMock()
-        mock_create_session.return_value = mock_session
+        mock_provider = MagicMock()
+        mock_credential_provider.return_value = mock_provider
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -181,20 +180,21 @@ class TestCreateTransportWithSigv4:
         metadata = {'AWS_REGION': 'test-forwarding-region'}
         custom_timeout = Timeout(60.0)
 
-        result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
+        transport, credential_provider = create_transport_with_sigv4(
+            url, service, region, metadata, custom_timeout
+        )
 
-        # Verify session was created without profile
-        mock_create_session.assert_called_once_with(None)
+        # Verify credential provider was created without profile
+        mock_credential_provider.assert_called_once_with(None)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
-        # We need to access the factory through the transport's internal structure
-        if hasattr(result, 'httpx_client_factory') and result.httpx_client_factory:
-            factory = result.httpx_client_factory
+        if hasattr(transport, 'httpx_client_factory') and transport.httpx_client_factory:
+            factory = transport.httpx_client_factory
             factory(headers=None, timeout=None, auth=None)
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                credential_provider=mock_provider,
                 region=region,
                 headers=None,
                 timeout=custom_timeout,
@@ -202,8 +202,7 @@ class TestCreateTransportWithSigv4:
                 metadata=metadata,
             )
         else:
-            # If we can't access the factory directly, just verify the transport was created
-            assert result is not None
+            assert transport is not None
 
 
 class TestValidateRequiredArgs:

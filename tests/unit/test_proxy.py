@@ -27,6 +27,7 @@ from mcp_proxy_for_aws.proxy import (
     AWSMCPProxyClientFactory,
     AWSProxyToolManager,
 )
+from mcp_proxy_for_aws.sigv4_helper import CredentialProvider
 from unittest.mock import AsyncMock, Mock, patch
 
 
@@ -152,6 +153,16 @@ def test_client_factory_initialization():
     assert factory._transport == mock_transport
     assert factory._client is None
     assert factory._initialize_request is None
+    assert factory._credential_provider is None
+
+
+def test_client_factory_initialization_with_credential_provider():
+    """Test factory initialization with credential provider."""
+    mock_transport = Mock(spec=ClientTransport)
+    mock_provider = Mock(spec=CredentialProvider)
+    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
+
+    assert factory._credential_provider == mock_provider
 
 
 def test_client_factory_set_init_params():
@@ -296,3 +307,48 @@ async def test_proxy_client_max_connect_retry_default():
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
     assert client._max_connect_retry == 3
+
+
+@pytest.mark.asyncio
+async def test_client_factory_reconnects_on_credential_change():
+    """Test factory tears down and recreates client when credentials change."""
+    mock_transport = Mock(spec=ClientTransport)
+    mock_provider = Mock(spec=CredentialProvider)
+    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
+
+    # First call: no credential change, creates client
+    mock_provider.consume_credentials_changed.return_value = False
+    client1 = await factory.get_client()
+    assert isinstance(client1, AWSMCPProxyClient)
+
+    # Simulate credential change
+    mock_provider.consume_credentials_changed.return_value = True
+    with patch.object(factory, 'disconnect', new_callable=AsyncMock) as mock_disconnect:
+        client2 = await factory.get_client()
+        mock_disconnect.assert_called_once()
+        # New client should be a different instance
+        assert client2 is not client1
+
+
+@pytest.mark.asyncio
+async def test_client_factory_no_reconnect_without_credential_change():
+    """Test factory reuses client when credentials haven't changed."""
+    mock_transport = Mock(spec=ClientTransport)
+    mock_provider = Mock(spec=CredentialProvider)
+    mock_provider.consume_credentials_changed.return_value = False
+    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
+
+    client1 = await factory.get_client()
+    client2 = await factory.get_client()
+    assert client1 is client2
+
+
+@pytest.mark.asyncio
+async def test_client_factory_no_reconnect_without_provider():
+    """Test factory behaves normally without credential provider."""
+    mock_transport = Mock(spec=ClientTransport)
+    factory = AWSMCPProxyClientFactory(mock_transport)
+
+    client1 = await factory.get_client()
+    client2 = await factory.get_client()
+    assert client1 is client2

@@ -18,12 +18,15 @@ import httpx
 import pytest
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
+    CredentialProvider,
     SigV4HTTPXAuth,
     _sanitize_headers,
+    _sign_request_hook,
+    _sign_request_hook_with_provider,
     create_aws_session,
     create_sigv4_client,
 )
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestSigV4HTTPXAuth:
@@ -264,7 +267,7 @@ class TestSanitizeHeaders:
     def test_sanitize_headers_redacts_authorization(self):
         """Test that Authorization header is redacted."""
         headers = {
-            'Authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/...',
+            'Authorization': 'AWS4-HMAC-SHA256 Credential=test-access-key/...',
             'Content-Type': 'application/json',
         }
         result = _sanitize_headers(headers)
@@ -330,3 +333,160 @@ class TestSanitizeHeaders:
         assert 'authorization' in SENSITIVE_HEADERS
         assert 'x-amz-security-token' in SENSITIVE_HEADERS
         assert 'x-amz-date' in SENSITIVE_HEADERS
+
+
+class TestCredentialProvider:
+    """Test cases for the CredentialProvider class."""
+
+    def _make_session_mock(self, access_key='test-access-key'):
+        """Helper to create a mock boto3 session with given access key."""
+        mock_session = Mock()
+        mock_frozen = Mock()
+        mock_frozen.access_key = access_key
+        mock_creds = Mock()
+        mock_creds.get_frozen_credentials.return_value = mock_frozen
+        mock_session.get_credentials.return_value = mock_creds
+        return mock_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_initial_session_creation(self, mock_create_session):
+        """Test that CredentialProvider creates a session on init."""
+        mock_session = self._make_session_mock()
+        mock_create_session.return_value = mock_session
+
+        provider = CredentialProvider(profile='test-profile')
+
+        mock_create_session.assert_called_once_with('test-profile')
+        assert provider.get_session() is mock_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_returns_cached_session_when_files_unchanged(self, mock_create_session):
+        """Test that get_session returns cached session when config files haven't changed."""
+        mock_session = self._make_session_mock()
+        mock_create_session.return_value = mock_session
+
+        provider = CredentialProvider()
+        result1 = provider.get_session()
+        result2 = provider.get_session()
+
+        assert result1 is result2
+        # Only called once during __init__, not on subsequent get_session calls
+        mock_create_session.assert_called_once()
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_creates_fresh_session_when_files_change(self, mock_create_session, mock_mtimes):
+        """Test that get_session creates a fresh session when config files change."""
+        session1 = self._make_session_mock(access_key='test-access-key-1')
+        session2 = self._make_session_mock(access_key='test-access-key-1')
+        mock_create_session.side_effect = [session1, session2]
+        mock_mtimes.side_effect = [(1.0, 1.0), (2.0, 1.0)]
+
+        provider = CredentialProvider()
+        result = provider.get_session()
+
+        # Fresh session used after file change, but same key = no identity change
+        assert result is session2
+        assert provider.consume_credentials_changed() is False
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_detects_credential_identity_change(self, mock_create_session, mock_mtimes):
+        """Test that get_session detects when the access key changes."""
+        session1 = self._make_session_mock(access_key='test-access-key-1')
+        session2 = self._make_session_mock(access_key='test-access-key-2')
+        mock_create_session.side_effect = [session1, session2]
+        mock_mtimes.side_effect = [(1.0, 1.0), (2.0, 1.0)]
+
+        provider = CredentialProvider()
+        result = provider.get_session()
+
+        assert result is session2
+        assert provider.consume_credentials_changed() is True
+        assert provider.consume_credentials_changed() is False
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_consume_credentials_changed_initially_false(self, mock_create_session):
+        """Test that consume_credentials_changed returns False initially."""
+        mock_create_session.return_value = self._make_session_mock()
+
+        provider = CredentialProvider()
+        assert provider.consume_credentials_changed() is False
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_falls_back_to_cached_session_on_error(self, mock_create_session, mock_mtimes):
+        """Test that get_session falls back to cached session if fresh session fails."""
+        original_session = self._make_session_mock()
+        mock_create_session.side_effect = [original_session, ValueError('no creds')]
+        mock_mtimes.side_effect = [(1.0, 1.0), (2.0, 1.0)]
+
+        provider = CredentialProvider()
+        result = provider.get_session()
+
+        assert result is original_session
+        assert provider.consume_credentials_changed() is False
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_no_credentials_returns_none_key(self, mock_create_session):
+        """Test handling when session has no credentials."""
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = None
+        mock_create_session.return_value = mock_session
+
+        provider = CredentialProvider()
+        assert provider._access_key is None
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_uses_frozen_credentials(self, mock_create_session):
+        """Test that access key is resolved via get_frozen_credentials."""
+        mock_session = self._make_session_mock(access_key='test-access-key-1')
+        mock_create_session.return_value = mock_session
+
+        provider = CredentialProvider()
+
+        mock_session.get_credentials().get_frozen_credentials.assert_called()
+        assert provider._access_key == 'test-access-key-1'
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_multiple_identity_changes(self, mock_create_session, mock_mtimes):
+        """Test detecting multiple sequential credential changes."""
+        sessions = [
+            self._make_session_mock(access_key='test-access-key-1'),
+            self._make_session_mock(access_key='test-access-key-2'),
+            self._make_session_mock(access_key='test-access-key-3'),
+        ]
+        mock_create_session.side_effect = sessions
+        # init reads once, then each get_session reads once — alternate mtimes to trigger refresh
+        mock_mtimes.side_effect = [
+            (1.0, 1.0),  # init
+            (2.0, 1.0),  # first get_session — changed
+            (3.0, 1.0),  # second get_session — changed again
+        ]
+
+        provider = CredentialProvider()
+
+        provider.get_session()
+        assert provider.consume_credentials_changed() is True
+
+        provider.get_session()
+        assert provider.consume_credentials_changed() is True
+
+
+class TestSignRequestHookWithProvider:
+    """Test cases for _sign_request_hook_with_provider."""
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper._sign_request_hook', new_callable=AsyncMock)
+    async def test_delegates_to_sign_request_hook(self, mock_sign_hook):
+        """Test that the provider hook calls get_session and delegates to _sign_request_hook."""
+        mock_session = Mock()
+        mock_provider = Mock(spec=CredentialProvider)
+        mock_provider.get_session.return_value = mock_session
+        mock_request = Mock(spec=httpx.Request)
+
+        await _sign_request_hook_with_provider('us-east-1', 'bedrock', mock_provider, mock_request)
+
+        mock_provider.get_session.assert_called_once()
+        mock_sign_hook.assert_called_once_with('us-east-1', 'bedrock', mock_session, mock_request)

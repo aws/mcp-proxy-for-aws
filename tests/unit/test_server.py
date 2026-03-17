@@ -70,7 +70,8 @@ class TestServer:
 
         # Mock the transport and client factory
         mock_transport = Mock(spec=ClientTransport)
-        mock_create_transport.return_value = mock_transport
+        mock_credential_provider = Mock()
+        mock_create_transport.return_value = (mock_transport, mock_credential_provider)
 
         mock_client_factory = Mock()
         mock_client_factory.disconnect = AsyncMock()
@@ -96,7 +97,7 @@ class TestServer:
         assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
-        mock_client_factory_class.assert_called_once_with(mock_transport)
+        mock_client_factory_class.assert_called_once_with(mock_transport, mock_credential_provider)
         mock_aws_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
@@ -142,7 +143,8 @@ class TestServer:
 
         # Mock the transport and client factory
         mock_transport = Mock(spec=ClientTransport)
-        mock_create_transport.return_value = mock_transport
+        mock_credential_provider = Mock()
+        mock_create_transport.return_value = (mock_transport, mock_credential_provider)
 
         mock_client_factory = Mock()
         mock_client_factory.disconnect = AsyncMock()
@@ -171,7 +173,7 @@ class TestServer:
         }  # metadata
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
-        mock_client_factory_class.assert_called_once_with(mock_transport)
+        mock_client_factory_class.assert_called_once_with(mock_transport, mock_credential_provider)
         mock_aws_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once_with(
@@ -213,7 +215,7 @@ class TestServer:
         mock_determine_region.return_value = 'ap-southeast-1'
 
         mock_transport = Mock(spec=ClientTransport)
-        mock_create_transport.return_value = mock_transport
+        mock_create_transport.return_value = (mock_transport, Mock())
 
         mock_client_factory = Mock()
         mock_client_factory.disconnect = AsyncMock()
@@ -268,7 +270,7 @@ class TestServer:
         mock_determine_region.return_value = 'us-west-1'
 
         mock_transport = Mock(spec=ClientTransport)
-        mock_create_transport.return_value = mock_transport
+        mock_create_transport.return_value = (mock_transport, Mock())
 
         mock_client_factory = Mock()
         mock_client_factory.disconnect = AsyncMock()
