@@ -25,7 +25,7 @@ from fastmcp.tools import Tool
 from mcp import McpError
 from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
 from mcp_proxy_for_aws.sigv4_helper import CredentialProvider
-from typing import Any, Optional
+from typing import Any
 from typing_extensions import override
 
 
@@ -35,13 +35,19 @@ logger = logging.getLogger(__name__)
 class AWSProxyToolManager(_ProxyToolManager):
     """Customized proxy tool manager that better suites our needs."""
 
-    def __init__(self, client_factory: ClientFactoryT, **kwargs: Any):
+    def __init__(
+        self,
+        client_factory: ClientFactoryT,
+        credential_provider: CredentialProvider,
+        **kwargs: Any,
+    ):
         """Initialize a proxy tool manager.
 
         Cached tools are set to None.
         """
         super().__init__(client_factory, **kwargs)
         self._cached_tools: dict[str, Tool] | None = None
+        self._credential_provider = credential_provider
 
     @override
     async def get_tool(self, key: str) -> Tool:
@@ -58,7 +64,18 @@ class AWSProxyToolManager(_ProxyToolManager):
 
         In case the server supports notifications/tools/listChanged, the `get_tools` method
         will be called explicity , hence, we are not missing the change to the tool list.
+
+        When credentials change, the tool cache is invalidated so that new ProxyTool
+        instances are created pointing to the new client.
         """
+        self._credential_provider.get_session()
+        if self._credential_provider.consume_credentials_changed():
+            logger.info('Credentials changed, reconnecting and invalidating tool cache')
+            if isinstance(self.client_factory, AWSMCPProxyClientFactory):
+                await self.client_factory.disconnect()
+                self.client_factory._client = None
+            self._cached_tools = None
+
         if self._cached_tools is None:
             logger.debug('cached_tools not found, calling get_tools')
             self._cached_tools = await self.get_tools()
@@ -80,12 +97,14 @@ class AWSMCPProxy(_FastMCPProxy):
         self,
         *,
         client_factory: ClientFactoryT | None = None,
+        credential_provider: CredentialProvider,
         **kwargs,
     ):
         """Initialize a client."""
         super().__init__(client_factory=client_factory, **kwargs)
         self._tool_manager = AWSProxyToolManager(
             client_factory=self.client_factory,
+            credential_provider=credential_provider,
             transformations=self._tool_manager.transformations,
         )
 
@@ -168,7 +187,7 @@ class AWSMCPProxyClientFactory:
     def __init__(
         self,
         transport: ClientTransport,
-        credential_provider: Optional[CredentialProvider] = None,
+        credential_provider: CredentialProvider,
     ) -> None:
         """Initialize a client factory with transport."""
         self._transport = transport
@@ -181,16 +200,7 @@ class AWSMCPProxyClientFactory:
         self._initialize_request = initialize_request
 
     async def get_client(self) -> Client:
-        """Get client, reconnecting if credentials have changed."""
-        if (
-            self._credential_provider is not None
-            and self._client is not None
-            and self._credential_provider.consume_credentials_changed()
-        ):
-            logger.info('AWS credentials changed, tearing down existing connection')
-            await self.disconnect()
-            self._client = None
-
+        """Get client."""
         if self._client is None:
             self._client = AWSMCPProxyClient(self._transport)
 

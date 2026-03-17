@@ -88,6 +88,7 @@ async def run_proxy(args) -> None:
     try:
         proxy = AWSMCPProxy(
             client_factory=client_factory,
+            credential_provider=credential_provider,
             name='MCP Proxy for AWS',
             instructions=(
                 'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '

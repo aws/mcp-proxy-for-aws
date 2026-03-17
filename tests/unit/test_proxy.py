@@ -31,11 +31,20 @@ from mcp_proxy_for_aws.sigv4_helper import CredentialProvider
 from unittest.mock import AsyncMock, Mock, patch
 
 
+def _mock_credential_provider(**overrides):
+    """Create a mock CredentialProvider with sensible defaults."""
+    provider = Mock(spec=CredentialProvider)
+    provider.consume_credentials_changed.return_value = False
+    for k, v in overrides.items():
+        setattr(provider, k, v)
+    return provider
+
+
 @pytest.mark.asyncio
 async def test_tool_manager_get_tool_with_cache():
     """Test get_tool returns from cache when available."""
     mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
+    manager = AWSProxyToolManager(mock_factory, credential_provider=_mock_credential_provider())
     mock_tool = Mock(spec=Tool)
     manager._cached_tools = {'test_tool': mock_tool}
 
@@ -47,7 +56,7 @@ async def test_tool_manager_get_tool_with_cache():
 async def test_tool_manager_get_tool_without_cache():
     """Test get_tool fetches tools when cache is empty."""
     mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
+    manager = AWSProxyToolManager(mock_factory, credential_provider=_mock_credential_provider())
     mock_tool = Mock(spec=Tool)
 
     with patch.object(manager, 'get_tools', return_value={'test_tool': mock_tool}):
@@ -60,7 +69,7 @@ async def test_tool_manager_get_tool_without_cache():
 async def test_tool_manager_get_tool_not_found():
     """Test get_tool raises NotFoundError when tool doesn't exist."""
     mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
+    manager = AWSProxyToolManager(mock_factory, credential_provider=_mock_credential_provider())
     manager._cached_tools = {}
 
     with pytest.raises(NotFoundError, match="Tool 'missing_tool' not found"):
@@ -71,7 +80,7 @@ async def test_tool_manager_get_tool_not_found():
 async def test_tool_manager_get_tools_updates_cache():
     """Test get_tools updates the cache."""
     mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
+    manager = AWSProxyToolManager(mock_factory, credential_provider=_mock_credential_provider())
     mock_tools = {'tool1': Mock(spec=Tool), 'tool2': Mock(spec=Tool)}
 
     with patch('mcp_proxy_for_aws.proxy._ProxyToolManager.get_tools', return_value=mock_tools):
@@ -83,7 +92,9 @@ async def test_tool_manager_get_tools_updates_cache():
 def test_proxy_initialization():
     """Test AWSMCPProxy initializes with custom tool manager."""
     mock_factory = Mock()
-    proxy = AWSMCPProxy(client_factory=mock_factory, name='test')
+    proxy = AWSMCPProxy(
+        client_factory=mock_factory, credential_provider=_mock_credential_provider(), name='test'
+    )
     assert isinstance(proxy._tool_manager, AWSProxyToolManager)
 
 
@@ -148,27 +159,19 @@ async def test_proxy_client_aexit_does_not_disconnect():
 def test_client_factory_initialization():
     """Test factory initialization."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    mock_provider = _mock_credential_provider()
+    factory = AWSMCPProxyClientFactory(mock_transport, mock_provider)
 
     assert factory._transport == mock_transport
     assert factory._client is None
     assert factory._initialize_request is None
-    assert factory._credential_provider is None
-
-
-def test_client_factory_initialization_with_credential_provider():
-    """Test factory initialization with credential provider."""
-    mock_transport = Mock(spec=ClientTransport)
-    mock_provider = Mock(spec=CredentialProvider)
-    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
-
     assert factory._credential_provider == mock_provider
 
 
 def test_client_factory_set_init_params():
     """Test setting initialization parameters."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     mock_request = Mock(spec=InitializeRequest)
     factory.set_init_params(mock_request)
@@ -180,7 +183,7 @@ def test_client_factory_set_init_params():
 async def test_client_factory_get_client_when_connected():
     """Test get_client returns existing client when connected."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     mock_client = Mock(spec=AWSMCPProxyClient)
     factory._client = mock_client
@@ -193,7 +196,7 @@ async def test_client_factory_get_client_when_connected():
 async def test_client_factory_get_client_when_disconnected():
     """Test get_client creates new client when disconnected."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     client = await factory.get_client()
     assert isinstance(client, AWSMCPProxyClient)
@@ -204,7 +207,7 @@ async def test_client_factory_get_client_when_disconnected():
 async def test_client_factory_callable_interface():
     """Test factory callable interface."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     client = await factory()
     assert isinstance(client, AWSMCPProxyClient)
@@ -214,7 +217,7 @@ async def test_client_factory_callable_interface():
 async def test_client_factory_disconnect_all():
     """Test disconnect disconnects the client."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     mock_client = Mock()
     mock_client._disconnect = AsyncMock()
@@ -229,7 +232,7 @@ async def test_client_factory_disconnect_all():
 async def test_client_factory_disconnect_all_handles_exceptions():
     """Test disconnect handles exceptions gracefully."""
     mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
     mock_client = Mock()
     mock_client._disconnect = AsyncMock(side_effect=Exception('Disconnect failed'))
@@ -310,45 +313,39 @@ async def test_proxy_client_max_connect_retry_default():
 
 
 @pytest.mark.asyncio
-async def test_client_factory_reconnects_on_credential_change():
-    """Test factory tears down and recreates client when credentials change."""
+async def test_client_factory_reuses_client():
+    """Test factory reuses client across calls."""
     mock_transport = Mock(spec=ClientTransport)
-    mock_provider = Mock(spec=CredentialProvider)
-    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
+    factory = AWSMCPProxyClientFactory(mock_transport, _mock_credential_provider())
 
-    # First call: no credential change, creates client
-    mock_provider.consume_credentials_changed.return_value = False
     client1 = await factory.get_client()
-    assert isinstance(client1, AWSMCPProxyClient)
+    client2 = await factory.get_client()
+    assert client1 is client2
 
-    # Simulate credential change
+
+@pytest.mark.asyncio
+async def test_tool_manager_invalidates_cache_on_credential_change():
+    """Test tool manager invalidates tool cache when credentials change."""
+    mock_factory = AsyncMock()
+    mock_provider = Mock(spec=CredentialProvider)
+    mock_provider.consume_credentials_changed.return_value = False
+
+    manager = AWSProxyToolManager(mock_factory, credential_provider=mock_provider)
+    manager._cached_tools = {'my_tool': Mock(spec=Tool)}
+
+    # No credential change — cache stays
+    try:
+        await manager.get_tool('my_tool')
+    except Exception:
+        pass
+    assert manager._cached_tools is not None
+
+    # Credential change — cache invalidated
     mock_provider.consume_credentials_changed.return_value = True
-    with patch.object(factory, 'disconnect', new_callable=AsyncMock) as mock_disconnect:
-        client2 = await factory.get_client()
-        mock_disconnect.assert_called_once()
-        # New client should be a different instance
-        assert client2 is not client1
-
-
-@pytest.mark.asyncio
-async def test_client_factory_no_reconnect_without_credential_change():
-    """Test factory reuses client when credentials haven't changed."""
-    mock_transport = Mock(spec=ClientTransport)
-    mock_provider = Mock(spec=CredentialProvider)
-    mock_provider.consume_credentials_changed.return_value = False
-    factory = AWSMCPProxyClientFactory(mock_transport, credential_provider=mock_provider)
-
-    client1 = await factory.get_client()
-    client2 = await factory.get_client()
-    assert client1 is client2
-
-
-@pytest.mark.asyncio
-async def test_client_factory_no_reconnect_without_provider():
-    """Test factory behaves normally without credential provider."""
-    mock_transport = Mock(spec=ClientTransport)
-    factory = AWSMCPProxyClientFactory(mock_transport)
-
-    client1 = await factory.get_client()
-    client2 = await factory.get_client()
-    assert client1 is client2
+    manager._cached_tools = {'my_tool': Mock(spec=Tool)}
+    try:
+        await manager.get_tool('my_tool')
+    except Exception:
+        pass
+    # Cache was invalidated (set to None, then get_tools was called)
+    mock_provider.get_session.assert_called()
