@@ -222,10 +222,6 @@ def create_sigv4_client(
     Returns:
         httpx.AsyncClient with SigV4 authentication
     """
-    # Create or use provided AWS session
-    if session is None and credential_provider is None:
-        session = create_aws_session(profile)
-
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': True,
@@ -247,11 +243,12 @@ def create_sigv4_client(
     logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
 
     # Use credential_provider for signing if available, otherwise fall back to fixed session
-    sign_hook = (
-        partial(_sign_request_hook_with_provider, region, service, credential_provider)
-        if credential_provider
-        else partial(_sign_request_hook, region, service, session)
-    )
+    if credential_provider:
+        sign_hook = partial(_sign_request_hook_with_provider, region, service, credential_provider)
+    else:
+        if session is None:
+            session = create_aws_session(profile)
+        sign_hook = partial(_sign_request_hook, region, service, session)
 
     return httpx.AsyncClient(
         **client_kwargs,
