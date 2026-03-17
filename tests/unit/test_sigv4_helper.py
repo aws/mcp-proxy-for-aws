@@ -21,7 +21,6 @@ from mcp_proxy_for_aws.sigv4_helper import (
     CredentialProvider,
     SigV4HTTPXAuth,
     _sanitize_headers,
-    _sign_request_hook,
     _sign_request_hook_with_provider,
     create_aws_session,
     create_sigv4_client,
