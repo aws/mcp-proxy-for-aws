@@ -88,9 +88,9 @@ def create_transport_with_sigv4(
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
     """
-    # Create AWS session once and reuse it for all httpx clients
-    logger.debug('Creating AWS session with profile: %s', profile)
-    session = create_aws_session(profile)
+    # Validate credentials are available at startup (fail-fast)
+    logger.debug('Validating AWS credentials with profile: %s', profile)
+    create_aws_session(profile)
 
     def client_factory(
         headers: Optional[Dict[str, str]] = None,
@@ -100,7 +100,7 @@ def create_transport_with_sigv4(
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
             service=service,
-            session=session,
+            profile=profile,
             region=region,
             headers=headers,
             timeout=custom_timeout,

@@ -23,7 +23,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     _inject_metadata_hook,
     _sign_request_hook,
 )
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 
 def create_request_with_sigv4_headers(
@@ -379,10 +379,12 @@ class TestSignRequestHook:
     """Test cases for sign_request_hook function."""
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_signs_request(self):
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_sign_request_hook_signs_request(self, mock_create_session):
         """Test that sign_request_hook properly signs requests."""
         # Setup mocks
         mock_session = create_mock_session()
+        mock_create_session.return_value = mock_session
 
         region = 'us-east-1'
         service = 'bedrock-agentcore'
@@ -391,8 +393,11 @@ class TestSignRequestHook:
         request_body = json.dumps({'test': 'data'}).encode('utf-8')
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        # Call the hook
-        await _sign_request_hook(region, service, mock_session, request)
+        # Call the hook with profile instead of session
+        await _sign_request_hook(region, service, None, request)
+
+        # Verify a fresh session was created
+        mock_create_session.assert_called_once_with(None)
 
         # Verify signature headers were added
         assert 'authorization' in request.headers
@@ -401,10 +406,12 @@ class TestSignRequestHook:
         assert request.headers['content-length'] == str(len(request_body))
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_with_profile(self):
-        """Test that sign_request_hook uses session when provided."""
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_sign_request_hook_with_profile(self, mock_create_session):
+        """Test that sign_request_hook creates session with the given profile."""
         # Setup mocks
         mock_session = create_mock_session()
+        mock_create_session.return_value = mock_session
 
         region = 'us-west-2'
         service = 'execute-api'
@@ -412,18 +419,23 @@ class TestSignRequestHook:
         request_body = b'test content'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        # Call the hook
-        await _sign_request_hook(region, service, mock_session, request)
+        # Call the hook with a profile
+        await _sign_request_hook(region, service, 'test-profile', request)
+
+        # Verify session was created with the profile
+        mock_create_session.assert_called_once_with('test-profile')
 
         # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_sets_content_length(self):
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_sign_request_hook_sets_content_length(self, mock_create_session):
         """Test that sign_request_hook sets Content-Length header."""
         # Setup mocks
         mock_session = create_mock_session()
+        mock_create_session.return_value = mock_session
 
         region = 'eu-west-1'
         service = 'lambda'
@@ -432,22 +444,25 @@ class TestSignRequestHook:
         request_body = b'test content with specific length'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _sign_request_hook(region, service, mock_session, request)
+        await _sign_request_hook(region, service, None, request)
 
         # Verify Content-Length was set correctly
         assert request.headers['content-length'] == str(len(request_body))
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_with_partial_application(self):
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_sign_request_hook_with_partial_application(self, mock_create_session):
         """Test that sign_request_hook works with functools.partial."""
         # Setup mocks
         mock_session = create_mock_session()
+        mock_create_session.return_value = mock_session
 
         region = 'ap-southeast-1'
         service = 'execute-api'
+        profile = 'my-profile'
 
-        # Create curried function using partial
-        curried_hook = partial(_sign_request_hook, region, service, mock_session)
+        # Create curried function using partial (as done in create_sigv4_client)
+        curried_hook = partial(_sign_request_hook, region, service, profile)
 
         request_body = b'request data'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -455,6 +470,36 @@ class TestSignRequestHook:
         # Call the curried function (only needs request parameter)
         await curried_hook(request)
 
+        # Verify session was created with the profile
+        mock_create_session.assert_called_once_with(profile)
+
         # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_sign_request_hook_creates_fresh_session_each_call(self, mock_create_session):
+        """Test that sign_request_hook creates a new session on each invocation.
+
+        This ensures credentials are dynamically resolved rather than cached.
+        """
+        mock_session = create_mock_session()
+        mock_create_session.return_value = mock_session
+
+        region = 'us-east-1'
+        service = 'bedrock-agentcore'
+        profile = 'my-profile'
+
+        request_body = b'test data'
+
+        # Call the hook twice
+        request1 = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        await _sign_request_hook(region, service, profile, request1)
+
+        request2 = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        await _sign_request_hook(region, service, profile, request2)
+
+        # Verify create_aws_session was called twice (once per request)
+        assert mock_create_session.call_count == 2
+        mock_create_session.assert_called_with(profile)

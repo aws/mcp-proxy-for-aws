@@ -138,18 +138,20 @@ def create_sigv4_client(
     region: str,
     timeout: Optional[httpx.Timeout] = None,
     profile: Optional[str] = None,
-    session: Optional[boto3.Session] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
 
+    Credentials are resolved dynamically on each request via the signing hook,
+    so they automatically refresh when the underlying credential source changes
+    (e.g., SSO token refresh, instance profile rotation).
+
     Args:
         service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional, only used if session is not provided)
-        session: AWS boto3 session to use (optional, takes precedence over profile)
-        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
+        profile: AWS profile to use (optional)
+        region: AWS region for SigV4 signing
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
@@ -158,9 +160,6 @@ def create_sigv4_client(
     Returns:
         httpx.AsyncClient with SigV4 authentication
     """
-    # Create or use provided AWS session
-    if session is None:
-        session = create_aws_session(profile)
 
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
@@ -188,7 +187,7 @@ def create_sigv4_client(
             'response': [_handle_error_response],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                partial(_sign_request_hook, region, service, session),
+                partial(_sign_request_hook, region, service, profile),
             ],
         },
     )
@@ -254,25 +253,30 @@ async def _handle_error_response(response: httpx.Response) -> None:
 async def _sign_request_hook(
     region: str,
     service: str,
-    session: boto3.Session,
+    profile: Optional[str],
     request: httpx.Request,
 ) -> None:
     """Request hook to sign HTTP requests with AWS SigV4.
 
     This hook signs the request with AWS SigV4 credentials and adds signature headers.
+    A fresh boto3 session is created on each request to ensure credentials are
+    dynamically resolved from the credential chain (SSO, assume-role, instance
+    profile, environment variables, etc.) rather than using stale cached values.
 
     This should be the last hook called to ensure the signature includes any modifications.
 
     Args:
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
-        session: AWS boto3 session to use for credentials
+        profile: AWS profile name (optional) for session creation
         request: The HTTP request object to sign (modified in-place)
     """
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
 
-    # Get AWS credentials from the session
+    # Create a fresh session per request so that credentials are re-resolved
+    # from the credential chain (e.g. refreshed SSO tokens, rotated keys).
+    session = create_aws_session(profile)
     credentials = session.get_credentials()
     logger.debug(
         'Signing request with credentials for access key: %s...%s',

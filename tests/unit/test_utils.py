@@ -137,7 +137,7 @@ class TestCreateTransportWithSigv4:
             url, service, region, metadata, custom_timeout, profile
         )
 
-        # Verify session was created with profile
+        # Verify session was created with profile for validation
         mock_create_session.assert_called_once_with(profile)
 
         # Verify result is StreamableHttpTransport
@@ -153,7 +153,7 @@ class TestCreateTransportWithSigv4:
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                profile=profile,
                 region=region,
                 headers={'test': 'header'},
                 timeout=custom_timeout,
@@ -183,7 +183,7 @@ class TestCreateTransportWithSigv4:
 
         result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
 
-        # Verify session was created without profile
+        # Verify session was created without profile for validation
         mock_create_session.assert_called_once_with(None)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
@@ -194,7 +194,7 @@ class TestCreateTransportWithSigv4:
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                profile=None,
                 region=region,
                 headers=None,
                 timeout=custom_timeout,
