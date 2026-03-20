@@ -16,7 +16,9 @@
 
 from importlib.metadata import version as _metadata_version
 
-import mcp_proxy_for_aws.fastmcp_patch as _fastmcp_patch
+from mcp_proxy_for_aws.transport_patch import apply_transport_401_patch as _apply_transport_patch
+
+_apply_transport_patch()
 
 
 __all__ = ['__version__']

@@ -27,6 +27,22 @@ from typing import Any, Dict, Generator, Optional
 
 logger = logging.getLogger(__name__)
 
+
+class UpstreamAuthenticationError(Exception):
+    """Raised when upstream MCP server returns 401 with WWW-Authenticate header.
+
+    This exception is raised in the httpx response event hook BEFORE the MCP SDK's
+    transport can call raise_for_status(), preventing the transport task from crashing
+    and the session from hanging.
+    """
+
+    def __init__(self, status_code: int, www_authenticate: str, body: str = ""):
+        self.status_code = status_code
+        self.www_authenticate = www_authenticate
+        self.body = body
+        super().__init__(f"HTTP {status_code}: WWW-Authenticate: {www_authenticate}")
+
+
 # Headers that should be redacted when logging to prevent credential exposure
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})
 
@@ -184,13 +200,20 @@ async def _handle_error_response(response: httpx.Response) -> None:
     This function is called for every HTTP response to check for errors
     and provide more detailed error information when requests fail.
 
+    For 401 responses, logs a warning with the WWW-Authenticate header value.
+    The actual 401→JSON-RPC conversion is handled by the transport monkey-patch
+    in transport_patch.py.
+
     Args:
         response: The HTTP response object
-
-    Raises:
-        No raises. let the mcp http client handle the errors.
     """
     if response.is_error:
+        if response.status_code == 401:
+            www_auth = response.headers.get('www-authenticate', '')
+            logger.warning('HTTP 401 from upstream. WWW-Authenticate: %s', www_auth)
+            # Don't raise — let the monkey-patched transport handle it
+            # by converting 401 to a JSON-RPC error response.
+
         # warning only because the SDK logs error
         log_level = logging.WARNING
         if (

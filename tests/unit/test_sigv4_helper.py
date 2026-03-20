@@ -19,6 +19,7 @@ import pytest
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
     SigV4HTTPXAuth,
+    UpstreamAuthenticationError,
     _sanitize_headers,
     create_aws_session,
     create_sigv4_client,
@@ -330,3 +331,46 @@ class TestSanitizeHeaders:
         assert 'authorization' in SENSITIVE_HEADERS
         assert 'x-amz-security-token' in SENSITIVE_HEADERS
         assert 'x-amz-date' in SENSITIVE_HEADERS
+
+
+class TestUpstreamAuthenticationError:
+    """Test cases for the UpstreamAuthenticationError exception class."""
+
+    def test_basic_construction(self):
+        """Test creating an UpstreamAuthenticationError with all fields."""
+        error = UpstreamAuthenticationError(
+            status_code=401,
+            www_authenticate='Bearer scope="aws.sigv4"',
+            body='Unauthorized',
+        )
+        assert error.status_code == 401
+        assert error.www_authenticate == 'Bearer scope="aws.sigv4"'
+        assert error.body == 'Unauthorized'
+        assert 'HTTP 401' in str(error)
+        assert 'Bearer scope="aws.sigv4"' in str(error)
+
+    def test_construction_without_body(self):
+        """Test creating error without body defaults to empty string."""
+        error = UpstreamAuthenticationError(
+            status_code=401,
+            www_authenticate='Bearer',
+        )
+        assert error.body == ""
+
+    def test_is_exception(self):
+        """Test that UpstreamAuthenticationError is a proper Exception."""
+        error = UpstreamAuthenticationError(401, 'Bearer')
+        assert isinstance(error, Exception)
+
+    def test_can_be_raised_and_caught(self):
+        """Test that it can be raised and caught as Exception."""
+        with pytest.raises(UpstreamAuthenticationError) as exc_info:
+            raise UpstreamAuthenticationError(401, 'Bearer realm="test"', 'body')
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.www_authenticate == 'Bearer realm="test"'
+
+    def test_empty_www_authenticate(self):
+        """Test creating error with empty WWW-Authenticate."""
+        error = UpstreamAuthenticationError(401, '')
+        assert error.www_authenticate == ''
+        assert 'HTTP 401' in str(error)

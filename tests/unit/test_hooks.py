@@ -148,6 +148,41 @@ class TestHandleErrorResponse:
         # Verify response was read despite invalid JSON
         assert response.is_stream_consumed
 
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_401_logs_warning_no_raise(self):
+        """Test that 401 responses log a warning but don't raise.
+
+        The transport monkey-patch handles 401→JSON-RPC conversion; the event
+        hook just logs and lets the response flow through.
+        """
+        request = httpx.Request('POST', 'https://example.com/mcp')
+        response = httpx.Response(
+            status_code=401,
+            headers={
+                'content-type': 'text/plain',
+                'www-authenticate': 'Bearer resource_metadata="/.well-known/oauth-protected-resource", scope="aws.sigv4"',
+            },
+            content=b'Unauthorized',
+            request=request,
+        )
+
+        # Should NOT raise — just log and return
+        await _handle_error_response(response)
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_with_401_no_www_authenticate(self):
+        """Test that 401 responses without WWW-Authenticate don't raise."""
+        request = httpx.Request('POST', 'https://example.com/mcp')
+        response = httpx.Response(
+            status_code=401,
+            headers={'content-type': 'text/plain'},
+            content=b'Unauthorized',
+            request=request,
+        )
+
+        # Should NOT raise
+        await _handle_error_response(response)
+
 
 class TestMetadataInjectionHook:
     """Test cases for _inject_metadata_hook function."""

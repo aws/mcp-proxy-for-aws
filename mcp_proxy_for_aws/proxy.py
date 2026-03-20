@@ -14,16 +14,23 @@
 
 import httpx
 import logging
+from collections.abc import Sequence
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
-from fastmcp.exceptions import NotFoundError
-from fastmcp.server.proxy import ClientFactoryT
-from fastmcp.server.proxy import FastMCPProxy as _FastMCPProxy
-from fastmcp.server.proxy import ProxyClient as _ProxyClient
-from fastmcp.server.proxy import ProxyToolManager as _ProxyToolManager
+from fastmcp.exceptions import ToolError
+from fastmcp.server.context import Context
+from fastmcp.server.providers.proxy import (
+    ClientFactoryT,
+    FastMCPProxy as _FastMCPProxy,
+    ProxyClient as _ProxyClient,
+    ProxyProvider as _ProxyProvider,
+    ProxyTool as _ProxyTool,
+)
 from fastmcp.tools import Tool
+from fastmcp.tools.tool import ToolResult
 from mcp import McpError
-from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
+from mcp.types import ErrorData, InitializeRequest, JSONRPCError, JSONRPCMessage
+from mcp_proxy_for_aws.sigv4_helper import UpstreamAuthenticationError
 from typing import Any
 from typing_extensions import override
 
@@ -31,49 +38,102 @@ from typing_extensions import override
 logger = logging.getLogger(__name__)
 
 
-class AWSProxyToolManager(_ProxyToolManager):
-    """Customized proxy tool manager that better suites our needs."""
+class AWSProxyTool(_ProxyTool):
+    """ProxyTool that converts upstream 401 errors to ToolError.
 
-    def __init__(self, client_factory: ClientFactoryT, **kwargs: Any):
-        """Initialize a proxy tool manager.
-
-        Cached tools are set to None.
-        """
-        super().__init__(client_factory, **kwargs)
-        self._cached_tools: dict[str, Tool] | None = None
+    Catches authentication failures from the upstream server and surfaces
+    them as ToolError with WWW-Authenticate details, preventing 401s from
+    crashing the MCP SDK transport task.
+    """
 
     @override
-    async def get_tool(self, key: str) -> Tool:
-        """Return the tool from cached tools.
+    async def run(
+        self,
+        arguments: dict[str, Any],
+        context: Context | None = None,
+    ) -> ToolResult:
+        """Execute the tool, converting upstream 401 errors to ToolError."""
+        try:
+            return await super().run(arguments, context)
+        except UpstreamAuthenticationError as auth_error:
+            logger.warning('Upstream auth required for tool call: %s', auth_error)
+            raise ToolError(
+                f'Authentication required (HTTP 401). '
+                f'WWW-Authenticate: {auth_error.www_authenticate}'
+            ) from auth_error
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                www_auth = e.response.headers.get('www-authenticate', '')
+                raise ToolError(
+                    f'Authentication required (HTTP 401). WWW-Authenticate: {www_auth}'
+                ) from e
+            raise
+        except McpError as e:
+            if (
+                e.error.data
+                and isinstance(e.error.data, dict)
+                and e.error.data.get('status_code') == 401
+            ):
+                www_auth = e.error.data.get('www_authenticate', '')
+                raise ToolError(
+                    f'Authentication required (HTTP 401). WWW-Authenticate: {www_auth}'
+                ) from e
+            raise
+        except ToolError:
+            raise
+        except Exception as e:
+            # Check if the root cause was an auth error wrapped by anyio or MCP session
+            cause = e.__cause__ or e.__context__
+            while cause:
+                if isinstance(cause, UpstreamAuthenticationError):
+                    raise ToolError(
+                        f'Authentication required (HTTP 401). '
+                        f'WWW-Authenticate: {cause.www_authenticate}'
+                    ) from cause
+                cause = getattr(cause, '__cause__', None) or getattr(cause, '__context__', None)
+            raise
 
-        This method is invoked when the client tries to call a tool.
 
-            tool = self.get_tool(key)
-            tool.invoke(...)
+class AWSProxyProvider(_ProxyProvider):
+    """ProxyProvider with tool caching and custom ProxyTool type.
 
-        The parent class implementation always make a mcp call to list the tools.
-        Since the client already knows the name of the tools, list_tool is not necessary.
-        We are wasting a network call just to get the tools which were already listed.
+    Caches tool listings so that subsequent get_tool lookups (during tool
+    invocation) don't redundantly re-list from the remote server.
+    Uses AWSProxyTool instead of ProxyTool for 401 error handling.
+    """
 
-        In case the server supports notifications/tools/listChanged, the `get_tools` method
-        will be called explicity , hence, we are not missing the change to the tool list.
-        """
-        if self._cached_tools is None:
-            logger.debug('cached_tools not found, calling get_tools')
-            self._cached_tools = await self.get_tools()
-        if key in self._cached_tools:
-            return self._cached_tools[key]
-        raise NotFoundError(f'Tool {key!r} not found')
+    def __init__(self, client_factory: ClientFactoryT):
+        """Initialize the provider."""
+        super().__init__(client_factory)
+        self._cached_tools: Sequence[Tool] | None = None
 
     @override
-    async def get_tools(self) -> dict[str, Tool]:
-        """Return list tools."""
-        self._cached_tools = await super(AWSProxyToolManager, self).get_tools()
-        return self._cached_tools
+    async def _list_tools(self) -> Sequence[Tool]:
+        """List tools from the remote server, using AWSProxyTool for 401 handling."""
+        from mcp.shared.exceptions import McpError
+        from mcp.types import METHOD_NOT_FOUND
+
+        try:
+            client = await self._get_client()
+            async with client:
+                mcp_tools = await client.list_tools()
+                tools = [
+                    AWSProxyTool.from_mcp_tool(self.client_factory, t) for t in mcp_tools
+                ]
+                self._cached_tools = tools
+                return tools
+        except McpError as e:
+            if e.error.code == METHOD_NOT_FOUND:
+                return []
+            raise
+
+    def invalidate_cache(self) -> None:
+        """Invalidate the cached tools, forcing a re-list on next access."""
+        self._cached_tools = None
 
 
 class AWSMCPProxy(_FastMCPProxy):
-    """Customized MCP Proxy to better suite our needs."""
+    """Customized MCP Proxy using AWSProxyProvider for 401 handling and caching."""
 
     def __init__(
         self,
@@ -81,19 +141,20 @@ class AWSMCPProxy(_FastMCPProxy):
         client_factory: ClientFactoryT | None = None,
         **kwargs,
     ):
-        """Initialize a client."""
-        super().__init__(client_factory=client_factory, **kwargs)
-        self._tool_manager = AWSProxyToolManager(
-            client_factory=self.client_factory,
-            transformations=self._tool_manager.transformations,
-        )
+        """Initialize the proxy with AWSProxyProvider instead of the default ProxyProvider."""
+        # Call FastMCP.__init__ directly (skip _FastMCPProxy which adds a default ProxyProvider)
+        from fastmcp.server.server import FastMCP
+        FastMCP.__init__(self, **kwargs)
+        self.client_factory = client_factory
+        provider = AWSProxyProvider(client_factory)
+        self.add_provider(provider)
 
 
 class AWSMCPProxyClient(_ProxyClient):
     """Proxy client that handles HTTP errors when connection fails."""
 
     def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
-        """Constructor of AutoRefreshProxyCilent."""
+        """Constructor of AWSMCPProxyClient."""
         super().__init__(transport, **kwargs)
         self._max_connect_retry = max_connect_retry
 
@@ -105,9 +166,33 @@ class AWSMCPProxyClient(_ProxyClient):
             result = await super(AWSMCPProxyClient, self)._connect()
             logger.debug('Connected %s', self)
             return result
+        except UpstreamAuthenticationError as auth_error:
+            logger.warning('Upstream auth required during connect: %s', auth_error)
+            raise McpError(
+                error=ErrorData(
+                    code=-32001,
+                    message='Authentication required',
+                    data={
+                        'status_code': auth_error.status_code,
+                        'www_authenticate': auth_error.www_authenticate,
+                    },
+                )
+            ) from auth_error
         except httpx.HTTPStatusError as http_error:
             logger.exception('Connection failed')
             response = http_error.response
+
+            if response.status_code == 401:
+                www_auth = response.headers.get('www-authenticate', '')
+                logger.warning('Upstream returned 401. WWW-Authenticate: %s', www_auth)
+                raise McpError(
+                    error=ErrorData(
+                        code=-32001,
+                        message='Authentication required',
+                        data={'status_code': 401, 'www_authenticate': www_auth},
+                    )
+                ) from http_error
+
             try:
                 body = await response.aread()
                 jsonrpc_msg = JSONRPCMessage.model_validate_json(body).root
@@ -135,7 +220,6 @@ class AWSMCPProxyClient(_ProxyClient):
                 # _disconnect awaits on the session_task,
                 # which raises the timeout error that caused the client session to be terminated.
                 # the error is ignored as long as the counter is force set to 0.
-                # TODO: investigate how timeout error is handled by fastmcp and httpx
                 logger.exception(
                     'Session was terminated due to timeout error, ignore and reconnect'
                 )
