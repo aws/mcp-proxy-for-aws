@@ -159,4 +159,13 @@ Examples:
         help='Write timeout (seconds) when connecting to endpoint (default: 180)',
     )
 
+    parser.add_argument(
+        '--allow-switch-profile',
+        nargs='+',
+        default=None,
+        metavar='PROFILE',
+        help='Enable the switch_profile tool and restrict it to the specified AWS CLI profile names '
+        '(e.g., --allow-switch-profile dev-profile staging-profile)',
+    )
+
     return parser.parse_args()
