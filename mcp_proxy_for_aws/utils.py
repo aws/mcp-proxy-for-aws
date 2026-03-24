@@ -96,7 +96,6 @@ def create_transport_with_sigv4(
         headers: Optional[Dict[str, str]] = None,
         timeout: Optional[httpx.Timeout] = None,
         auth: Optional[httpx.Auth] = None,
-        **kw,
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
             service=service,
@@ -106,7 +105,6 @@ def create_transport_with_sigv4(
             timeout=custom_timeout,
             metadata=metadata,
             auth=auth,
-            **kw,
         )
 
     return StreamableHttpTransport(

@@ -78,7 +78,7 @@ class AWSMCPProxy(_FastMCPProxy):
     def __init__(
         self,
         *,
-        client_factory: ClientFactoryT,
+        client_factory: ClientFactoryT | None = None,
         **kwargs,
     ):
         """Initialize a client."""
