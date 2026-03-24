@@ -33,6 +33,7 @@ from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
+from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
@@ -88,6 +89,7 @@ async def run_proxy(args) -> None:
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
+    profile_middleware: ProfileOverrideMiddleware | None = None
     try:
         proxy = FastMCPProxy(
             client_factory=client_factory,
@@ -103,6 +105,18 @@ async def run_proxy(args) -> None:
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
+        allowed_profiles = getattr(args, 'allow_switch_profile', None)
+        if isinstance(allowed_profiles, list) and allowed_profiles:
+            profile_middleware = ProfileOverrideMiddleware(
+                allowed_profiles=allowed_profiles,
+                service=service,
+                region=region,
+                metadata=metadata,
+                timeout=timeout,
+                endpoint=args.endpoint,
+            )
+            proxy.add_middleware(profile_middleware)
+
         if args.retries:
             add_retry_middleware(proxy, args.retries)
         await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
@@ -110,6 +124,8 @@ async def run_proxy(args) -> None:
         logger.error('Cannot start proxy server: %s', e)
         raise e
     finally:
+        if profile_middleware:
+            await profile_middleware.disconnect_profile_clients()
         await client_factory.disconnect()
 
 
