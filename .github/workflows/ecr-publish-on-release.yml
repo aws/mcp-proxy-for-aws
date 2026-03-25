@@ -15,12 +15,12 @@ jobs:
       version: ${{ steps.get-package-version.outputs.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
       - name: Get version from package
         id: get-package-version
@@ -58,7 +58,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Generate CycloneDX SBOM with Syft
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           image: mcp-proxy-for-aws:${{ steps.get-package-version.outputs.version }}
           format: cyclonedx-json
@@ -75,7 +75,7 @@ jobs:
           cyclonedx convert --input-file sbom.cyclonedx.json --input-format json --output-format csv --output-file SBOM-${{ steps.get-package-version.outputs.version }}.csv
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sbom-${{ steps.get-package-version.outputs.version }}
           path: SBOM-${{ steps.get-package-version.outputs.version }}.csv
@@ -92,7 +92,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
 
