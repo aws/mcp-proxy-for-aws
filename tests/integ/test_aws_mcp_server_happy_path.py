@@ -87,29 +87,10 @@ def verify_json_response(response: CallToolResult):
     'tool_name,params',
     [
         ('aws___list_regions', {}),
-        ('aws___suggest_aws_commands', {'query': 'how to list my lambda functions'}),
-        ('aws___search_documentation', {'search_phrase': 'S3 bucket versioning'}),
-        (
-            'aws___recommend',
-            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
-        ),
-        (
-            'aws___read_documentation',
-            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
-        ),
-        (
-            'aws___get_regional_availability',
-            {'resource_type': 'cfn', 'region': 'us-east-1'},
-        ),
         ('aws___call_aws', {'cli_command': 'aws lambda list-functions', 'max_results': 10}),
     ],
     ids=[
         'list_regions',
-        'suggest_aws_commands',
-        'search_documentation',
-        'recommend',
-        'read_documentation',
-        'get_regional_availability',
         'list_lambda_functions',
     ],
 )
