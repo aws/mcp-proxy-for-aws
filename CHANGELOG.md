@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.2.0 (2026-04-01)
+
+### Feat
+
+- build and publish container image (#126)
+
+### Fix
+
+- retrieve_agent_sop test (#197)
+- **security**: Add URL scheme validation to prevent credential interception (#169)
+- replace failing integ test (#178)
+- **security**: prevent credential exposure in logs (#167)
+
 ## v1.1.6 (2026-01-29)
 
 Include MCP ownership information in package README to be used for MCP registry owner verification.
