@@ -76,6 +76,7 @@ jobs:
   trigger-ecr-publish:
     needs: [build, deploy]
     permissions:
+      id-token: write
       contents: read
     uses: ./.github/workflows/ecr-publish-on-release.yml
     secrets: inherit
