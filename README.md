@@ -108,6 +108,7 @@ docker build -t mcp-proxy-for-aws .
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
+| `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
 
 ### Optional Environment Variables
 
