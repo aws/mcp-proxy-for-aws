@@ -17,6 +17,7 @@
 import httpx
 import pytest
 from httpx import __version__ as httpx_version
+from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
@@ -123,9 +124,12 @@ class TestCreateAwsSession:
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_default(
+        self, mock_client_class, mock_create_session, mock_get_client_info
+    ):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -148,9 +152,12 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers']['User-Agent'] == expected_user_agent
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_custom_headers(
+        self, mock_client_class, mock_create_session, mock_get_client_info
+    ):
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -220,9 +227,12 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_prompt_context(
+        self, mock_client_class, mock_create_session, mock_get_client_info
+    ):
         """Test creating SigV4 client when prompts exist in the system context.
 
         This test simulates the scenario where the sigv4_helper is used in a context
@@ -261,6 +271,54 @@ class TestCreateSigv4Client:
         assert 'response' in call_args[1]['event_hooks']
         assert len(call_args[1]['event_hooks']['response']) == 1
 
+        assert result == mock_client
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_user_agent_excludes_client_info_when_telemetry_disabled(
+        self, mock_client_class, mock_create_session, mock_get_client_info
+    ):
+        """Test that User-Agent omits client info when disable_telemetry is True."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+
+        result = create_sigv4_client(
+            service='test-service', region='test-region', disable_telemetry=True
+        )
+
+        call_args = mock_client_class.call_args
+        user_agent = call_args[1]['headers']['User-Agent']
+        assert 'python-httpx' in user_agent
+        assert 'mcp-proxy-for-aws' in user_agent
+        assert 'my-client' not in user_agent
+        assert result == mock_client
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_user_agent_includes_client_info_when_telemetry_enabled(
+        self, mock_client_class, mock_create_session, mock_get_client_info
+    ):
+        """Test that User-Agent includes client info when disable_telemetry is False."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_session = Mock()
+        mock_create_session.return_value = mock_session
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+
+        result = create_sigv4_client(
+            service='test-service', region='test-region', disable_telemetry=False
+        )
+
+        call_args = mock_client_class.call_args
+        user_agent = call_args[1]['headers']['User-Agent']
+        assert 'python-httpx' in user_agent
+        assert 'mcp-proxy-for-aws' in user_agent
+        assert 'my-client/2.0' in user_agent
         assert result == mock_client
 
 

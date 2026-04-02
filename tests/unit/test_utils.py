@@ -159,6 +159,7 @@ class TestCreateTransportWithSigv4:
                 timeout=custom_timeout,
                 auth=None,
                 metadata=metadata,
+                disable_telemetry=False,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -200,6 +201,7 @@ class TestCreateTransportWithSigv4:
                 timeout=custom_timeout,
                 auth=None,
                 metadata=metadata,
+                disable_telemetry=False,
             )
         else:
             # If we can't access the factory directly, just verify the transport was created
@@ -237,6 +239,7 @@ class TestCreateTransportWithSigv4:
             timeout=custom_timeout,
             auth=None,
             metadata=metadata,
+            disable_telemetry=False,
             follow_redirects=True,
         )
 
