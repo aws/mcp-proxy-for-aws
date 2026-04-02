@@ -168,4 +168,10 @@ Examples:
         'to the agent instead of hanging (default: 300).',
     )
 
+    parser.add_argument(
+        '--disable-telemetry',
+        action='store_true',
+        help='Disables telemetry data collection',
+    )
+
     return parser.parse_args()

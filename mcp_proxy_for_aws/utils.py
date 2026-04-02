@@ -73,6 +73,7 @@ def create_transport_with_sigv4(
     metadata: Dict[str, Any],
     custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
+    disable_telemetry: bool = False,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -83,6 +84,7 @@ def create_transport_with_sigv4(
         metadata: Metadata dictionary to inject into MCP requests
         custom_timeout: httpx.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
+        disable_telemetry: Whether to disable telemetry
 
 
     Returns:
@@ -105,6 +107,7 @@ def create_transport_with_sigv4(
             headers=headers,
             timeout=custom_timeout,
             metadata=metadata,
+            disable_telemetry=disable_telemetry,
             auth=auth,
             **kw,
         )
