@@ -22,6 +22,8 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import Credentials
 from functools import partial
+from httpx import __version__ as httpx_version
+from mcp_proxy_for_aws import __version__
 from typing import Any, Dict, Generator, Optional
 
 
@@ -154,8 +156,13 @@ def create_sigv4_client(
         **kwargs,
     }
 
+    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+
     # Add headers if provided
-    default_headers = {'Accept': 'application/json, text/event-stream'}
+    default_headers = {
+        'Accept': 'application/json, text/event-stream',
+        'User-Agent': user_agent,
+    }
     if headers is not None:
         default_headers.update(headers)
     client_kwargs['headers'] = default_headers
