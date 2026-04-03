@@ -32,6 +32,7 @@ from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
+from mcp_proxy_for_aws.middleware.tool_timeout_middleware import ToolTimeoutMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxy, AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
@@ -95,6 +96,7 @@ async def run_proxy(args) -> None:
             ),
         )
         proxy.add_middleware(InitializeMiddleware(client_factory))
+        add_tool_timeout_middleware(proxy, args.tool_timeout)
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
@@ -106,6 +108,19 @@ async def run_proxy(args) -> None:
         raise e
     finally:
         await client_factory.disconnect()
+
+
+def add_tool_timeout_middleware(mcp: FastMCP, tool_timeout: float | None = None) -> None:
+    """Add tool timeout middleware if a tool timeout is configured.
+
+    Args:
+        mcp: The FastMCP instance to add the middleware to
+        tool_timeout: Maximum seconds a tool call may take. None disables the middleware.
+    """
+    if tool_timeout is None:
+        return
+    logger.info('Adding tool timeout middleware with tool_timeout=%s', tool_timeout)
+    mcp.add_middleware(ToolTimeoutMiddleware(tool_call_timeout=tool_timeout))
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:

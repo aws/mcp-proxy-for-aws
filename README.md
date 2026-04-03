@@ -107,6 +107,7 @@ docker build -t mcp-proxy-for-aws .
 | `--connect-timeout`	 | Set desired connect timeout in seconds	                                                                                                                                                                                                 | 60	                                                                         |No	|
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
+| `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | Not set	                                                                    |No	|
 
 ### Optional Environment Variables
 
@@ -325,12 +326,18 @@ uv sync
 
 ## Troubleshooting
 
-### Handling `Authentication error - Invalid credentials`
+### Authentication errors
 We try to autodetect the service from the url, sometimes this fails, ensure that `--service` is set correctly to the
 service you are attempting to connect to.
 Otherwise the SigV4 signing will not be able to be verified by the service you connect to, resulting in this error.
 Also ensure that you have valid IAM credentials on your machine before retrying.
 
+For long-running sessions, consider using long-lived credentials:
+- Use an AWS profile via `--profile`
+- Use IAM Identity Center and run `aws sso login` before starting the proxy
+
+### Client hangs on tool calls
+If your MCP client hangs waiting for a tool call response (e.g., due to expired credentials or an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
 
 ## Development & Contributing
 

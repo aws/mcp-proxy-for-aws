@@ -159,4 +159,13 @@ Examples:
         help='Write timeout (seconds) when connecting to endpoint (default: 180)',
     )
 
+    parser.add_argument(
+        '--tool-timeout',
+        type=within_range(0),
+        default=None,
+        help='Maximum seconds a tool call may take before being cancelled. '
+        'When set, wraps each tool call with a timeout and returns a graceful error '
+        'to the agent instead of hanging. Not set by default.',
+    )
+
     return parser.parse_args()
