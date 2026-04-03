@@ -16,6 +16,8 @@
 
 import httpx
 import pytest
+from httpx import __version__ as httpx_version
+from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
     SigV4HTTPXAuth,
@@ -142,6 +144,8 @@ class TestCreateSigv4Client:
         assert len(call_args[1]['event_hooks']['response']) == 1
         assert len(call_args[1]['event_hooks']['request']) == 2  # metadata + sign hooks
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
+        expected_user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+        assert call_args[1]['headers']['User-Agent'] == expected_user_agent
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
@@ -163,6 +167,7 @@ class TestCreateSigv4Client:
         call_args = mock_client_class.call_args
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
+            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'Custom-Header': 'custom-value',
         }
         assert call_args[1]['headers'] == expected_headers
@@ -245,6 +250,7 @@ class TestCreateSigv4Client:
         # Verify headers include both default and prompt-context headers
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
+            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'X-MCP-Prompt-Context': 'enabled',
             'Content-Type': 'application/json',
         }
