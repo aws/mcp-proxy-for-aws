@@ -15,7 +15,7 @@
 import logging
 from collections.abc import Awaitable, Callable
 from fastmcp.server.middleware import Middleware, MiddlewareContext
-from fastmcp.tools.tool import Tool
+from fastmcp.tools import Tool
 from typing import Sequence
 
 

@@ -38,16 +38,16 @@ def greet(name: str):
 
 
 @mcp.tool
-def add_tool_multiply(ctx: Context):
+async def add_tool_multiply(ctx: Context):
     """MCP Tool used for testing dynamic tool behavior through the proxy."""
-    if not ctx.get_state('multiply_registered'):
+    if not await ctx.get_state('multiply_registered'):
 
         @mcp.tool
         def multiply(x: int, y: int):
             """Multiply two numbers."""
             return x * y
 
-        ctx.set_state('multiply_registered', True)
+        await ctx.set_state('multiply_registered', True)
         return 'Tool "multiply" added successfully'
     return 'Tool "multiply" already exists'
 
