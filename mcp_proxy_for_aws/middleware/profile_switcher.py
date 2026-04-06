@@ -22,6 +22,7 @@ Each profile gets its own lazily-created ``StreamableHttpTransport`` and MCP ses
 so parallel subagents querying different accounts don't interfere with each other.
 """
 
+import asyncio
 import httpx
 import logging
 import mcp.types as mt
@@ -68,6 +69,7 @@ class ProfileOverrideMiddleware(Middleware):
         self._metadata = metadata
         self._timeout = timeout
         self._profile_clients: dict[str, Client] = {}
+        self._lock = asyncio.Lock()
 
     # ── tool listing ────────────────────────────────────────────────
 
@@ -121,20 +123,21 @@ class ProfileOverrideMiddleware(Middleware):
         so that requests signed with different AWS identities don't collide
         on the same backend session.
         """
-        if profile not in self._profile_clients:
-            logger.info('Creating dedicated connection for profile %s', profile)
-            transport = create_transport_with_sigv4(
-                self._endpoint,
-                self._service,
-                self._region,
-                self._metadata,
-                self._timeout,
-                profile,
-            )
-            client = Client(transport=transport)
-            await client.__aenter__()
-            self._profile_clients[profile] = client
-        return self._profile_clients[profile]
+        async with self._lock:
+            if profile not in self._profile_clients:
+                logger.info('Creating dedicated connection for profile %s', profile)
+                transport = create_transport_with_sigv4(
+                    self._endpoint,
+                    self._service,
+                    self._region,
+                    self._metadata,
+                    self._timeout,
+                    profile,
+                )
+                client = Client(transport=transport)
+                await client.__aenter__()
+                self._profile_clients[profile] = client
+            return self._profile_clients[profile]
 
     async def disconnect_profile_clients(self) -> None:
         """Disconnect all per-profile clients. Call during server shutdown."""
