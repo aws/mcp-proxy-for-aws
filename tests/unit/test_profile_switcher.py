@@ -14,6 +14,7 @@
 
 """Tests for the ProfileOverrideMiddleware."""
 
+import asyncio
 import httpx
 import pytest
 from fastmcp.server.middleware import MiddlewareContext
@@ -204,6 +205,46 @@ class TestPerCallProfileOverride:
 
         assert 'tool call failed' in result.content[0].text
         assert 'backend error' not in result.content[0].text
+
+
+class TestGetProfileClient:
+    """Tests for the _get_profile_client method."""
+
+    @pytest.mark.asyncio
+    async def test_lock_prevents_duplicate_client_creation(self, middleware):
+        """Concurrent calls for the same profile only create one client."""
+        call_count = 0
+        mock_client = AsyncMock()
+
+        original_aenter = mock_client.__aenter__
+
+        async def slow_aenter(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.05)
+            return await original_aenter(*args, **kwargs)
+
+        mock_client.__aenter__ = slow_aenter
+
+        mock_transport = Mock()
+
+        with patch(
+            'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+            return_value=mock_transport,
+        ), patch(
+            'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+            return_value=mock_client,
+        ):
+            results = await asyncio.gather(
+                middleware._get_profile_client('dev-profile'),
+                middleware._get_profile_client('dev-profile'),
+                middleware._get_profile_client('dev-profile'),
+            )
+
+        # All calls return the same client
+        assert all(r is mock_client for r in results)
+        # Client was only created once despite 3 concurrent calls
+        assert call_count == 1
 
 
 class TestDisconnectProfileClients:
