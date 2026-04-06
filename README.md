@@ -247,6 +247,22 @@ Or using a locally built image:
 
 The MCP Proxy for AWS enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
 
+By default, the library resolves AWS credentials automatically from the standard [boto3 credential chain](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html#configuring-credentials) (environment variables, shared credentials file, etc.). You can optionally pass credentials programmatically via the `credentials` parameter. When provided, these take precedence over the `aws_profile` parameter. Note that `aws_region` must be explicitly specified when using `credentials`.
+
+```python
+from botocore.credentials import Credentials
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+creds = Credentials(access_key="...", secret_key="...", token="...")
+
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint=mcp_url,
+    aws_region=region,
+    aws_service=service,
+    credentials=creds,  # Optional: explicitly pass AWS credentials
+)
+```
+
 ### Integration Patterns
 
 The library supports two integration patterns depending on your framework:

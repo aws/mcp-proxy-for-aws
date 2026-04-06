@@ -15,20 +15,17 @@
 """Tests for the main function in server.py."""
 
 from mcp_proxy_for_aws.server import main
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, patch
 
 
 class TestMain:
     """Tests for the main function."""
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
-    @patch('mcp_proxy_for_aws.server.run_proxy')
+    @patch('mcp_proxy_for_aws.server.run_proxy', new_callable=Mock)
     @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
     def test_main_default(self, mock_run_proxy, mock_asyncio_run):
         """Test main function with default arguments."""
-        # Mock run_proxy as async
-        mock_run_proxy.return_value = AsyncMock()
-
         # Mock asyncio.run to avoid actual execution
         mock_asyncio_run.return_value = None
 

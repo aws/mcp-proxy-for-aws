@@ -28,6 +28,7 @@ import logging
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.server import FastMCP
+from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
@@ -91,6 +92,7 @@ async def run_proxy(args) -> None:
         proxy = AWSMCPProxy(
             client_factory=client_factory,
             name='MCP Proxy for AWS',
+            version=__version__,
             instructions=(
                 'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '
                 'This proxy handles authentication and request routing to the appropriate backend services.'

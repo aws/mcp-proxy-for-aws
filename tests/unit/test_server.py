@@ -364,8 +364,9 @@ class TestServer:
         assert args.retries == 5
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.run_proxy', new_callable=Mock)
     @patch('sys.argv', ['test', 'https://test.example.com'])
-    def test_main_function(self, mock_asyncio_run):
+    def test_main_function(self, mock_run_proxy, mock_asyncio_run):
         """Test that main function runs server correctly."""
         # Arrange
         mock_asyncio_run.return_value = None
@@ -377,8 +378,9 @@ class TestServer:
         mock_asyncio_run.assert_called_once()
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.run_proxy', new_callable=Mock)
     @patch('sys.argv', ['test', 'https://test.example.com'])
-    def test_main_error_handling(self, mock_asyncio_run):
+    def test_main_error_handling(self, mock_run_proxy, mock_asyncio_run):
         """Test that main function handles errors gracefully."""
         # Arrange
         mock_asyncio_run.side_effect = Exception('Test error')
