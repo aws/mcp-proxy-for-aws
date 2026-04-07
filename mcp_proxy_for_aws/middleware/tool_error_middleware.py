@@ -43,13 +43,13 @@ class ToolErrorMiddleware(Middleware):
 
     def __init__(
         self,
-        tool_call_timeout: float | None = None,
+        tool_call_timeout: float = 300.0,
     ) -> None:
         """Initialize the middleware.
 
         Args:
             tool_call_timeout: Maximum seconds a tool call may take before being
-                cancelled. None means no timeout (not recommended).
+                cancelled.
         """
         super().__init__()
         self._tool_call_timeout = tool_call_timeout

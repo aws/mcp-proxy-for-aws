@@ -22,11 +22,7 @@ from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 from mcp import McpError
 from mcp.types import ErrorData
-from mcp_proxy_for_aws.middleware.tool_error_middleware import (
-    ToolErrorMiddleware,
-    _FailedToolResult,
-)
-from typing import Optional
+from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from unittest.mock import AsyncMock, Mock
 
 
@@ -41,12 +37,19 @@ def _make_context(tool_name: str = 'test_tool') -> MiddlewareContext[mt.CallTool
     )
 
 
-def _make_middleware(tool_call_timeout: Optional[float] = 5.0) -> ToolErrorMiddleware:
+def _make_middleware(tool_call_timeout: float = 5.0) -> ToolErrorMiddleware:
     """Create a ToolErrorMiddleware with mocked dependencies."""
     middleware = ToolErrorMiddleware(
         tool_call_timeout=tool_call_timeout,
     )
     return middleware
+
+
+def _is_error(result: ToolResult) -> bool:
+    """Check if a ToolResult has the MCP isError flag set."""
+    mcp_result = result.to_mcp_result()
+    assert isinstance(mcp_result, mt.CallToolResult)
+    return bool(mcp_result.isError)
 
 
 def _get_text(result: ToolResult, index: int = 0) -> str:
@@ -70,7 +73,7 @@ class TestToolErrorMiddleware:
         result = await middleware.on_call_tool(context, call_next)
 
         assert result is expected
-        assert not isinstance(result, _FailedToolResult)
+        assert not _is_error(result)
         call_next.assert_awaited_once_with(context)
 
     @pytest.mark.asyncio
@@ -84,7 +87,7 @@ class TestToolErrorMiddleware:
 
         result = await middleware.on_call_tool(context, call_next)
 
-        assert isinstance(result, _FailedToolResult)
+        assert _is_error(result)
         assert len(result.content) == 1
         text = _get_text(result)
         assert 'Connection closed' in text
@@ -102,7 +105,7 @@ class TestToolErrorMiddleware:
 
         result = await middleware.on_call_tool(context, hang_forever)
 
-        assert isinstance(result, _FailedToolResult)
+        assert _is_error(result)
         assert len(result.content) == 1
         text = _get_text(result)
         assert 'slow_tool' in text
@@ -120,7 +123,7 @@ class TestToolErrorMiddleware:
 
         result = await middleware.on_call_tool(context, call_next)
 
-        assert isinstance(result, _FailedToolResult)
+        assert _is_error(result)
         text = _get_text(result)
         assert 'expired or invalid AWS credentials' in text
         assert '--profile' in text
@@ -134,18 +137,7 @@ class TestToolErrorMiddleware:
 
         result = await middleware.on_call_tool(context, call_next)
 
-        assert isinstance(result, _FailedToolResult)
+        assert _is_error(result)
         text = _get_text(result)
         assert '--profile' not in text
 
-    @pytest.mark.asyncio
-    async def test_no_timeout_when_none(self):
-        """When tool_call_timeout is None, no timeout is applied."""
-        middleware = _make_middleware(tool_call_timeout=None)
-        expected = ToolResult(content=[mt.TextContent(type='text', text='ok')])
-        call_next = AsyncMock(return_value=expected)
-        context = _make_context()
-
-        result = await middleware.on_call_tool(context, call_next)
-
-        assert result is expected
