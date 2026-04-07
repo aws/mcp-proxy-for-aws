@@ -73,7 +73,8 @@ class TestToolErrorMiddleware:
         result = await middleware.on_call_tool(context, call_next)
 
         assert result is expected
-        assert not _is_error(result)
+        mcp_result = result.to_mcp_result()
+        assert not isinstance(mcp_result, mt.CallToolResult) or not mcp_result.isError
         call_next.assert_awaited_once_with(context)
 
     @pytest.mark.asyncio
