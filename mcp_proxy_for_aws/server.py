@@ -27,13 +27,14 @@ import httpx
 import logging
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
+from fastmcp.server.providers.proxy import FastMCPProxy
 from fastmcp.server.server import FastMCP
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
-from mcp_proxy_for_aws.proxy import AWSMCPProxy, AWSMCPProxyClientFactory
+from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -87,7 +88,7 @@ async def run_proxy(args) -> None:
     client_factory = AWSMCPProxyClientFactory(transport)
 
     try:
-        proxy = AWSMCPProxy(
+        proxy = FastMCPProxy(
             client_factory=client_factory,
             name='MCP Proxy for AWS',
             version=__version__,

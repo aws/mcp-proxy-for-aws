@@ -17,73 +17,13 @@
 import httpx
 import pytest
 from fastmcp.client.transports import ClientTransport
-from fastmcp.exceptions import NotFoundError
-from fastmcp.tools import Tool
 from mcp import McpError
 from mcp.types import ErrorData, InitializeRequest, JSONRPCError
 from mcp_proxy_for_aws.proxy import (
-    AWSMCPProxy,
     AWSMCPProxyClient,
     AWSMCPProxyClientFactory,
-    AWSProxyToolManager,
 )
 from unittest.mock import AsyncMock, Mock, patch
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_with_cache():
-    """Test get_tool returns from cache when available."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tool = Mock(spec=Tool)
-    manager._cached_tools = {'test_tool': mock_tool}
-
-    result = await manager.get_tool('test_tool')
-    assert result == mock_tool
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_without_cache():
-    """Test get_tool fetches tools when cache is empty."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tool = Mock(spec=Tool)
-
-    with patch.object(manager, 'get_tools', return_value={'test_tool': mock_tool}):
-        result = await manager.get_tool('test_tool')
-        assert result == mock_tool
-        assert manager._cached_tools == {'test_tool': mock_tool}
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_not_found():
-    """Test get_tool raises NotFoundError when tool doesn't exist."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    manager._cached_tools = {}
-
-    with pytest.raises(NotFoundError, match="Tool 'missing_tool' not found"):
-        await manager.get_tool('missing_tool')
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tools_updates_cache():
-    """Test get_tools updates the cache."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tools = {'tool1': Mock(spec=Tool), 'tool2': Mock(spec=Tool)}
-
-    with patch('mcp_proxy_for_aws.proxy._ProxyToolManager.get_tools', return_value=mock_tools):
-        result = await manager.get_tools()
-        assert result == mock_tools
-        assert manager._cached_tools == mock_tools
-
-
-def test_proxy_initialization():
-    """Test AWSMCPProxy initializes with custom tool manager."""
-    mock_factory = Mock()
-    proxy = AWSMCPProxy(client_factory=mock_factory, name='test')
-    assert isinstance(proxy._tool_manager, AWSProxyToolManager)
 
 
 @pytest.mark.asyncio
