@@ -16,7 +16,7 @@ import httpx
 import logging
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
-from fastmcp.server.providers.proxy import ProxyClient as _ProxyClient
+from fastmcp.server.providers.proxy import StatefulProxyClient
 from mcp import McpError
 from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
 from typing_extensions import override
@@ -25,7 +25,7 @@ from typing_extensions import override
 logger = logging.getLogger(__name__)
 
 
-class AWSMCPProxyClient(_ProxyClient):
+class AWSMCPProxyClient(StatefulProxyClient):
     """Proxy client that handles HTTP errors when connection fails."""
 
     def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
