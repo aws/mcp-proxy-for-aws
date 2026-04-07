@@ -160,7 +160,7 @@ Examples:
     )
 
     parser.add_argument(
-        '--tool-error-timeout',
+        '--tool-timeout',
         type=within_range(0),
         default=300.0,
         help='Maximum seconds a tool call may take before being cancelled. '

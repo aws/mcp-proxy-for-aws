@@ -38,7 +38,7 @@ class TestParseArgs:
         assert args.connect_timeout == 60.0
         assert args.read_timeout == 120.0
         assert args.write_timeout == 180.0
-        assert args.tool_error_timeout == 300.0
+        assert args.tool_timeout == 300.0
 
     @patch(
         'sys.argv',
