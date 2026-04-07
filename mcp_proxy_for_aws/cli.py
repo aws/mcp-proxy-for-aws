@@ -160,12 +160,12 @@ Examples:
     )
 
     parser.add_argument(
-        '--tool-timeout',
+        '--tool-error-timeout',
         type=within_range(0),
-        default=None,
+        default=300.0,
         help='Maximum seconds a tool call may take before being cancelled. '
         'When set, wraps each tool call with a timeout and returns a graceful error '
-        'to the agent instead of hanging. Not set by default.',
+        'to the agent instead of hanging (default: 300).',
     )
 
     return parser.parse_args()

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for ToolTimeoutMiddleware."""
+"""Unit tests for ToolErrorMiddleware."""
 
 import anyio
 import httpx
@@ -22,8 +22,8 @@ from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 from mcp import McpError
 from mcp.types import ErrorData
-from mcp_proxy_for_aws.middleware.tool_timeout_middleware import (
-    ToolTimeoutMiddleware,
+from mcp_proxy_for_aws.middleware.tool_error_middleware import (
+    ToolErrorMiddleware,
     _FailedToolResult,
 )
 from typing import Optional
@@ -41,9 +41,9 @@ def _make_context(tool_name: str = 'test_tool') -> MiddlewareContext[mt.CallTool
     )
 
 
-def _make_middleware(tool_call_timeout: Optional[float] = 5.0) -> ToolTimeoutMiddleware:
-    """Create a ToolTimeoutMiddleware with mocked dependencies."""
-    middleware = ToolTimeoutMiddleware(
+def _make_middleware(tool_call_timeout: Optional[float] = 5.0) -> ToolErrorMiddleware:
+    """Create a ToolErrorMiddleware with mocked dependencies."""
+    middleware = ToolErrorMiddleware(
         tool_call_timeout=tool_call_timeout,
     )
     return middleware
@@ -56,8 +56,8 @@ def _get_text(result: ToolResult, index: int = 0) -> str:
     return content.text
 
 
-class TestToolTimeoutMiddleware:
-    """Test cases for ToolTimeoutMiddleware."""
+class TestToolErrorMiddleware:
+    """Test cases for ToolErrorMiddleware."""
 
     @pytest.mark.asyncio
     async def test_passes_through_on_success(self):

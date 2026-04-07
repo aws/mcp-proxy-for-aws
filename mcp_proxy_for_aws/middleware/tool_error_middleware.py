@@ -30,7 +30,7 @@ class _FailedToolResult(ToolResult):
         return mt.CallToolResult(content=self.content, isError=True)
 
 
-class ToolTimeoutMiddleware(Middleware):
+class ToolErrorMiddleware(Middleware):
     """Middleware that ensures tool calls never hang and always return a response.
 
     Implements two layers of protection:
