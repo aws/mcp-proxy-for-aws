@@ -32,7 +32,7 @@ async def test_proxy_client_connect_success():
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', return_value='connected'):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', return_value='connected'):
         result = await client._connect()
         assert result == 'connected'
 
@@ -51,7 +51,7 @@ async def test_proxy_client_connect_http_error_with_mcp_error():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=http_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
         with pytest.raises(McpError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
@@ -69,7 +69,7 @@ async def test_proxy_client_connect_http_error_non_mcp():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=http_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
         with pytest.raises(httpx.HTTPStatusError):
             await client._connect()
 
@@ -180,7 +180,7 @@ async def test_proxy_client_connect_runtime_error_with_mcp_error():
     runtime_error = RuntimeError('Connection failed')
     runtime_error.__cause__ = mcp_error
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
         with pytest.raises(McpError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
@@ -194,7 +194,7 @@ async def test_proxy_client_connect_runtime_error_max_retries():
 
     runtime_error = RuntimeError('Connection failed')
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
         with patch.object(client, '_disconnect', new_callable=AsyncMock) as mock_disconnect:
             with pytest.raises(RuntimeError):
                 await client._connect()
@@ -218,7 +218,8 @@ async def test_proxy_client_connect_runtime_error_with_timeout():
         return 'connected'
 
     with patch(
-        'mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=mock_connect_side_effect
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect',
+        side_effect=mock_connect_side_effect,
     ):
         with patch.object(
             client,

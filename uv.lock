@@ -2942,7 +2942,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.41.0" },
     { name = "botocore", extras = ["crt"], specifier = ">=1.41.0" },
-    { name = "fastmcp", specifier = ">=3.2.0,<4" },
+    { name = "fastmcp", specifier = "~=3.2.0" },
 ]
 
 [package.metadata.requires-dev]

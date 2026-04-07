@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v1.1.8 (2026-04-02)
+## Unreleased
 
 ### Added
 
@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Use new streamable http client (#228)
 - Add URL scheme validation to prevent credential interception (#169)
 - Prevent credential exposure in logs (#167)
 - Replace failing integ test (#178)
