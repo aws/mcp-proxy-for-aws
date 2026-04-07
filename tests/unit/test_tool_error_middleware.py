@@ -141,4 +141,3 @@ class TestToolErrorMiddleware:
         assert _is_error(result)
         text = _get_text(result)
         assert '--profile' not in text
-
