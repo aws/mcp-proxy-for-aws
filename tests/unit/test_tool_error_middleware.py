@@ -18,8 +18,9 @@ import anyio
 import httpx
 import mcp.types as mt
 import pytest
+from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from mcp import McpError
 from mcp.types import ErrorData
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
@@ -39,24 +40,7 @@ def _make_context(tool_name: str = 'test_tool') -> MiddlewareContext[mt.CallTool
 
 def _make_middleware(tool_call_timeout: float = 5.0) -> ToolErrorMiddleware:
     """Create a ToolErrorMiddleware with mocked dependencies."""
-    middleware = ToolErrorMiddleware(
-        tool_call_timeout=tool_call_timeout,
-    )
-    return middleware
-
-
-def _is_error(result: ToolResult) -> bool:
-    """Check if a ToolResult has the MCP isError flag set."""
-    mcp_result = result.to_mcp_result()
-    assert isinstance(mcp_result, mt.CallToolResult)
-    return bool(mcp_result.isError)
-
-
-def _get_text(result: ToolResult, index: int = 0) -> str:
-    """Extract text from a ToolResult content item."""
-    content = result.content[index]
-    assert isinstance(content, mt.TextContent)
-    return content.text
+    return ToolErrorMiddleware(tool_call_timeout=tool_call_timeout)
 
 
 class TestToolErrorMiddleware:
@@ -73,29 +57,23 @@ class TestToolErrorMiddleware:
         result = await middleware.on_call_tool(context, call_next)
 
         assert result is expected
-        mcp_result = result.to_mcp_result()
-        assert not isinstance(mcp_result, mt.CallToolResult) or not mcp_result.isError
         call_next.assert_awaited_once_with(context)
 
     @pytest.mark.asyncio
-    async def test_catches_exception_returns_error_result(self):
-        """Exceptions are caught and returned as error ToolResults."""
+    async def test_catches_exception_raises_tool_error(self):
+        """Exceptions are caught and raised as ToolError."""
         middleware = _make_middleware()
         call_next = AsyncMock(
             side_effect=McpError(ErrorData(code=-1, message='Connection closed'))
         )
         context = _make_context()
 
-        result = await middleware.on_call_tool(context, call_next)
-
-        assert _is_error(result)
-        assert len(result.content) == 1
-        text = _get_text(result)
-        assert 'Connection closed' in text
+        with pytest.raises(ToolError, match='Connection closed'):
+            await middleware.on_call_tool(context, call_next)
 
     @pytest.mark.asyncio
-    async def test_timeout_returns_error_result(self):
-        """Tool calls that exceed the timeout return an error ToolResult."""
+    async def test_timeout_raises_tool_error(self):
+        """Tool calls that exceed the timeout raise a ToolError."""
         middleware = _make_middleware(tool_call_timeout=0.1)
 
         async def hang_forever(context: MiddlewareContext[mt.CallToolRequestParams]) -> ToolResult:
@@ -104,12 +82,8 @@ class TestToolErrorMiddleware:
 
         context = _make_context(tool_name='slow_tool')
 
-        result = await middleware.on_call_tool(context, hang_forever)
-
-        assert _is_error(result)
-        assert len(result.content) == 1
-        text = _get_text(result)
-        assert 'slow_tool' in text
+        with pytest.raises(ToolError, match='slow_tool'):
+            await middleware.on_call_tool(context, hang_forever)
 
     @pytest.mark.asyncio
     async def test_credential_error_suggests_profile(self):
@@ -122,12 +96,9 @@ class TestToolErrorMiddleware:
         )
         context = _make_context()
 
-        result = await middleware.on_call_tool(context, call_next)
-
-        assert _is_error(result)
-        text = _get_text(result)
-        assert 'expired or invalid AWS credentials' in text
-        assert '--profile' in text
+        with pytest.raises(ToolError, match='expired or invalid AWS credentials') as exc_info:
+            await middleware.on_call_tool(context, call_next)
+        assert '--profile' in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_non_credential_error_no_suggestion(self):
@@ -136,8 +107,6 @@ class TestToolErrorMiddleware:
         call_next = AsyncMock(side_effect=RuntimeError('transport died'))
         context = _make_context()
 
-        result = await middleware.on_call_tool(context, call_next)
-
-        assert _is_error(result)
-        text = _get_text(result)
-        assert '--profile' not in text
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+        assert '--profile' not in str(exc_info.value)

@@ -16,18 +16,12 @@ import anyio
 import httpx
 import logging
 import mcp.types as mt
+from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 
 
 logger = logging.getLogger(__name__)
-
-
-class _FailedToolResult(ToolResult):
-    """A ToolResult that signals an error via the MCP isError flag."""
-
-    def to_mcp_result(self) -> mt.CallToolResult:
-        return mt.CallToolResult(content=self.content, isError=True)
 
 
 class ToolErrorMiddleware(Middleware):
@@ -35,8 +29,8 @@ class ToolErrorMiddleware(Middleware):
 
     Implements two layers of protection:
     1. Timeout — bounds how long a tool call can take, breaking any hang.
-    2. Error propagation — catches any error and returns it as a ToolResult
-       so the agent always gets a response.
+    2. Error propagation — catches any error and returns an error message
+       to the agent so it always gets a response.
 
     Reconnection is handled automatically by fastmcp on every tool call.
     """
@@ -73,7 +67,7 @@ class ToolErrorMiddleware(Middleware):
                     ' Consider using long-lived credentials such as an AWS profile'
                     ' (--profile) or IAM Identity Center (aws sso login).'
                 )
-            return self._error_result(message)
+            raise ToolError(message) from e
 
     @staticmethod
     def _is_credential_error(error: Exception) -> bool:
@@ -81,10 +75,4 @@ class ToolErrorMiddleware(Middleware):
         return isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (
             401,
             403,
-        )
-
-    @staticmethod
-    def _error_result(message: str) -> ToolResult:
-        return _FailedToolResult(
-            content=[mt.TextContent(type='text', text=message)],
         )
