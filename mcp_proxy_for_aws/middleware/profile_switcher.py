@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Middleware that enables per-call AWS profile overrides via a ``profile`` argument.
+"""Middleware that enables per-call AWS profile overrides via an ``aws_profile`` argument.
 
-Pass ``profile`` as an extra argument on any tool call to route that single request
+Pass ``aws_profile`` as an extra argument on any tool call to route that single request
 through a dedicated transport signed with the specified profile's credentials. The
 argument is stripped before forwarding to the backend.
 
@@ -23,11 +23,13 @@ so parallel subagents querying different accounts don't interfere with each othe
 """
 
 import asyncio
+import copy
 import httpx
 import logging
 import mcp.types as mt
 from collections.abc import Sequence
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool, ToolResult
 from mcp_proxy_for_aws.utils import create_transport_with_sigv4
@@ -39,12 +41,12 @@ logger = logging.getLogger(__name__)
 
 
 class ProfileOverrideMiddleware(Middleware):
-    """Middleware that intercepts ``profile`` on any tool call for per-request AWS identity switching.
+    """Middleware that intercepts ``aws_profile`` on any tool call for per-request AWS identity switching.
 
-    When a tool call includes a ``profile`` argument, the middleware:
+    When a tool call includes an ``aws_profile`` argument, the middleware:
 
     1. Validates the profile against the allowed list
-    2. Strips ``profile`` from the arguments
+    2. Strips ``aws_profile`` from the arguments
     3. Forwards the call through a dedicated per-profile MCP client
 
     Each profile gets its own transport and session to the backend so that
@@ -79,16 +81,18 @@ class ProfileOverrideMiddleware(Middleware):
         context: MiddlewareContext[mt.ListToolsRequest],
         call_next: CallNext[mt.ListToolsRequest, Sequence[Tool]],
     ) -> Sequence[Tool]:
-        """Inject ``profile`` into every tool's schema."""
+        """Inject ``aws_profile`` into every tool's schema."""
         tools = await call_next(context)
 
         for tool in tools:
             params = tool.parameters
             if not isinstance(params, dict):
                 continue
+            params = copy.deepcopy(params)
+            tool.parameters = params
             if 'properties' not in params:
                 params['properties'] = {}
-            params['properties']['profile'] = {
+            params['properties']['aws_profile'] = {
                 'type': 'string',
                 'description': (
                     'AWS CLI profile to sign this request with. Omit to use the default profile.'
@@ -106,10 +110,10 @@ class ProfileOverrideMiddleware(Middleware):
         context: MiddlewareContext[mt.CallToolRequestParams],
         call_next: CallNext[mt.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
-        """Intercept ``profile`` and route through a dedicated per-profile client."""
+        """Intercept ``aws_profile`` and route through a dedicated per-profile client."""
         arguments = context.message.arguments
-        if isinstance(arguments, dict) and 'profile' in arguments:
-            profile = arguments['profile']
+        if isinstance(arguments, dict) and 'aws_profile' in arguments:
+            profile = arguments['aws_profile']
             return await self._call_with_profile(profile, context, call_next)
 
         return await call_next(context)
@@ -157,14 +161,14 @@ class ProfileOverrideMiddleware(Middleware):
         """Forward a tool call through a dedicated per-profile connection."""
         if profile not in self._allowed_profiles:
             allowed = ', '.join(sorted(self._allowed_profiles))
-            return ToolResult(
-                content=f'Error: profile {profile!r} is not in the allowed list. '
+            raise ToolError(
+                f'Profile {profile!r} is not in the allowed list. '
                 f'Allowed profiles: {allowed}'
             )
 
-        # Strip profile before forwarding to the backend
+        # Strip aws_profile before forwarding to the backend
         arguments: dict[str, Any] = dict(cast(dict[str, Any], context.message.arguments))
-        arguments.pop('profile', None)
+        arguments.pop('aws_profile', None)
 
         logger.info(
             'Per-call profile override: routing through dedicated connection for %s', profile
@@ -174,8 +178,8 @@ class ProfileOverrideMiddleware(Middleware):
             client = await self._get_profile_client(profile)
         except Exception:
             logger.exception('Failed to create connection for profile %s', profile)
-            return ToolResult(
-                content=f'Error: failed to create connection for profile {profile!r}. '
+            raise ToolError(
+                f'Failed to create connection for profile {profile!r}. '
                 'Check that the profile is configured and credentials are valid.'
             )
 
@@ -188,7 +192,7 @@ class ProfileOverrideMiddleware(Middleware):
             )
         except Exception:
             logger.exception('Error calling tool via profile %s', profile)
-            return ToolResult(
-                content=f'Error: tool call failed using profile {profile!r}. '
+            raise ToolError(
+                f'Tool call failed using profile {profile!r}. '
                 'The request could not be completed with the specified profile.'
             )

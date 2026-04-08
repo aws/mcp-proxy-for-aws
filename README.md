@@ -107,7 +107,7 @@ docker build -t mcp-proxy-for-aws .
 | `--connect-timeout`	 | Set desired connect timeout in seconds	                                                                                                                                                                                                 | 60	                                                                         |No	|
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
-| `--allow-switch-profile` | Enable per-call AWS profile switching by providing an allowlist of profile names. Each tool call can include a `profile` argument to route through a dedicated connection signed with that profile's credentials. | None (disabled) | No |
+| `--allow-switch-profile` | Enable per-call AWS profile switching by providing an allowlist of profile names. Each tool call can include an `aws_profile` argument to route through a dedicated connection signed with that profile's credentials. | None (disabled) | No |
 
 ### Optional Environment Variables
 
@@ -170,8 +170,8 @@ The `--allow-switch-profile` flag lets individual tool calls route through diffe
 
 **How it interacts with `--profile`:**
 - `--profile` sets the **default** identity used when a tool call does not specify a profile.
-- `--allow-switch-profile` defines which additional profiles a tool call may request via a `profile` argument. Each profile gets its own dedicated connection to the backend.
-- If a tool call omits `profile`, the default `--profile` connection is used. If it includes `profile`, the request is routed through the matching per-profile connection instead.
+- `--allow-switch-profile` defines which additional profiles a tool call may request via an `aws_profile` argument. Each profile gets its own dedicated connection to the backend.
+- If a tool call omits `aws_profile`, the default `--profile` connection is used. If it includes `aws_profile`, the request is routed through the matching per-profile connection instead.
 
 ```json
 {
@@ -194,7 +194,7 @@ The `--allow-switch-profile` flag lets individual tool calls route through diffe
 }
 ```
 
-In the example above, tool calls without a `profile` argument use the `default` profile. A tool call that includes `"profile": "dev-profile"` is routed through a dedicated connection signed with `dev-profile` credentials.
+In the example above, tool calls without an `aws_profile` argument use the `default` profile. A tool call that includes `"aws_profile": "dev-profile"` is routed through a dedicated connection signed with `dev-profile` credentials.
 
 #### Using Docker
 
