@@ -7,16 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Fixed
-
-- Simplify error middleware and suggest long-lived AWS credentials on auth errors (#216)
-
 ### Added
 
 - Build and publish container image (#126)
 
 ### Fixed
 
+- Simplify error middleware and suggest long-lived AWS credentials on auth errors (#216)
+- Use new streamable http client (#228)
 - Add URL scheme validation to prevent credential interception (#169)
 - Prevent credential exposure in logs (#167)
 - Replace failing integ test (#178)
