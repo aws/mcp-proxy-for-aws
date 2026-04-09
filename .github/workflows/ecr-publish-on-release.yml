@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     outputs:
       version: ${{ steps.get-package-version.outputs.version }}
     steps:
