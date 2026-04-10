@@ -19,7 +19,7 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client, try_create_aws_session
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -88,9 +88,9 @@ def create_transport_with_sigv4(
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
     """
-    # Validate credentials are available at startup (fail-fast)
+    # Validate credentials are available at startup (warn if missing, don't crash)
     logger.debug('Validating AWS credentials with profile: %s', profile)
-    create_aws_session(profile)
+    try_create_aws_session(profile)
 
     def client_factory(
         headers: Optional[Dict[str, str]] = None,

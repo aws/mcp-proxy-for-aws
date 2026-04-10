@@ -14,12 +14,14 @@
 
 import httpx
 import logging
+import time
 from collections.abc import Sequence
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
 from fastmcp.exceptions import ToolError
 from fastmcp.server.context import Context
 from fastmcp.server.providers.proxy import (
+    _CacheEntry,
     ClientFactoryT,
     FastMCPProxy as _FastMCPProxy,
     ProxyClient as _ProxyClient,
@@ -36,6 +38,7 @@ from typing_extensions import override
 
 
 logger = logging.getLogger(__name__)
+debug_logger = logging.getLogger('mcp-proxy-debug')
 
 
 class AWSProxyTool(_ProxyTool):
@@ -53,8 +56,19 @@ class AWSProxyTool(_ProxyTool):
         context: Context | None = None,
     ) -> ToolResult:
         """Execute the tool, converting upstream 401 errors to ToolError."""
+        debug_logger.debug(
+            '[PROXY-DEBUG] AWSProxyTool.run | forwarding tools/call | tool=%s, arg_keys=%s',
+            self.name,
+            list(arguments.keys()),
+        )
         try:
-            return await super().run(arguments, context)
+            result = await super().run(arguments, context)
+            debug_logger.debug(
+                '[PROXY-DEBUG] AWSProxyTool.run | upstream response OK | tool=%s, result_type=%s',
+                self.name,
+                type(result).__name__,
+            )
+            return result
         except UpstreamAuthenticationError as auth_error:
             logger.warning('Upstream auth required for tool call: %s', auth_error)
             raise ToolError(
@@ -95,17 +109,12 @@ class AWSProxyTool(_ProxyTool):
 
 
 class AWSProxyProvider(_ProxyProvider):
-    """ProxyProvider with tool caching and custom ProxyTool type.
+    """ProxyProvider that uses AWSProxyTool for upstream 401 error handling.
 
-    Caches tool listings so that subsequent get_tool lookups (during tool
-    invocation) don't redundantly re-list from the remote server.
-    Uses AWSProxyTool instead of ProxyTool for 401 error handling.
+    Uses AWSProxyTool instead of ProxyTool so that HTTP 401 errors from the
+    upstream server are surfaced as ToolError with WWW-Authenticate details.
+    Inherits tool caching from the parent ProxyProvider.
     """
-
-    def __init__(self, client_factory: ClientFactoryT):
-        """Initialize the provider."""
-        super().__init__(client_factory)
-        self._cached_tools: Sequence[Tool] | None = None
 
     @override
     async def _list_tools(self) -> Sequence[Tool]:
@@ -113,23 +122,65 @@ class AWSProxyProvider(_ProxyProvider):
         from mcp.shared.exceptions import McpError
         from mcp.types import METHOD_NOT_FOUND
 
+        debug_logger.debug('[PROXY-DEBUG] _list_tools | called | fetching tools from upstream')
         try:
             client = await self._get_client()
             async with client:
                 mcp_tools = await client.list_tools()
+                raw_names = [t.name for t in mcp_tools]
+                debug_logger.debug(
+                    '[PROXY-DEBUG] _list_tools | raw upstream tools | count=%d, names=%s',
+                    len(raw_names),
+                    raw_names,
+                )
                 tools = [
                     AWSProxyTool.from_mcp_tool(self.client_factory, t) for t in mcp_tools
                 ]
-                self._cached_tools = tools
-                return tools
         except McpError as e:
             if e.error.code == METHOD_NOT_FOUND:
-                return []
-            raise
+                debug_logger.debug(
+                    '[PROXY-DEBUG] _list_tools | METHOD_NOT_FOUND | upstream does not support tools/list'
+                )
+                tools = []
+            else:
+                raise
+        self._tools_cache = _CacheEntry(tools, time.monotonic())
+        cached_names = [t.name for t in tools]
+        debug_logger.debug(
+            '[PROXY-DEBUG] _list_tools | cache updated | count=%d, names=%s, timestamp=%.3f',
+            len(cached_names),
+            cached_names,
+            self._tools_cache.timestamp,
+        )
+        return tools
+
+    @override
+    async def _get_tool(self, name, version=None):
+        """Look up a tool by name, with debug logging."""
+        cache = self._tools_cache
+        cache_state = 'empty' if cache is None else f'{len(cache.items)} tools'
+        debug_logger.debug(
+            '[PROXY-DEBUG] _get_tool | looking up tool | name=%s, cache_state=%s',
+            name,
+            cache_state,
+        )
+        if cache is not None:
+            cached_names = [t.name for t in cache.items]
+            debug_logger.debug(
+                '[PROXY-DEBUG] _get_tool | cached tool names | names=%s',
+                cached_names,
+            )
+        result = await super()._get_tool(name, version)
+        debug_logger.debug(
+            '[PROXY-DEBUG] _get_tool | lookup result | name=%s, found=%s',
+            name,
+            result is not None,
+        )
+        return result
 
     def invalidate_cache(self) -> None:
         """Invalidate the cached tools, forcing a re-list on next access."""
-        self._cached_tools = None
+        self._tools_cache = None
 
 
 class AWSMCPProxy(_FastMCPProxy):

@@ -115,16 +115,16 @@ class TestValidateEndpointUrl:
 class TestCreateTransportWithSigv4:
     """Test cases for create_transport_with_sigv4 function (line 129)."""
 
-    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.try_create_aws_session')
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
-    def test_create_transport_with_sigv4(self, mock_create_sigv4_client, mock_create_session):
+    def test_create_transport_with_sigv4(self, mock_create_sigv4_client, mock_try_create_session):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
         from httpx import Timeout
 
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
         mock_session = MagicMock()
-        mock_create_session.return_value = mock_session
+        mock_try_create_session.return_value = mock_session
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -138,7 +138,7 @@ class TestCreateTransportWithSigv4:
         )
 
         # Verify session was created with profile for validation
-        mock_create_session.assert_called_once_with(profile)
+        mock_try_create_session.assert_called_once_with(profile)
 
         # Verify result is StreamableHttpTransport
         assert isinstance(result, StreamableHttpTransport)
@@ -164,16 +164,16 @@ class TestCreateTransportWithSigv4:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
 
-    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.try_create_aws_session')
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(
-        self, mock_create_sigv4_client, mock_create_session
+        self, mock_create_sigv4_client, mock_try_create_session
     ):
         """Test creating transport without profile."""
         from httpx import Timeout
 
         mock_session = MagicMock()
-        mock_create_session.return_value = mock_session
+        mock_try_create_session.return_value = mock_session
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -184,7 +184,7 @@ class TestCreateTransportWithSigv4:
         result = create_transport_with_sigv4(url, service, region, metadata, custom_timeout)
 
         # Verify session was created without profile for validation
-        mock_create_session.assert_called_once_with(None)
+        mock_try_create_session.assert_called_once_with(None)
 
         # Test that the httpx_client_factory calls create_sigv4_client correctly
         # We need to access the factory through the transport's internal structure
@@ -204,6 +204,30 @@ class TestCreateTransportWithSigv4:
         else:
             # If we can't access the factory directly, just verify the transport was created
             assert result is not None
+
+    @patch('mcp_proxy_for_aws.utils.try_create_aws_session')
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_create_transport_with_sigv4_missing_profile_does_not_crash(
+        self, mock_create_sigv4_client, mock_try_create_session
+    ):
+        """Test that create_transport_with_sigv4 doesn't crash when profile is missing."""
+        from httpx import Timeout
+
+        mock_try_create_session.return_value = None  # No valid session
+
+        url = 'https://test-service.us-west-2.api.aws/mcp'
+        service = 'test-service'
+        region = 'us-west-2'
+        metadata = {'AWS_REGION': 'us-west-2'}
+        custom_timeout = Timeout(30.0)
+
+        # Should not raise even with missing profile
+        result = create_transport_with_sigv4(
+            url, service, region, metadata, custom_timeout, 'nonexistent-profile'
+        )
+
+        mock_try_create_session.assert_called_once_with('nonexistent-profile')
+        assert isinstance(result, StreamableHttpTransport)
 
 
 class TestValidateRequiredArgs:

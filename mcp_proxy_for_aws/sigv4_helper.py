@@ -133,6 +133,27 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     return session
 
 
+def try_create_aws_session(profile: Optional[str] = None) -> Optional[boto3.Session]:
+    """Attempt to create an AWS session, returning None on failure.
+
+    Unlike create_aws_session, this function logs a warning instead of raising
+    when the profile is missing or credentials cannot be loaded. This enables
+    deferred authentication: the proxy starts without credentials, and signing
+    errors surface only when an authenticated tool is actually called.
+
+    Args:
+        profile: AWS profile to use (optional)
+
+    Returns:
+        boto3.Session if credentials are available, None otherwise
+    """
+    try:
+        return create_aws_session(profile)
+    except ValueError as e:
+        logger.warning('AWS session unavailable: %s — requests will be sent unsigned', e)
+        return None
+
+
 def create_sigv4_client(
     service: str,
     region: str,
@@ -263,6 +284,10 @@ async def _sign_request_hook(
     dynamically resolved from the credential chain (SSO, assume-role, instance
     profile, environment variables, etc.) rather than using stale cached values.
 
+    If credentials are unavailable (e.g. missing profile), the request is sent
+    unsigned and a warning is logged. This supports deferred authentication where
+    public tools work without credentials.
+
     This should be the last hook called to ensure the signature includes any modifications.
 
     Args:
@@ -276,7 +301,15 @@ async def _sign_request_hook(
 
     # Create a fresh session per request so that credentials are re-resolved
     # from the credential chain (e.g. refreshed SSO tokens, rotated keys).
-    session = create_aws_session(profile)
+    session = try_create_aws_session(profile)
+    if session is None:
+        logger.warning(
+            'Skipping SigV4 signing for %s %s — no valid AWS credentials available',
+            request.method,
+            request.url,
+        )
+        return
+
     credentials = session.get_credentials()
     logger.debug(
         'Signing request with credentials for access key: %s...%s',

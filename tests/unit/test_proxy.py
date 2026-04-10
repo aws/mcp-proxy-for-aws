@@ -268,15 +268,112 @@ async def test_proxy_tool_run_tool_error_passthrough():
 def test_proxy_provider_cache_starts_empty():
     """Test AWSProxyProvider cache starts as None."""
     provider = AWSProxyProvider(client_factory=Mock())
-    assert provider._cached_tools is None
+    assert provider._tools_cache is None
 
 
 def test_proxy_provider_invalidate_cache():
     """Test AWSProxyProvider.invalidate_cache resets cache."""
     provider = AWSProxyProvider(client_factory=Mock())
-    provider._cached_tools = [Mock()]
     provider.invalidate_cache()
-    assert provider._cached_tools is None
+    assert provider._tools_cache is None
+
+
+@pytest.mark.asyncio
+async def test_proxy_provider_list_tools_with_async_factory():
+    """Test _list_tools works with async client factory (AWSMCPProxyClientFactory)."""
+    from mcp.types import Tool as MCPTool
+
+    upstream_tools = [
+        MCPTool(
+            name='knowledge___aws___list_regions',
+            description='List regions',
+            inputSchema={'type': 'object', 'properties': {}},
+        ),
+        MCPTool(
+            name='aws___call_aws',
+            description='Call AWS API',
+            inputSchema={'type': 'object', 'properties': {}},
+        ),
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.list_tools = AsyncMock(return_value=upstream_tools)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    async_factory = AsyncMock(return_value=mock_client)
+    provider = AWSProxyProvider(client_factory=async_factory)
+
+    tools = await provider._list_tools()
+    assert len(tools) == 2
+    assert tools[0].name == 'knowledge___aws___list_regions'
+    assert tools[1].name == 'aws___call_aws'
+    assert all(isinstance(t, AWSProxyTool) for t in tools)
+
+
+@pytest.mark.asyncio
+async def test_proxy_provider_get_tool_with_prefixed_names():
+    """Test _get_tool resolves tools with triple-underscore prefixed names."""
+    from mcp.types import Tool as MCPTool
+
+    upstream_tools = [
+        MCPTool(
+            name='knowledge___aws___list_regions',
+            description='List regions',
+            inputSchema={'type': 'object', 'properties': {}},
+        ),
+        MCPTool(
+            name='aws___call_aws',
+            description='Call AWS API',
+            inputSchema={'type': 'object', 'properties': {}},
+        ),
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.list_tools = AsyncMock(return_value=upstream_tools)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    async_factory = AsyncMock(return_value=mock_client)
+    provider = AWSProxyProvider(client_factory=async_factory)
+
+    tool = await provider._get_tool('knowledge___aws___list_regions')
+    assert tool is not None
+    assert tool.name == 'knowledge___aws___list_regions'
+    assert isinstance(tool, AWSProxyTool)
+
+    tool2 = await provider._get_tool('aws___call_aws')
+    assert tool2 is not None
+    assert tool2.name == 'aws___call_aws'
+
+    missing = await provider._get_tool('nonexistent___tool')
+    assert missing is None
+
+
+@pytest.mark.asyncio
+async def test_proxy_provider_list_tools_with_sync_factory():
+    """Test _list_tools works with sync client factory."""
+    from mcp.types import Tool as MCPTool
+
+    upstream_tools = [
+        MCPTool(
+            name='aws___call_aws',
+            description='Call AWS API',
+            inputSchema={'type': 'object', 'properties': {}},
+        ),
+    ]
+
+    mock_client = AsyncMock()
+    mock_client.list_tools = AsyncMock(return_value=upstream_tools)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    sync_factory = Mock(return_value=mock_client)
+    provider = AWSProxyProvider(client_factory=sync_factory)
+
+    tools = await provider._list_tools()
+    assert len(tools) == 1
+    assert tools[0].name == 'aws___call_aws'
 
 
 # ---------------------------------------------------------------------------

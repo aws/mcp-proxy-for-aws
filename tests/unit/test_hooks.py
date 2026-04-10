@@ -503,3 +503,28 @@ class TestSignRequestHook:
         # Verify create_aws_session was called twice (once per request)
         assert mock_create_session.call_count == 2
         mock_create_session.assert_called_with(profile)
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.try_create_aws_session')
+    async def test_sign_request_hook_skips_signing_when_no_credentials(
+        self, mock_try_create_session
+    ):
+        """Test that sign_request_hook skips signing when credentials are unavailable."""
+        mock_try_create_session.return_value = None
+
+        region = 'us-east-1'
+        service = 'bedrock-agentcore'
+
+        request_body = json.dumps({'test': 'data'}).encode('utf-8')
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        # Should not raise — just skip signing
+        await _sign_request_hook(region, service, 'nonexistent-profile', request)
+
+        # Content-Length should still be set
+        assert request.headers['content-length'] == str(len(request_body))
+
+        # No authorization headers should be present
+        assert 'authorization' not in request.headers
+        assert 'x-amz-date' not in request.headers
+        assert 'x-amz-security-token' not in request.headers
