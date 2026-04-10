@@ -109,6 +109,7 @@ docker build -t mcp-proxy-for-aws .
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 | `--allow-switch-profile` | Enable per-call AWS profile switching by providing an allowlist of profile names. Each tool call can include an `mcp_proxy_aws_profile` argument to route through a dedicated connection signed with that profile's credentials. | None (disabled) | No |
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
+| `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
 
 ### Optional Environment Variables
 
