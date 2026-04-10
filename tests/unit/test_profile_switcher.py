@@ -225,12 +225,15 @@ class TestGetProfileClient:
 
         mock_transport = Mock()
 
-        with patch(
-            'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
-            return_value=mock_transport,
-        ), patch(
-            'mcp_proxy_for_aws.middleware.profile_switcher.Client',
-            return_value=mock_client,
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=mock_transport,
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=mock_client,
+            ),
         ):
             results = await asyncio.gather(
                 middleware._get_profile_client('dev-profile'),
