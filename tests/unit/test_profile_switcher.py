@@ -63,7 +63,7 @@ class TestOnListTools:
 
         assert len(result) == 1
         assert result[0].name == 'some_tool'
-        profile_schema = result[0].parameters['properties']['aws_profile']
+        profile_schema = result[0].parameters['properties']['mcp_proxy_aws_profile']
         assert profile_schema['type'] == 'string'
         assert 'AWS CLI profile' in profile_schema['description']
         assert profile_schema['enum'] == sorted(ALLOWED_PROFILES)
@@ -102,7 +102,7 @@ class TestOnListTools:
         result = await middleware.on_list_tools(mock_context, call_next)
 
         assert 'properties' in result[0].parameters
-        assert 'aws_profile' in result[0].parameters['properties']
+        assert 'mcp_proxy_aws_profile' in result[0].parameters['properties']
 
 
 class TestOnCallTool:
@@ -145,7 +145,7 @@ class TestPerCallProfileOverride:
         """Profile with a disallowed profile raises ToolError."""
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'evil-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'mcp_proxy_aws_profile': 'evil-profile'}
         call_next = AsyncMock()
 
         with pytest.raises(ToolError, match='not in the allowed list'):
@@ -165,7 +165,7 @@ class TestPerCallProfileOverride:
 
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'mcp_proxy_aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(middleware, '_get_profile_client', return_value=mock_client):
@@ -179,7 +179,7 @@ class TestPerCallProfileOverride:
         """Connection failure raises ToolError with sanitized message."""
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'mcp_proxy_aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(
@@ -196,7 +196,7 @@ class TestPerCallProfileOverride:
 
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'mcp_proxy_aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(middleware, '_get_profile_client', return_value=mock_client):
