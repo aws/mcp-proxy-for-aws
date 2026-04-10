@@ -24,6 +24,7 @@ from botocore.credentials import Credentials
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.context import get_client_info
 from typing import Any, Dict, Generator, Optional
 
 
@@ -127,6 +128,7 @@ def create_sigv4_client(
     session: Optional[boto3.Session] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    disable_telemetry: bool = False,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
@@ -139,6 +141,7 @@ def create_sigv4_client(
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
+        disable_telemetry: Whether to disable telemetry
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:
@@ -157,6 +160,11 @@ def create_sigv4_client(
     }
 
     user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+
+    client_info = get_client_info()
+    if client_info and not disable_telemetry:
+        client_name = client_info.name.lower().replace(' ', '-').replace('/', '-')
+        user_agent += f' {client_name}/{client_info.version}'
 
     # Add headers if provided
     default_headers = {

@@ -15,6 +15,7 @@
 import logging
 import mcp.types as mt
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
+from mcp_proxy_for_aws.context import set_client_info
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from typing_extensions import override
 
@@ -39,10 +40,15 @@ class InitializeMiddleware(Middleware):
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
+            client_info = context.message.params.clientInfo
+            set_client_info(client_info)
+            logger.info(
+                'Captured client_info: name=%s, version=%s', client_info.name, client_info.version
+            )
             client = await self._client_factory.get_client()
             # connect the http client, fail and don't succeed the stdio connect
             # if remote client cannot be connected
-            client_name = context.message.params.clientInfo.name.lower()
+            client_name = client_info.name.lower()
             if 'kiro cli' not in client_name and 'q dev cli' not in client_name:
                 # q cli / kiro cli uses the rust SDK which does not handle json rpc error
                 # properly during initialization.
