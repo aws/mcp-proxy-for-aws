@@ -19,7 +19,7 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import SessionHolder, create_aws_session, create_sigv4_client
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -90,9 +90,10 @@ def create_transport_with_sigv4(
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
     """
-    # Create AWS session once and reuse it for all httpx clients
+    # Create AWS session with a holder that can refresh on credential errors
     logger.debug('Creating AWS session with profile: %s', profile)
     session = create_aws_session(profile)
+    session_holder = SessionHolder(session, profile)
 
     def client_factory(
         headers: Optional[Dict[str, str]] = None,
@@ -102,7 +103,7 @@ def create_transport_with_sigv4(
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
             service=service,
-            session=session,
+            session_holder=session_holder,
             region=region,
             headers=headers,
             timeout=custom_timeout,

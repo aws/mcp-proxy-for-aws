@@ -98,7 +98,7 @@ class TestToolErrorMiddleware:
 
         with pytest.raises(ToolError, match='expired or invalid AWS credentials') as exc_info:
             await middleware.on_call_tool(context, call_next)
-        assert '--profile' in str(exc_info.value)
+        assert 'refresh your credentials' in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_non_credential_error_no_suggestion(self):

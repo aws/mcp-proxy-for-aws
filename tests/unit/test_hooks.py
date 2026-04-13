@@ -19,6 +19,7 @@ import json
 import pytest
 from functools import partial
 from mcp_proxy_for_aws.sigv4_helper import (
+    SessionHolder,
     _handle_error_response,
     _inject_metadata_hook,
     _sign_request_hook,
@@ -52,6 +53,13 @@ def create_mock_session():
     return mock_session
 
 
+def create_mock_session_holder():
+    """Helper to create a mocked SessionHolder."""
+    holder = MagicMock(spec=SessionHolder)
+    holder.session = create_mock_session()
+    return holder
+
+
 class TestHandleErrorResponse:
     """Test cases for the _handle_error_response function."""
 
@@ -68,7 +76,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        await _handle_error_response(response)
+        await _handle_error_response(create_mock_session_holder(), response)
 
         # Verify response was read (content should be settled)
         assert response.is_stream_consumed
@@ -85,7 +93,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        await _handle_error_response(response)
+        await _handle_error_response(create_mock_session_holder(), response)
 
         # Verify response was read
         assert response.is_stream_consumed
@@ -102,7 +110,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        await _handle_error_response(response)
+        await _handle_error_response(create_mock_session_holder(), response)
 
         # Verify function completes without error for success responses
         assert response.status_code == 200
@@ -125,7 +133,7 @@ class TestHandleErrorResponse:
             )
         )
 
-        await _handle_error_response(response)
+        await _handle_error_response(create_mock_session_holder(), response)
 
         # Verify it handled the read failure gracefully (no exception raised)
         # The aread() was attempted (would have been called)
@@ -143,7 +151,7 @@ class TestHandleErrorResponse:
             request=request,
         )
 
-        await _handle_error_response(response)
+        await _handle_error_response(create_mock_session_holder(), response)
 
         # Verify response was read despite invalid JSON
         assert response.is_stream_consumed
@@ -346,20 +354,16 @@ class TestSignRequestHook:
     @pytest.mark.asyncio
     async def test_sign_request_hook_signs_request(self):
         """Test that sign_request_hook properly signs requests."""
-        # Setup mocks
-        mock_session = create_mock_session()
+        holder = create_mock_session_holder()
 
         region = 'us-east-1'
         service = 'bedrock-agentcore'
 
-        # Create request without signature headers
         request_body = json.dumps({'test': 'data'}).encode('utf-8')
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        # Call the hook
-        await _sign_request_hook(region, service, mock_session, request)
+        await _sign_request_hook(region, service, holder, request)
 
-        # Verify signature headers were added
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
         assert 'x-amz-security-token' in request.headers
@@ -368,8 +372,7 @@ class TestSignRequestHook:
     @pytest.mark.asyncio
     async def test_sign_request_hook_with_profile(self):
         """Test that sign_request_hook uses session when provided."""
-        # Setup mocks
-        mock_session = create_mock_session()
+        holder = create_mock_session_holder()
 
         region = 'us-west-2'
         service = 'execute-api'
@@ -377,49 +380,40 @@ class TestSignRequestHook:
         request_body = b'test content'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        # Call the hook
-        await _sign_request_hook(region, service, mock_session, request)
+        await _sign_request_hook(region, service, holder, request)
 
-        # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_sets_content_length(self):
         """Test that sign_request_hook sets Content-Length header."""
-        # Setup mocks
-        mock_session = create_mock_session()
+        holder = create_mock_session_holder()
 
         region = 'eu-west-1'
         service = 'lambda'
 
-        # Create request
         request_body = b'test content with specific length'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _sign_request_hook(region, service, mock_session, request)
+        await _sign_request_hook(region, service, holder, request)
 
-        # Verify Content-Length was set correctly
         assert request.headers['content-length'] == str(len(request_body))
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_with_partial_application(self):
         """Test that sign_request_hook works with functools.partial."""
-        # Setup mocks
-        mock_session = create_mock_session()
+        holder = create_mock_session_holder()
 
         region = 'ap-southeast-1'
         service = 'execute-api'
 
-        # Create curried function using partial
-        curried_hook = partial(_sign_request_hook, region, service, mock_session)
+        curried_hook = partial(_sign_request_hook, region, service, holder)
 
         request_body = b'request data'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        # Call the curried function (only needs request parameter)
         await curried_hook(request)
 
-        # Verify request was signed
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers

@@ -62,17 +62,32 @@ class ToolErrorMiddleware(Middleware):
             logger.error('Tool call %r failed: %s.', tool_name, e)
             message = f'Tool call {tool_name!r} failed: {e}. Please retry.'
             if self._is_credential_error(e):
-                message += (
-                    ' This may be caused by expired or invalid AWS credentials.'
-                    ' Consider using long-lived credentials such as an AWS profile'
-                    ' (--profile) or IAM Identity Center (aws sso login).'
+                message = (
+                    f'Tool call {tool_name!r} failed due to expired or invalid AWS credentials.'
+                    ' Please refresh your credentials and retry.'
+                    ' The proxy will automatically use the new credentials on the next request.'
                 )
             raise ToolError(message) from e
 
     @staticmethod
     def _is_credential_error(error: Exception) -> bool:
         """Check if the error is likely caused by expired or invalid credentials."""
-        return isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (
-            401,
-            403,
-        )
+        # Walk the exception chain — the 401/403 may be wrapped
+        current: BaseException | None = error
+        while current is not None:
+            if isinstance(current, httpx.HTTPStatusError) and current.response.status_code in (
+                401,
+                403,
+            ):
+                return True
+            current = current.__cause__ if current.__cause__ else current.__context__
+            # Avoid infinite loops on self-referencing chains
+            if current is error:
+                break
+
+        # "Unknown tool" after a failed reconnect is almost always a credential issue
+        error_str = str(error)
+        if 'Unknown tool' in error_str or 'Unauthorized' in error_str:
+            return True
+
+        return False
