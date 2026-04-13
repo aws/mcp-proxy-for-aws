@@ -17,6 +17,7 @@
 import asyncio
 import httpx
 import pytest
+from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -51,8 +52,8 @@ class TestOnListTools:
     """Tests for the on_list_tools method."""
 
     @pytest.mark.asyncio
-    async def test_injects_profile_property_into_tool_schemas(self, middleware, mock_context):
-        """Every proxied tool gets a profile property in its schema."""
+    async def test_injects_proxy_profile_property_into_tool_schemas(self, middleware, mock_context):
+        """Every proxied tool gets a proxy_profile property in its schema."""
         tool = Mock()
         tool.name = 'some_tool'
         tool.parameters = {'type': 'object', 'properties': {'arg': {'type': 'string'}}}
@@ -62,7 +63,7 @@ class TestOnListTools:
 
         assert len(result) == 1
         assert result[0].name == 'some_tool'
-        profile_schema = result[0].parameters['properties']['profile']
+        profile_schema = result[0].parameters['properties']['proxy_profile']
         assert profile_schema['type'] == 'string'
         assert 'AWS CLI profile' in profile_schema['description']
         assert profile_schema['enum'] == sorted(ALLOWED_PROFILES)
@@ -101,15 +102,15 @@ class TestOnListTools:
         result = await middleware.on_list_tools(mock_context, call_next)
 
         assert 'properties' in result[0].parameters
-        assert 'profile' in result[0].parameters['properties']
+        assert 'proxy_profile' in result[0].parameters['properties']
 
 
 class TestOnCallTool:
     """Tests for the on_call_tool method."""
 
     @pytest.mark.asyncio
-    async def test_passes_through_calls_without_profile(self, middleware, mock_context):
-        """Tool calls without profile are forwarded unchanged."""
+    async def test_passes_through_calls_without_proxy_profile(self, middleware, mock_context):
+        """Tool calls without proxy_profile are forwarded unchanged."""
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
         mock_context.message.arguments = {'arg': 'value'}
@@ -141,20 +142,20 @@ class TestPerCallProfileOverride:
 
     @pytest.mark.asyncio
     async def test_profile_override_disallowed(self, middleware, mock_context):
-        """Profile with a disallowed profile returns an error."""
+        """Disallowed profile raises ToolError."""
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'profile': 'evil-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'proxy_profile': 'evil-profile'}
         call_next = AsyncMock()
 
-        result = await middleware.on_call_tool(mock_context, call_next)
+        with pytest.raises(ToolError, match='not in the allowed list'):
+            await middleware.on_call_tool(mock_context, call_next)
 
-        assert 'not in the allowed list' in result.content[0].text
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_profile_override_strips_profile_arg(self, middleware, mock_context):
-        """Profile is stripped before forwarding to the backend."""
+    async def test_profile_override_strips_proxy_profile_arg(self, middleware, mock_context):
+        """proxy_profile is stripped before forwarding to the backend."""
         mock_client = AsyncMock()
         mock_call_result = MagicMock()
         mock_call_result.content = 'result'
@@ -164,7 +165,7 @@ class TestPerCallProfileOverride:
 
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'proxy_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(middleware, '_get_profile_client', return_value=mock_client):
@@ -175,36 +176,36 @@ class TestPerCallProfileOverride:
 
     @pytest.mark.asyncio
     async def test_profile_override_connection_failure(self, middleware, mock_context):
-        """Connection failure returns a sanitized error."""
+        """Connection failure raises ToolError with sanitized message."""
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'proxy_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(
             middleware, '_get_profile_client', side_effect=Exception('connection refused')
         ):
-            result = await middleware.on_call_tool(mock_context, call_next)
+            with pytest.raises(ToolError, match='Failed to create connection') as exc_info:
+                await middleware.on_call_tool(mock_context, call_next)
 
-        assert 'failed to create connection' in result.content[0].text
-        assert 'connection refused' not in result.content[0].text
+        assert 'connection refused' not in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_profile_override_tool_call_failure(self, middleware, mock_context):
-        """Tool call failure returns a sanitized error."""
+        """Tool call failure raises ToolError with sanitized message."""
         mock_client = AsyncMock()
         mock_client.call_tool.side_effect = Exception('backend error')
 
         mock_context.message = Mock()
         mock_context.message.name = 'some_tool'
-        mock_context.message.arguments = {'arg': 'value', 'profile': 'dev-profile'}
+        mock_context.message.arguments = {'arg': 'value', 'proxy_profile': 'dev-profile'}
         call_next = AsyncMock()
 
         with patch.object(middleware, '_get_profile_client', return_value=mock_client):
-            result = await middleware.on_call_tool(mock_context, call_next)
+            with pytest.raises(ToolError, match='Tool call failed') as exc_info:
+                await middleware.on_call_tool(mock_context, call_next)
 
-        assert 'tool call failed' in result.content[0].text
-        assert 'backend error' not in result.content[0].text
+        assert 'backend error' not in str(exc_info.value)
 
 
 class TestGetProfileClient:
