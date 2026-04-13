@@ -24,7 +24,8 @@ from botocore.credentials import Credentials
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
-from typing import Any, Dict, Generator, Optional
+from pathlib import Path
+from typing import Any, Dict, Generator, Optional, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -119,12 +120,53 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     return session
 
 
+def _get_file_mtimes() -> Tuple[Optional[float], Optional[float]]:
+    """Get modification times of ~/.aws/config and ~/.aws/credentials."""
+    aws_dir = Path.home() / '.aws'
+    results: list[Optional[float]] = []
+    for path in (aws_dir / 'config', aws_dir / 'credentials'):
+        try:
+            results.append(path.stat().st_mtime)
+        except OSError:
+            results.append(None)
+    return (results[0], results[1])
+
+
+class CredentialRefresher:
+    """Refreshes the boto3 session when AWS credential files change on disk.
+
+    Monitors ~/.aws/config and ~/.aws/credentials modification times.
+    When files change, creates a new boto3 session to pick up updated credentials.
+    """
+
+    def __init__(self, profile: Optional[str] = None) -> None:
+        """Initialize with an AWS profile."""
+        self._profile = profile
+        self._session = create_aws_session(profile)
+        self._file_mtimes = _get_file_mtimes()
+
+    def get_session(self) -> boto3.Session:
+        """Return the current boto3 session, refreshing when config files change."""
+        current_mtimes = _get_file_mtimes()
+        if current_mtimes == self._file_mtimes:
+            return self._session
+
+        logger.debug('AWS config file change detected, refreshing session')
+        self._file_mtimes = current_mtimes
+
+        try:
+            self._session = create_aws_session(self._profile)
+        except ValueError:
+            logger.warning('Failed to create fresh AWS session, using cached session')
+
+        return self._session
+
+
 def create_sigv4_client(
     service: str,
     region: str,
+    credential_refresher: CredentialRefresher,
     timeout: Optional[httpx.Timeout] = None,
-    profile: Optional[str] = None,
-    session: Optional[boto3.Session] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
@@ -133,9 +175,8 @@ def create_sigv4_client(
 
     Args:
         service: AWS service name for SigV4 signing
-        profile: AWS profile to use (optional, only used if session is not provided)
-        session: AWS boto3 session to use (optional, takes precedence over profile)
-        region: AWS region (optional, defaults to AWS_REGION env var or us-east-1)
+        region: AWS region for SigV4 signing
+        credential_refresher: Refresher that provides up-to-date boto3 sessions
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
@@ -144,10 +185,6 @@ def create_sigv4_client(
     Returns:
         httpx.AsyncClient with SigV4 authentication
     """
-    # Create or use provided AWS session
-    if session is None:
-        session = create_aws_session(profile)
-
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': True,
@@ -179,7 +216,7 @@ def create_sigv4_client(
             'response': [_handle_error_response],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                partial(_sign_request_hook, region, service, session),
+                partial(_sign_request_hook, region, service, credential_refresher),
             ],
         },
     )
@@ -238,31 +275,28 @@ async def _handle_error_response(response: httpx.Response) -> None:
 async def _sign_request_hook(
     region: str,
     service: str,
-    session: boto3.Session,
+    credential_refresher: CredentialRefresher,
     request: httpx.Request,
 ) -> None:
     """Request hook to sign HTTP requests with AWS SigV4.
 
     This hook signs the request with AWS SigV4 credentials and adds signature headers.
+    Uses the credential refresher to pick up changes to ~/.aws/credentials or ~/.aws/config.
 
     This should be the last hook called to ensure the signature includes any modifications.
 
     Args:
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
-        session: AWS boto3 session to use for credentials
+        credential_refresher: Refresher that provides up-to-date boto3 sessions
         request: The HTTP request object to sign (modified in-place)
     """
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
 
-    # Get AWS credentials from the session
+    # Get AWS credentials from the current session (refreshed if config files changed)
+    session = credential_refresher.get_session()
     credentials = session.get_credentials()
-    logger.debug(
-        'Signing request with credentials for access key: %s...%s',
-        credentials.access_key[:4],
-        credentials.access_key[-4:],
-    )
 
     # Create SigV4 auth and use its signing logic
     auth = SigV4HTTPXAuth(credentials, service, region)

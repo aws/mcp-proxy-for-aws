@@ -20,6 +20,7 @@ from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
+    CredentialRefresher,
     SigV4HTTPXAuth,
     _sanitize_headers,
     create_aws_session,
@@ -123,17 +124,17 @@ class TestCreateAwsSession:
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_default(self, mock_client_class):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        mock_refresher = Mock(spec=CredentialRefresher)
 
         # Test client creation
-        result = create_sigv4_client(service='test-service', region='test-region')
+        result = create_sigv4_client(
+            service='test-service', region='test-region', credential_refresher=mock_refresher
+        )
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -148,19 +149,20 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers']['User-Agent'] == expected_user_agent
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_custom_headers(self, mock_client_class):
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        mock_refresher = Mock(spec=CredentialRefresher)
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
         result = create_sigv4_client(
-            service='test-service', region='test-region', headers=custom_headers
+            service='test-service',
+            region='test-region',
+            credential_refresher=mock_refresher,
+            headers=custom_headers,
         )
 
         # Verify client was created with merged headers
@@ -173,43 +175,33 @@ class TestCreateSigv4Client:
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(
-        self, mock_client_class, mock_create_session
-    ):
+    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-
-        # Mock session creation
-        mock_session = Mock()
-        mock_session.get_credentials.return_value = Mock(access_key='test-key')
-        mock_create_session.return_value = mock_session
+        mock_refresher = Mock(spec=CredentialRefresher)
 
         # Test client creation with custom parameters
         result = create_sigv4_client(
-            service='custom-service', profile='test-profile', region='us-east-1'
+            service='custom-service', region='us-east-1', credential_refresher=mock_refresher
         )
 
-        # Verify session was created with profile
-        mock_create_session.assert_called_once_with('test-profile')
         # Verify client was created
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_kwargs(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_kwargs(self, mock_client_class):
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        mock_refresher = Mock(spec=CredentialRefresher)
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
+            credential_refresher=mock_refresher,
             verify=False,
             proxies={'http': 'http://proxy:8080'},
         )
@@ -220,19 +212,12 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_session):
-        """Test creating SigV4 client when prompts exist in the system context.
-
-        This test simulates the scenario where the sigv4_helper is used in a context
-        where MCP prompts are present, ensuring the client is properly configured
-        to handle requests that might include prompt-related content or headers.
-        """
+    def test_create_sigv4_client_with_prompt_context(self, mock_client_class):
+        """Test creating SigV4 client with prompt context headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        mock_refresher = Mock(spec=CredentialRefresher)
 
         # Test client creation with headers that might be used when prompts exist
         prompt_context_headers = {
@@ -241,7 +226,10 @@ class TestCreateSigv4Client:
         }
 
         result = create_sigv4_client(
-            service='test-service', headers=prompt_context_headers, region='us-west-2'
+            service='test-service',
+            region='us-west-2',
+            credential_refresher=mock_refresher,
+            headers=prompt_context_headers,
         )
 
         # Check that AsyncClient was called with correct parameters including prompt headers
@@ -336,3 +324,87 @@ class TestSanitizeHeaders:
         assert 'authorization' in SENSITIVE_HEADERS
         assert 'x-amz-security-token' in SENSITIVE_HEADERS
         assert 'x-amz-date' in SENSITIVE_HEADERS
+
+
+class TestCredentialRefresher:
+    """Test cases for the CredentialRefresher class."""
+
+    def _make_session_mock(self):
+        """Helper to create a mock boto3 session."""
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = Mock()
+        return mock_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes', return_value=(1.0, 1.0))
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_initial_session_creation(self, mock_create_session, _mock_mtimes):
+        """Test that CredentialRefresher creates a session on init."""
+        mock_session = self._make_session_mock()
+        mock_create_session.return_value = mock_session
+
+        refresher = CredentialRefresher(profile='test-profile')
+
+        mock_create_session.assert_called_once_with('test-profile')
+        assert refresher.get_session() is mock_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes', return_value=(1.0, 1.0))
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_returns_cached_session_when_files_unchanged(self, mock_create_session, _mock_mtimes):
+        """Test that get_session returns cached session when config files haven't changed."""
+        mock_session = self._make_session_mock()
+        mock_create_session.return_value = mock_session
+
+        refresher = CredentialRefresher()
+        result1 = refresher.get_session()
+        result2 = refresher.get_session()
+
+        assert result1 is result2
+        mock_create_session.assert_called_once()
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_creates_fresh_session_when_files_change(self, mock_create_session, mock_mtimes):
+        """Test that get_session creates a fresh session when config files change."""
+        session1 = self._make_session_mock()
+        session2 = self._make_session_mock()
+        mock_create_session.side_effect = [session1, session2]
+        mock_mtimes.side_effect = [(1.0, 1.0), (2.0, 1.0)]
+
+        refresher = CredentialRefresher()
+        result = refresher.get_session()
+
+        assert result is session2
+        assert mock_create_session.call_count == 2
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_falls_back_to_cached_session_on_error(self, mock_create_session, mock_mtimes):
+        """Test that get_session falls back to cached session if fresh session fails."""
+        original_session = self._make_session_mock()
+        mock_create_session.side_effect = [original_session, ValueError('no creds')]
+        mock_mtimes.side_effect = [(1.0, 1.0), (2.0, 1.0)]
+
+        refresher = CredentialRefresher()
+        result = refresher.get_session()
+
+        assert result is original_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper._get_file_mtimes')
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_multiple_file_changes(self, mock_create_session, mock_mtimes):
+        """Test detecting multiple sequential file changes."""
+        sessions = [self._make_session_mock() for _ in range(3)]
+        mock_create_session.side_effect = sessions
+        mock_mtimes.side_effect = [
+            (1.0, 1.0),  # init
+            (2.0, 1.0),  # first get_session
+            (3.0, 1.0),  # second get_session
+        ]
+
+        refresher = CredentialRefresher()
+
+        result1 = refresher.get_session()
+        assert result1 is sessions[1]
+
+        result2 = refresher.get_session()
+        assert result2 is sessions[2]
