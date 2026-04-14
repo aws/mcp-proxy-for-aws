@@ -71,8 +71,12 @@ class ToolErrorMiddleware(Middleware):
 
     @staticmethod
     def _is_credential_error(error: Exception) -> bool:
-        """Check if the error is likely caused by expired or invalid credentials."""
-        # Walk the exception chain — the 401/403 may be wrapped
+        """Check if the error is likely caused by expired or invalid credentials.
+
+        Walks the exception chain (__cause__/__context__) because the
+        HTTPStatusError may be wrapped.  isinstance already respects the
+        MRO, so subclasses are caught too.
+        """
         current: BaseException | None = error
         while current is not None:
             if isinstance(current, httpx.HTTPStatusError) and current.response.status_code in (
@@ -80,6 +84,5 @@ class ToolErrorMiddleware(Middleware):
                 403,
             ):
                 return True
-            current = current.__cause__ if current.__cause__ else current.__context__
-
+            current = current.__cause__ or current.__context__
         return False
