@@ -127,9 +127,7 @@ class TestCreateSigv4Client:
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(
-        self, mock_client_class, mock_get_client_info
-    ):
+    def test_create_sigv4_client_default(self, mock_client_class, mock_get_client_info):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -137,7 +135,9 @@ class TestCreateSigv4Client:
         session_holder = SessionHolder(mock_session)
 
         # Test client creation
-        result = create_sigv4_client(service='test-service', region='test-region', session_holder=session_holder)
+        result = create_sigv4_client(
+            service='test-service', region='test-region', session_holder=session_holder
+        )
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -165,7 +165,10 @@ class TestCreateSigv4Client:
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
         result = create_sigv4_client(
-            service='test-service', region='test-region', session_holder=session_holder, headers=custom_headers
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            headers=custom_headers,
         )
 
         # Verify client was created with merged headers
@@ -179,9 +182,7 @@ class TestCreateSigv4Client:
         assert result == mock_client
 
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(
-        self, mock_client_class
-    ):
+    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -236,7 +237,10 @@ class TestCreateSigv4Client:
         }
 
         result = create_sigv4_client(
-            service='test-service', session_holder=session_holder, headers=prompt_context_headers, region='us-west-2'
+            service='test-service',
+            session_holder=session_holder,
+            headers=prompt_context_headers,
+            region='us-west-2',
         )
 
         # Check that AsyncClient was called with correct parameters including prompt headers
@@ -270,7 +274,10 @@ class TestCreateSigv4Client:
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
-            service='test-service', region='test-region', session_holder=session_holder, disable_telemetry=True
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            disable_telemetry=True,
         )
 
         call_args = mock_client_class.call_args
@@ -292,7 +299,10 @@ class TestCreateSigv4Client:
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
-            service='test-service', region='test-region', session_holder=session_holder, disable_telemetry=False
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            disable_telemetry=False,
         )
 
         call_args = mock_client_class.call_args

@@ -128,6 +128,7 @@ class SessionHolder:
     """
 
     def __init__(self, session: boto3.Session, profile: Optional[str] = None) -> None:
+        """Initialize SessionHolder with the given session and optional profile."""
         self.session = session
         self._profile = profile
         self._needs_refresh = False
@@ -145,7 +146,9 @@ class SessionHolder:
             self.session = create_aws_session(self._profile)
             self._needs_refresh = False
         except ValueError:
-            logger.warning('Failed to create fresh AWS session, keeping current session', exc_info=True)
+            logger.warning(
+                'Failed to create fresh AWS session, keeping current session', exc_info=True
+            )
 
 
 def create_sigv4_client(
@@ -174,7 +177,6 @@ def create_sigv4_client(
     Returns:
         httpx.AsyncClient with SigV4 authentication
     """
-
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': True,

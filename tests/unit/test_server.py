@@ -410,7 +410,9 @@ class TestServer:
         mock_session.get_credentials.return_value = Mock(access_key='test-key')
         session_holder = SessionHolder(mock_session, profile='test-profile')
 
-        create_sigv4_client(service='test-service', region='us-west-2', session_holder=session_holder)
+        create_sigv4_client(
+            service='test-service', region='us-west-2', session_holder=session_holder
+        )
 
         assert mock_async_client.call_count == 1
         call_args = mock_async_client.call_args
@@ -424,7 +426,9 @@ class TestServer:
         mock_session = Mock()
         session_holder = SessionHolder(mock_session)
 
-        client = create_sigv4_client(service='test-service', region='test-region', session_holder=session_holder)
+        client = create_sigv4_client(
+            service='test-service', region='test-region', session_holder=session_holder
+        )
         assert client is not None
 
     def test_main_module_execution(self):
