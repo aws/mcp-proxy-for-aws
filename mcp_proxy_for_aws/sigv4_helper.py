@@ -140,12 +140,12 @@ class SessionHolder:
         """Create a fresh session if a previous request got an auth error."""
         if not self._needs_refresh:
             return
-        self._needs_refresh = False
         logger.info('Refreshing AWS session to pick up new credentials')
         try:
             self.session = create_aws_session(self._profile)
+            self._needs_refresh = False
         except ValueError:
-            logger.warning('Failed to create fresh AWS session, keeping current session')
+            logger.warning('Failed to create fresh AWS session, keeping current session', exc_info=True)
 
 
 def create_sigv4_client(

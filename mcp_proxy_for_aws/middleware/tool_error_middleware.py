@@ -81,13 +81,5 @@ class ToolErrorMiddleware(Middleware):
             ):
                 return True
             current = current.__cause__ if current.__cause__ else current.__context__
-            # Avoid infinite loops on self-referencing chains
-            if current is error:
-                break
-
-        # "Unknown tool" after a failed reconnect is almost always a credential issue
-        error_str = str(error)
-        if 'Unknown tool' in error_str or 'Unauthorized' in error_str:
-            return True
 
         return False
