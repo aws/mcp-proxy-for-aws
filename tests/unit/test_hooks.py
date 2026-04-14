@@ -64,6 +64,55 @@ class TestHandleErrorResponse:
     """Test cases for the _handle_error_response function."""
 
     @pytest.mark.asyncio
+    async def test_handle_error_response_marks_refresh_on_401(self):
+        """401 response marks the session holder for refresh."""
+        request = httpx.Request('POST', 'https://example.com/mcp')
+        response = httpx.Response(
+            status_code=401,
+            headers={'content-type': 'text/plain'},
+            content=b'Unauthorized',
+            request=request,
+        )
+        holder = create_mock_session_holder()
+
+        await _handle_error_response(holder, response)
+
+        holder.mark_needs_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_marks_refresh_on_403(self):
+        """403 response marks the session holder for refresh."""
+        request = httpx.Request('POST', 'https://example.com/mcp')
+        response = httpx.Response(
+            status_code=403,
+            headers={'content-type': 'text/plain'},
+            content=b'Forbidden',
+            request=request,
+        )
+        holder = create_mock_session_holder()
+
+        await _handle_error_response(holder, response)
+
+        holder.mark_needs_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_error_response_does_not_mark_refresh_on_other_errors(self):
+        """Non-auth error codes (400, 404, 500) do not mark refresh."""
+        for status_code in (400, 404, 500):
+            request = httpx.Request('POST', 'https://example.com/mcp')
+            response = httpx.Response(
+                status_code=status_code,
+                headers={'content-type': 'text/plain'},
+                content=b'Error',
+                request=request,
+            )
+            holder = create_mock_session_holder()
+
+            await _handle_error_response(holder, response)
+
+            holder.mark_needs_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_handle_error_response_with_json_error(self):
         """Test error handling with JSON error response."""
         # Create a mock error response with JSON content
@@ -350,6 +399,17 @@ class TestMetadataInjectionHook:
 
 class TestSignRequestHook:
     """Test cases for sign_request_hook function."""
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_calls_refresh_if_needed(self):
+        """Signing hook calls refresh_if_needed before signing."""
+        holder = create_mock_session_holder()
+        request_body = b'{"test": "data"}'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+
+        holder.refresh_if_needed.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_signs_request(self):
