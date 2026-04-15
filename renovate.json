@@ -12,9 +12,5 @@
         "*"
       ]
     }
-  ],
-  "schedule": [
-    "before 9am on monday"
-  ],
-  "timezone": "UTC"
+  ]
 }
