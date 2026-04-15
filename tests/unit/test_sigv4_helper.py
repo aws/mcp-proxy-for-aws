@@ -64,50 +64,35 @@ class TestCreateAwsSession:
     @patch('boto3.Session')
     def test_create_aws_session_default(self, mock_session_class):
         """Test creating AWS session with default profile."""
-        # Mock session and credentials
         mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_session.get_credentials.return_value = mock_credentials
         mock_session_class.return_value = mock_session
 
-        # Test session creation
         result = create_aws_session()
 
-        # Verify session was created correctly
         mock_session_class.assert_called_once_with()
         assert result == mock_session
 
     @patch('boto3.Session')
     def test_create_aws_session_with_profile(self, mock_session_class):
         """Test creating AWS session with specific profile."""
-        # Mock session and credentials
         mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_session.get_credentials.return_value = mock_credentials
         mock_session_class.return_value = mock_session
 
-        # Test session creation with profile
         result = create_aws_session(profile='test-profile')
 
-        # Verify session was created with profile
         mock_session_class.assert_called_once_with(profile_name='test-profile')
         assert result == mock_session
 
     @patch('boto3.Session')
-    def test_create_aws_session_no_credentials(self, mock_session_class):
-        """Test error handling when no credentials are available."""
-        # Mock session with no credentials
+    def test_create_aws_session_no_credentials_returns_session(self, mock_session_class):
+        """Test that session is returned even when no credentials are immediately available."""
         mock_session = Mock()
         mock_session.get_credentials.return_value = None
         mock_session_class.return_value = mock_session
 
-        # Test that ValueError is raised
-        with pytest.raises(ValueError) as exc_info:
-            create_aws_session()
+        result = create_aws_session()
 
-        assert 'No AWS credentials found' in str(exc_info.value)
+        assert result == mock_session
 
     @patch('boto3.Session')
     def test_create_aws_session_creation_failure(self, mock_session_class):
