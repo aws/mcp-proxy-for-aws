@@ -1,14 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
   "dependencyDashboard": false,
-  "schedule": ["before 9am on monday"],
-  "timezone": "UTC",
+  "extends": [
+    "config:recommended"
+  ],
   "packageRules": [
     {
-      "matchPackagePatterns": ["*"],
       "groupName": "all-dependencies",
-      "groupSlug": "all-deps"
+      "groupSlug": "all-deps",
+      "matchPackagePatterns": [
+        "*"
+      ]
     }
-  ]
+  ],
+  "schedule": [
+    "before 9am on monday"
+  ],
+  "timezone": "UTC"
 }
