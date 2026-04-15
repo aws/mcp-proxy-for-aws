@@ -98,7 +98,53 @@ class TestToolErrorMiddleware:
 
         with pytest.raises(ToolError, match='expired or invalid AWS credentials') as exc_info:
             await middleware.on_call_tool(context, call_next)
-        assert '--profile' in str(exc_info.value)
+        assert 'refresh your credentials' in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_credential_error_on_403(self):
+        """403 Forbidden is recognised as a credential error."""
+        middleware = _make_middleware()
+        response = Mock(spec=httpx.Response)
+        response.status_code = 403
+        call_next = AsyncMock(
+            side_effect=httpx.HTTPStatusError('Forbidden', request=Mock(), response=response)
+        )
+        context = _make_context()
+
+        with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
+            await middleware.on_call_tool(context, call_next)
+
+    @pytest.mark.asyncio
+    async def test_credential_error_wrapped_in_cause(self):
+        """401 wrapped via __cause__ is still detected."""
+        middleware = _make_middleware()
+        response = Mock(spec=httpx.Response)
+        response.status_code = 401
+        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        outer = RuntimeError('request failed')
+        outer.__cause__ = inner
+
+        call_next = AsyncMock(side_effect=outer)
+        context = _make_context()
+
+        with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
+            await middleware.on_call_tool(context, call_next)
+
+    @pytest.mark.asyncio
+    async def test_credential_error_wrapped_in_context(self):
+        """401 wrapped via __context__ (implicit chaining) is still detected."""
+        middleware = _make_middleware()
+        response = Mock(spec=httpx.Response)
+        response.status_code = 401
+        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        outer = RuntimeError('wrapped')
+        outer.__context__ = inner
+
+        call_next = AsyncMock(side_effect=outer)
+        context = _make_context()
+
+        with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
+            await middleware.on_call_tool(context, call_next)
 
     @pytest.mark.asyncio
     async def test_non_credential_error_no_suggestion(self):
