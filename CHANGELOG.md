@@ -5,20 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v1.3.0 (2026-04-10)
+
+### Added
+
+- Client info to user agent, opt-out with `--disable-telemetry` (#224)
+
+## v1.2.0 (2026-04-08)
 
 ### Added
 
 - Build and publish container image (#126)
+- Upgrade FastMCP to 3.2.0 (#229)
+- Update user agent with proxy info (#225)
 
 ### Fixed
 
 - Simplify error middleware and suggest long-lived AWS credentials on auth errors (#216)
-- Use new streamable http client (#228)
+- Use new streamable http client and fix elicitation forwarding (#228)
 - Add URL scheme validation to prevent credential interception (#169)
 - Prevent credential exposure in logs (#167)
 - Replace failing integ test (#178)
 - retrieve_agent_sop test (#197)
+- pytest coroutine warnings (#227)
 
 ## v1.1.6 (2026-01-29)
 
