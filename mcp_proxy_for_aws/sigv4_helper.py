@@ -101,21 +101,12 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
         boto3.Session instance
 
     Raises:
-        ValueError: If session creation fails or no credentials found
+        ValueError: If session creation fails
     """
     try:
         session = boto3.Session(profile_name=profile) if profile else boto3.Session()
     except Exception as e:
         raise ValueError(f"Failed to create AWS session with profile '{profile}': {e}")
-
-    # Verify credentials are available
-    credentials = session.get_credentials()
-    if not credentials:
-        profile_msg = f" with profile '{profile}'" if profile else ''
-        raise ValueError(
-            f'No AWS credentials found{profile_msg}. '
-            "Please configure your AWS credentials using 'aws configure' or environment variables."
-        )
 
     return session
 
