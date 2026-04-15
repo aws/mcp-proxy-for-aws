@@ -27,12 +27,15 @@ import httpx
 import logging
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
+from fastmcp.server.providers.proxy import FastMCPProxy
 from fastmcp.server.server import FastMCP
+from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
+from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
-from mcp_proxy_for_aws.proxy import AWSMCPProxy, AWSMCPProxyClientFactory
+from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -81,20 +84,22 @@ async def run_proxy(args) -> None:
 
     # Create transport with SigV4 authentication
     transport = create_transport_with_sigv4(
-        args.endpoint, service, region, metadata, timeout, profile
+        args.endpoint, service, region, metadata, timeout, profile, args.disable_telemetry
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
     try:
-        proxy = AWSMCPProxy(
+        proxy = FastMCPProxy(
             client_factory=client_factory,
             name='MCP Proxy for AWS',
+            version=__version__,
             instructions=(
                 'MCP Proxy for AWS provides access to SigV4 protected MCP servers through a single interface. '
                 'This proxy handles authentication and request routing to the appropriate backend services.'
             ),
         )
         proxy.add_middleware(InitializeMiddleware(client_factory))
+        add_tool_error_middleware(proxy, args.tool_timeout)
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
@@ -106,6 +111,17 @@ async def run_proxy(args) -> None:
         raise e
     finally:
         await client_factory.disconnect()
+
+
+def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:
+    """Add tool error middleware.
+
+    Args:
+        mcp: The FastMCP instance to add the middleware to
+        tool_timeout: Maximum seconds a tool call may take.
+    """
+    logger.info('Adding tool error middleware with tool_timeout=%s', tool_timeout)
+    mcp.add_middleware(ToolErrorMiddleware(tool_call_timeout=tool_timeout))
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:

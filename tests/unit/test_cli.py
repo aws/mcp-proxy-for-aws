@@ -38,6 +38,8 @@ class TestParseArgs:
         assert args.connect_timeout == 60.0
         assert args.read_timeout == 120.0
         assert args.write_timeout == 180.0
+        assert args.tool_timeout == 300.0
+        assert args.disable_telemetry is False
 
     @patch(
         'sys.argv',
@@ -186,3 +188,17 @@ class TestParseArgs:
         with pytest.raises((SystemExit, argparse.ArgumentTypeError)):
             # argparse may call sys.exit or raise ArgumentTypeError
             parse_args()
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--disable-telemetry'])
+    def test_parse_args_disable_telemetry_flag(self):
+        """Test that --disable-telemetry flag sets disable_telemetry to True."""
+        args = parse_args()
+
+        assert args.disable_telemetry is True
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_disable_telemetry_default(self):
+        """Test that disable_telemetry defaults to False when flag is not provided."""
+        args = parse_args()
+
+        assert args.disable_telemetry is False

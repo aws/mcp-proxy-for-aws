@@ -12,10 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""mcp-proxy-for-aws"""
-
-from importlib.metadata import version as _metadata_version
+from mcp.types import Implementation
 
 
-__all__ = ['__version__']
-__version__ = _metadata_version('mcp-proxy-for-aws')
+_client_info: Implementation | None = None
+
+
+def get_client_info() -> Implementation | None:
+    """Get the stored client info."""
+    return _client_info
+
+
+def set_client_info(info: Implementation | None) -> None:
+    """Set the client info."""
+    global _client_info
+    _client_info = info

@@ -22,7 +22,7 @@ from mcp_proxy_for_aws.server import (
     parse_args,
     run_proxy,
 )
-from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import SessionHolder, create_sigv4_client
 from mcp_proxy_for_aws.utils import determine_service_name
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -32,7 +32,7 @@ class TestServer:
 
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.AWSMCPProxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -43,7 +43,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_aws_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_factory_class,
     ):
@@ -79,7 +79,7 @@ class TestServer:
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
         mock_proxy.add_middleware = Mock()
-        mock_aws_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -97,7 +97,7 @@ class TestServer:
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
         mock_client_factory_class.assert_called_once_with(mock_transport)
-        mock_aws_proxy.assert_called_once()
+        mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, True)
         mock_add_retry.assert_called_once_with(mock_proxy, 1)
         mock_proxy.run_async.assert_called_once_with(
@@ -106,7 +106,7 @@ class TestServer:
 
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.AWSMCPProxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -115,7 +115,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_aws_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_factory_class,
     ):
@@ -151,7 +151,7 @@ class TestServer:
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
         mock_proxy.add_middleware = Mock()
-        mock_aws_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -172,7 +172,7 @@ class TestServer:
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] == 'test-profile'  # profile
         mock_client_factory_class.assert_called_once_with(mock_transport)
-        mock_aws_proxy.assert_called_once()
+        mock_fastmcp_proxy.assert_called_once()
         mock_add_filtering.assert_called_once_with(mock_proxy, False)
         mock_proxy.run_async.assert_called_once_with(
             transport='stdio', show_banner=False, log_level='INFO'
@@ -180,7 +180,7 @@ class TestServer:
 
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.AWSMCPProxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -189,7 +189,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_aws_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_factory_class,
     ):
@@ -222,7 +222,7 @@ class TestServer:
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
         mock_proxy.add_middleware = Mock()
-        mock_aws_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -235,7 +235,7 @@ class TestServer:
 
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
-    @patch('mcp_proxy_for_aws.server.AWSMCPProxy')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
@@ -244,7 +244,7 @@ class TestServer:
         mock_add_filtering,
         mock_determine_service,
         mock_determine_region,
-        mock_aws_proxy,
+        mock_fastmcp_proxy,
         mock_create_transport,
         mock_client_factory_class,
     ):
@@ -277,7 +277,7 @@ class TestServer:
         mock_proxy = Mock()
         mock_proxy.run_async = AsyncMock()
         mock_proxy.add_middleware = Mock()
-        mock_aws_proxy.return_value = mock_proxy
+        mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
         await run_proxy(mock_args)
@@ -364,8 +364,9 @@ class TestServer:
         assert args.retries == 5
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.run_proxy', new_callable=Mock)
     @patch('sys.argv', ['test', 'https://test.example.com'])
-    def test_main_function(self, mock_asyncio_run):
+    def test_main_function(self, mock_run_proxy, mock_asyncio_run):
         """Test that main function runs server correctly."""
         # Arrange
         mock_asyncio_run.return_value = None
@@ -377,8 +378,9 @@ class TestServer:
         mock_asyncio_run.assert_called_once()
 
     @patch('mcp_proxy_for_aws.server.asyncio.run')
+    @patch('mcp_proxy_for_aws.server.run_proxy', new_callable=Mock)
     @patch('sys.argv', ['test', 'https://test.example.com'])
-    def test_main_error_handling(self, mock_asyncio_run):
+    def test_main_error_handling(self, mock_run_proxy, mock_asyncio_run):
         """Test that main function handles errors gracefully."""
         # Arrange
         mock_asyncio_run.side_effect = Exception('Test error')
@@ -401,48 +403,32 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
-    def test_create_sigv4_client(self, mock_async_client, mock_create_session):
-        """Test creating SigV4 authenticated client with request hooks.
-
-        Note: Session creation and signing now happens in sign_request_hook,
-        not during client creation.
-        """
-        # Mock session creation
+    def test_create_sigv4_client(self, mock_async_client):
+        """Test creating SigV4 authenticated client with request hooks."""
         mock_session = Mock()
         mock_session.get_credentials.return_value = Mock(access_key='test-key')
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(mock_session, profile='test-profile')
 
-        # Act
-        create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
+        create_sigv4_client(
+            service='test-service', region='us-west-2', session_holder=session_holder
+        )
 
-        # Assert
-        # Verify session was created with profile
-        mock_create_session.assert_called_once_with('test-profile')
-        # Verify AsyncClient was called (signing happens via hooks)
         assert mock_async_client.call_count == 1
         call_args = mock_async_client.call_args
-        # Verify hooks are registered
         assert 'event_hooks' in call_args[1]
         assert 'request' in call_args[1]['event_hooks']
         assert 'response' in call_args[1]['event_hooks']
-        # Should have metadata injection + sign hooks
         assert len(call_args[1]['event_hooks']['request']) == 2
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_create_sigv4_client_no_credentials(self, mock_create_session):
-        """Test that credential check happens in sign_request_hook, not during client creation.
-
-        Note: With the refactoring, client creation no longer validates credentials.
-        Credential validation now happens in sign_request_hook when the request is signed.
-        """
+    def test_create_sigv4_client_no_credentials(self):
+        """Test that credential check happens in sign_request_hook, not during client creation."""
         mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(mock_session)
 
-        # Client creation should succeed even without credentials
-        # (credentials are checked when signing happens)
-        client = create_sigv4_client(service='test-service', region='test-region')
+        client = create_sigv4_client(
+            service='test-service', region='test-region', session_holder=session_holder
+        )
         assert client is not None
 
     def test_main_module_execution(self):

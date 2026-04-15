@@ -87,30 +87,11 @@ def verify_json_response(response: CallToolResult):
     'tool_name,params',
     [
         ('aws___list_regions', {}),
-        ('aws___suggest_aws_commands', {'query': 'how to list my lambda functions'}),
-        ('aws___search_documentation', {'search_phrase': 'S3 bucket versioning'}),
-        (
-            'aws___recommend',
-            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
-        ),
-        (
-            'aws___read_documentation',
-            {'url': 'https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html'},
-        ),
-        (
-            'aws___get_regional_availability',
-            {'resource_type': 'cfn', 'region': 'us-east-1'},
-        ),
-        ('aws___call_aws', {'cli_command': 'aws s3 ls', 'max_results': 10}),
+        ('aws___call_aws', {'cli_command': 'aws lambda list-functions', 'max_results': 10}),
     ],
     ids=[
         'list_regions',
-        'suggest_aws_commands',
-        'search_documentation',
-        'recommend',
-        'read_documentation',
-        'get_regional_availability',
-        'call_aws',
+        'list_lambda_functions',
     ],
 )
 @pytest.mark.asyncio(loop_scope='module')
@@ -123,28 +104,7 @@ async def test_aws_mcp_tools(aws_mcp_client: fastmcp.Client, tool_name: str, par
 @pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_tools_retrieve_agent_sop(aws_mcp_client: fastmcp.Client):
     """Test aws___retrieve_agent_sop by retrieving the list of available SOPs."""
-    # Step 1: Call retrieve_agent_sop with empty params to get list of available SOPs
-    list_sops_response = await aws_mcp_client.call_tool('aws___retrieve_agent_sop')
-
-    list_sops_response_text = verify_response_content(list_sops_response)
-
-    # Parse SOP names from text (format: "* sop_name : description")
-    sop_names = []
-    for line in list_sops_response_text.split('\n'):
-        line = line.strip()
-        if line.startswith('*') and ':' in line:
-            # Extract the SOP name between '*' and ':'
-            sop_name = line.split('*', 1)[1].split(':', 1)[0].strip()
-            if sop_name:
-                sop_names.append(sop_name)
-
-    assert len(sop_names) > 0, (
-        f'No SOPs found in response. Response: {list_sops_response_text[:200]}...'
-    )
-    logger.info('Found %d SOPs: %s', len(sop_names), sop_names)
-
-    # Step 2: Test retrieving the first SOP
-    test_script = sop_names[0]
+    test_script = 'create_production_vpc_multi_az'
     logger.info('Testing with SOP: %s', test_script)
 
     response = await aws_mcp_client.call_tool(

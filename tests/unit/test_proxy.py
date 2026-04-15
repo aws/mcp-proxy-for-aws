@@ -17,73 +17,13 @@
 import httpx
 import pytest
 from fastmcp.client.transports import ClientTransport
-from fastmcp.exceptions import NotFoundError
-from fastmcp.tools import Tool
 from mcp import McpError
 from mcp.types import ErrorData, InitializeRequest, JSONRPCError
 from mcp_proxy_for_aws.proxy import (
-    AWSMCPProxy,
     AWSMCPProxyClient,
     AWSMCPProxyClientFactory,
-    AWSProxyToolManager,
 )
 from unittest.mock import AsyncMock, Mock, patch
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_with_cache():
-    """Test get_tool returns from cache when available."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tool = Mock(spec=Tool)
-    manager._cached_tools = {'test_tool': mock_tool}
-
-    result = await manager.get_tool('test_tool')
-    assert result == mock_tool
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_without_cache():
-    """Test get_tool fetches tools when cache is empty."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tool = Mock(spec=Tool)
-
-    with patch.object(manager, 'get_tools', return_value={'test_tool': mock_tool}):
-        result = await manager.get_tool('test_tool')
-        assert result == mock_tool
-        assert manager._cached_tools == {'test_tool': mock_tool}
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tool_not_found():
-    """Test get_tool raises NotFoundError when tool doesn't exist."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    manager._cached_tools = {}
-
-    with pytest.raises(NotFoundError, match="Tool 'missing_tool' not found"):
-        await manager.get_tool('missing_tool')
-
-
-@pytest.mark.asyncio
-async def test_tool_manager_get_tools_updates_cache():
-    """Test get_tools updates the cache."""
-    mock_factory = Mock()
-    manager = AWSProxyToolManager(mock_factory)
-    mock_tools = {'tool1': Mock(spec=Tool), 'tool2': Mock(spec=Tool)}
-
-    with patch('mcp_proxy_for_aws.proxy._ProxyToolManager.get_tools', return_value=mock_tools):
-        result = await manager.get_tools()
-        assert result == mock_tools
-        assert manager._cached_tools == mock_tools
-
-
-def test_proxy_initialization():
-    """Test AWSMCPProxy initializes with custom tool manager."""
-    mock_factory = Mock()
-    proxy = AWSMCPProxy(client_factory=mock_factory, name='test')
-    assert isinstance(proxy._tool_manager, AWSProxyToolManager)
 
 
 @pytest.mark.asyncio
@@ -92,7 +32,7 @@ async def test_proxy_client_connect_success():
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', return_value='connected'):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', return_value='connected'):
         result = await client._connect()
         assert result == 'connected'
 
@@ -111,7 +51,7 @@ async def test_proxy_client_connect_http_error_with_mcp_error():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=http_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
         with pytest.raises(McpError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
@@ -129,7 +69,7 @@ async def test_proxy_client_connect_http_error_non_mcp():
 
     http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=http_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
         with pytest.raises(httpx.HTTPStatusError):
             await client._connect()
 
@@ -240,7 +180,7 @@ async def test_proxy_client_connect_runtime_error_with_mcp_error():
     runtime_error = RuntimeError('Connection failed')
     runtime_error.__cause__ = mcp_error
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
         with pytest.raises(McpError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
@@ -254,7 +194,7 @@ async def test_proxy_client_connect_runtime_error_max_retries():
 
     runtime_error = RuntimeError('Connection failed')
 
-    with patch('mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=runtime_error):
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
         with patch.object(client, '_disconnect', new_callable=AsyncMock) as mock_disconnect:
             with pytest.raises(RuntimeError):
                 await client._connect()
@@ -278,7 +218,8 @@ async def test_proxy_client_connect_runtime_error_with_timeout():
         return 'connected'
 
     with patch(
-        'mcp_proxy_for_aws.proxy._ProxyClient._connect', side_effect=mock_connect_side_effect
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect',
+        side_effect=mock_connect_side_effect,
     ):
         with patch.object(
             client,

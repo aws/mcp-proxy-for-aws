@@ -16,84 +16,20 @@ import httpx
 import logging
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
-from fastmcp.exceptions import NotFoundError
-from fastmcp.server.proxy import ClientFactoryT
-from fastmcp.server.proxy import FastMCPProxy as _FastMCPProxy
-from fastmcp.server.proxy import ProxyClient as _ProxyClient
-from fastmcp.server.proxy import ProxyToolManager as _ProxyToolManager
-from fastmcp.tools import Tool
+from fastmcp.server.providers.proxy import StatefulProxyClient
 from mcp import McpError
 from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
-from typing import Any
 from typing_extensions import override
 
 
 logger = logging.getLogger(__name__)
 
 
-class AWSProxyToolManager(_ProxyToolManager):
-    """Customized proxy tool manager that better suites our needs."""
-
-    def __init__(self, client_factory: ClientFactoryT, **kwargs: Any):
-        """Initialize a proxy tool manager.
-
-        Cached tools are set to None.
-        """
-        super().__init__(client_factory, **kwargs)
-        self._cached_tools: dict[str, Tool] | None = None
-
-    @override
-    async def get_tool(self, key: str) -> Tool:
-        """Return the tool from cached tools.
-
-        This method is invoked when the client tries to call a tool.
-
-            tool = self.get_tool(key)
-            tool.invoke(...)
-
-        The parent class implementation always make a mcp call to list the tools.
-        Since the client already knows the name of the tools, list_tool is not necessary.
-        We are wasting a network call just to get the tools which were already listed.
-
-        In case the server supports notifications/tools/listChanged, the `get_tools` method
-        will be called explicity , hence, we are not missing the change to the tool list.
-        """
-        if self._cached_tools is None:
-            logger.debug('cached_tools not found, calling get_tools')
-            self._cached_tools = await self.get_tools()
-        if key in self._cached_tools:
-            return self._cached_tools[key]
-        raise NotFoundError(f'Tool {key!r} not found')
-
-    @override
-    async def get_tools(self) -> dict[str, Tool]:
-        """Return list tools."""
-        self._cached_tools = await super(AWSProxyToolManager, self).get_tools()
-        return self._cached_tools
-
-
-class AWSMCPProxy(_FastMCPProxy):
-    """Customized MCP Proxy to better suite our needs."""
-
-    def __init__(
-        self,
-        *,
-        client_factory: ClientFactoryT | None = None,
-        **kwargs,
-    ):
-        """Initialize a client."""
-        super().__init__(client_factory=client_factory, **kwargs)
-        self._tool_manager = AWSProxyToolManager(
-            client_factory=self.client_factory,
-            transformations=self._tool_manager.transformations,
-        )
-
-
-class AWSMCPProxyClient(_ProxyClient):
+class AWSMCPProxyClient(StatefulProxyClient):
     """Proxy client that handles HTTP errors when connection fails."""
 
     def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
-        """Constructor of AutoRefreshProxyCilent."""
+        """Constructor of AWSMCPProxyClient."""
         super().__init__(transport, **kwargs)
         self._max_connect_retry = max_connect_retry
 

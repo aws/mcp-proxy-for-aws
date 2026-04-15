@@ -13,15 +13,17 @@
 # limitations under the License.
 
 import boto3
+import httpx
 import logging
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
-from mcp.client.streamable_http import GetSessionIdCallback, streamablehttp_client
+from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
+from mcp_proxy_for_aws.utils import validate_endpoint_url
 from typing import Optional
 
 
@@ -53,7 +55,8 @@ def aws_iam_streamablehttp_client(
     authentication via SigV4 signing. Use with 'async with' to manage the connection lifecycle.
 
     Args:
-        endpoint: The URL of the MCP server to connect to. Must be a valid HTTP/HTTPS URL.
+        endpoint: The URL of the MCP server to connect to. Must use HTTPS for remote endpoints
+            (HTTP is allowed for localhost during development).
         aws_service: The name of the AWS service the MCP server is hosted on, e.g. "bedrock-agentcore".
         aws_region: The AWS region name of the MCP server, e.g. "us-west-2".
         aws_profile: The AWS profile to use for authentication.
@@ -80,6 +83,9 @@ def aws_iam_streamablehttp_client(
             pass
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
+
+    # Validate URL scheme for security - AWS credentials must be transmitted over HTTPS
+    validate_endpoint_url(endpoint)
 
     if credentials is not None:
         creds = credentials
@@ -113,13 +119,13 @@ def aws_iam_streamablehttp_client(
     # Create a SigV4 authentication handler with AWS credentials
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
+    # Create the HTTP client with authentication and configuration
+    httpx_timeout = httpx.Timeout(
+        timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
+    )
+    http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)
+
     # Return the streamable HTTP client context manager with AWS IAM authentication
-    return streamablehttp_client(
-        url=endpoint,
-        headers=headers,
-        timeout=timeout,
-        sse_read_timeout=sse_read_timeout,
-        terminate_on_close=terminate_on_close,
-        httpx_client_factory=httpx_client_factory,
-        auth=auth,
+    return streamable_http_client(
+        url=endpoint, http_client=http_client, terminate_on_close=terminate_on_close
     )

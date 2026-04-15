@@ -9,6 +9,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "chore(deps): update github-actions"
     groups:
@@ -22,6 +25,9 @@ updates:
       - "/" # Searches for uv.lock in Root
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "chore(deps): update uv"
     groups:
@@ -35,6 +41,9 @@ updates:
       - "/" # Searches for Dockerfile in Root
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "chore(deps): update docker images"
     groups:
@@ -48,6 +57,9 @@ updates:
       - "/" # Searches for pyproject.toml in Root
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "chore(deps): update pip"
     groups:

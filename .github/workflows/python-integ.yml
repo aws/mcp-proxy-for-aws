@@ -44,7 +44,7 @@ jobs:
         run: uv sync --frozen --all-extras --dev
 
       - name: Configure AWS Credentials for Tests
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
         with:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.IntegTestRoleArn }}

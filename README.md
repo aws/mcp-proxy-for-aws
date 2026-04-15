@@ -80,7 +80,7 @@ You can use the pre-built image:
 docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:latest
 
 # Or pull a specific version
-docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.5
+docker pull public.ecr.aws/mcp-proxy-for-aws/mcp-proxy-for-aws:1.1.6
 ```
 
 Or build the image locally:
@@ -107,6 +107,8 @@ docker build -t mcp-proxy-for-aws .
 | `--connect-timeout`	 | Set desired connect timeout in seconds	                                                                                                                                                                                                 | 60	                                                                         |No	|
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
+| `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
+| `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
 
 ### Optional Environment Variables
 
@@ -174,6 +176,7 @@ Using the pre-built public ECR image:
       "command": "docker",
       "args": [
         "run",
+        "-i",
         "--rm",
         "--volume",
         "/full/path/to/.aws:/app/.aws:ro",
@@ -212,6 +215,22 @@ Or using a locally built image:
 ## Programmatic Access
 
 The MCP Proxy for AWS enables programmatic integration of IAM-secured MCP servers into AI agent frameworks. The library provides authenticated transport layers that work with popular Python AI frameworks.
+
+By default, the library resolves AWS credentials automatically from the standard [boto3 credential chain](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html#configuring-credentials) (environment variables, shared credentials file, etc.). You can optionally pass credentials programmatically via the `credentials` parameter. When provided, these take precedence over the `aws_profile` parameter. Note that `aws_region` must be explicitly specified when using `credentials`.
+
+```python
+from botocore.credentials import Credentials
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+creds = Credentials(access_key="...", secret_key="...", token="...")
+
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint=mcp_url,
+    aws_region=region,
+    aws_service=service,
+    credentials=creds,  # Optional: explicitly pass AWS credentials
+)
+```
 
 ### Integration Patterns
 
@@ -324,12 +343,20 @@ uv sync
 
 ## Troubleshooting
 
-### Handling `Authentication error - Invalid credentials`
+### Authentication errors
 We try to autodetect the service from the url, sometimes this fails, ensure that `--service` is set correctly to the
 service you are attempting to connect to.
 Otherwise the SigV4 signing will not be able to be verified by the service you connect to, resulting in this error.
 Also ensure that you have valid IAM credentials on your machine before retrying.
 
+For long-running sessions, consider using long-lived credentials:
+- Use an AWS profile via `--profile`
+- Use IAM Identity Center and run `aws sso login` before starting the proxy
+
+If your credentials do expire during a session, the proxy will automatically detect the auth failure and pick up refreshed credentials on the next request — no restart required. Simply refresh your credentials (e.g., `aws sso login`) and retry.
+
+### Client hangs on tool calls
+If your MCP client hangs waiting for a tool call response (e.g., due to an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
 
 ## Development & Contributing
 

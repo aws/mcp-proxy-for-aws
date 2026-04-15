@@ -15,9 +15,16 @@
 """Unit tests for sigv4_helper module."""
 
 import httpx
+import logging
 import pytest
+from httpx import __version__ as httpx_version
+from mcp.types import Implementation
+from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
+    SENSITIVE_HEADERS,
+    SessionHolder,
     SigV4HTTPXAuth,
+    _sanitize_headers,
     create_aws_session,
     create_sigv4_client,
 )
@@ -57,50 +64,35 @@ class TestCreateAwsSession:
     @patch('boto3.Session')
     def test_create_aws_session_default(self, mock_session_class):
         """Test creating AWS session with default profile."""
-        # Mock session and credentials
         mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_session.get_credentials.return_value = mock_credentials
         mock_session_class.return_value = mock_session
 
-        # Test session creation
         result = create_aws_session()
 
-        # Verify session was created correctly
         mock_session_class.assert_called_once_with()
         assert result == mock_session
 
     @patch('boto3.Session')
     def test_create_aws_session_with_profile(self, mock_session_class):
         """Test creating AWS session with specific profile."""
-        # Mock session and credentials
         mock_session = Mock()
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_session.get_credentials.return_value = mock_credentials
         mock_session_class.return_value = mock_session
 
-        # Test session creation with profile
         result = create_aws_session(profile='test-profile')
 
-        # Verify session was created with profile
         mock_session_class.assert_called_once_with(profile_name='test-profile')
         assert result == mock_session
 
     @patch('boto3.Session')
-    def test_create_aws_session_no_credentials(self, mock_session_class):
-        """Test error handling when no credentials are available."""
-        # Mock session with no credentials
+    def test_create_aws_session_no_credentials_returns_session(self, mock_session_class):
+        """Test that session is returned even when no credentials are immediately available."""
         mock_session = Mock()
         mock_session.get_credentials.return_value = None
         mock_session_class.return_value = mock_session
 
-        # Test that ValueError is raised
-        with pytest.raises(ValueError) as exc_info:
-            create_aws_session()
+        result = create_aws_session()
 
-        assert 'No AWS credentials found' in str(exc_info.value)
+        assert result == mock_session
 
     @patch('boto3.Session')
     def test_create_aws_session_creation_failure(self, mock_session_class):
@@ -119,17 +111,19 @@ class TestCreateAwsSession:
 class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_default(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_default(self, mock_client_class, mock_get_client_info):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
         mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(mock_session)
 
         # Test client creation
-        result = create_sigv4_client(service='test-service', region='test-region')
+        result = create_sigv4_client(
+            service='test-service', region='test-region', session_holder=session_holder
+        )
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -140,69 +134,69 @@ class TestCreateSigv4Client:
         assert len(call_args[1]['event_hooks']['response']) == 1
         assert len(call_args[1]['event_hooks']['request']) == 2  # metadata + sign hooks
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
+        expected_user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+        assert call_args[1]['headers']['User-Agent'] == expected_user_agent
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_headers(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_custom_headers(
+        self, mock_client_class, mock_get_client_info
+    ):
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(Mock())
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
         result = create_sigv4_client(
-            service='test-service', region='test-region', headers=custom_headers
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            headers=custom_headers,
         )
 
         # Verify client was created with merged headers
         call_args = mock_client_class.call_args
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
+            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'Custom-Header': 'custom-value',
         }
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_custom_service_and_region(
-        self, mock_client_class, mock_create_session
-    ):
+    def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
-        # Mock session creation
         mock_session = Mock()
         mock_session.get_credentials.return_value = Mock(access_key='test-key')
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(mock_session, profile='test-profile')
 
         # Test client creation with custom parameters
         result = create_sigv4_client(
-            service='custom-service', profile='test-profile', region='us-east-1'
+            service='custom-service', session_holder=session_holder, region='us-east-1'
         )
 
-        # Verify session was created with profile
-        mock_create_session.assert_called_once_with('test-profile')
         # Verify client was created
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_kwargs(self, mock_client_class, mock_create_session):
+    def test_create_sigv4_client_with_kwargs(self, mock_client_class):
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(Mock())
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
+            session_holder=session_holder,
             verify=False,
             proxies={'http': 'http://proxy:8080'},
         )
@@ -213,28 +207,26 @@ class TestCreateSigv4Client:
         assert call_args[1]['proxies'] == {'http': 'http://proxy:8080'}
         assert result == mock_client
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     @patch('httpx.AsyncClient')
-    def test_create_sigv4_client_with_prompt_context(self, mock_client_class, mock_create_session):
-        """Test creating SigV4 client when prompts exist in the system context.
-
-        This test simulates the scenario where the sigv4_helper is used in a context
-        where MCP prompts are present, ensuring the client is properly configured
-        to handle requests that might include prompt-related content or headers.
-        """
+    def test_create_sigv4_client_with_prompt_context(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Test creating SigV4 client when prompts exist in the system context."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        mock_create_session.return_value = mock_session
+        session_holder = SessionHolder(Mock())
 
-        # Test client creation with headers that might be used when prompts exist
         prompt_context_headers = {
             'X-MCP-Prompt-Context': 'enabled',
             'Content-Type': 'application/json',
         }
 
         result = create_sigv4_client(
-            service='test-service', headers=prompt_context_headers, region='us-west-2'
+            service='test-service',
+            session_holder=session_holder,
+            headers=prompt_context_headers,
+            region='us-west-2',
         )
 
         # Check that AsyncClient was called with correct parameters including prompt headers
@@ -243,6 +235,7 @@ class TestCreateSigv4Client:
         # Verify headers include both default and prompt-context headers
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
+            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'X-MCP-Prompt-Context': 'enabled',
             'Content-Type': 'application/json',
         }
@@ -254,3 +247,198 @@ class TestCreateSigv4Client:
         assert len(call_args[1]['event_hooks']['response']) == 1
 
         assert result == mock_client
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_user_agent_excludes_client_info_when_telemetry_disabled(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Test that User-Agent omits client info when disable_telemetry is True."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        session_holder = SessionHolder(Mock())
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+
+        result = create_sigv4_client(
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            disable_telemetry=True,
+        )
+
+        call_args = mock_client_class.call_args
+        user_agent = call_args[1]['headers']['User-Agent']
+        assert 'python-httpx' in user_agent
+        assert 'mcp-proxy-for-aws' in user_agent
+        assert 'my-client' not in user_agent
+        assert result == mock_client
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_user_agent_includes_client_info_when_telemetry_enabled(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Test that User-Agent includes client info when disable_telemetry is False."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        session_holder = SessionHolder(Mock())
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+
+        result = create_sigv4_client(
+            service='test-service',
+            region='test-region',
+            session_holder=session_holder,
+            disable_telemetry=False,
+        )
+
+        call_args = mock_client_class.call_args
+        user_agent = call_args[1]['headers']['User-Agent']
+        assert 'python-httpx' in user_agent
+        assert 'mcp-proxy-for-aws' in user_agent
+        assert 'my-client/2.0' in user_agent
+        assert result == mock_client
+
+
+class TestSessionHolder:
+    """Test cases for the SessionHolder class."""
+
+    def test_refresh_if_needed_noop_when_not_marked(self):
+        """refresh_if_needed does nothing when not marked."""
+        mock_session = Mock()
+        holder = SessionHolder(mock_session)
+
+        holder.refresh_if_needed()
+
+        assert holder.session is mock_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_refresh_if_needed_creates_new_session_when_marked(self, mock_create):
+        """refresh_if_needed replaces the session after mark_needs_refresh."""
+        old_session = Mock()
+        new_session = Mock()
+        mock_create.return_value = new_session
+        holder = SessionHolder(old_session, profile='my-profile')
+
+        holder.mark_needs_refresh()
+        holder.refresh_if_needed()
+
+        mock_create.assert_called_once_with('my-profile')
+        assert holder.session is new_session
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_refresh_clears_flag_on_success(self, mock_create):
+        """After a successful refresh the flag is cleared — second call is a no-op."""
+        mock_create.return_value = Mock()
+        holder = SessionHolder(Mock())
+
+        holder.mark_needs_refresh()
+        holder.refresh_if_needed()
+        mock_create.reset_mock()
+
+        holder.refresh_if_needed()
+        mock_create.assert_not_called()
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_refresh_keeps_flag_on_failure(self, mock_create):
+        """If refresh fails the flag stays set so the next call retries."""
+        old_session = Mock()
+        mock_create.side_effect = ValueError('no creds')
+        holder = SessionHolder(old_session)
+
+        holder.mark_needs_refresh()
+        holder.refresh_if_needed()
+
+        # Session unchanged
+        assert holder.session is old_session
+        # Flag still set — next call retries
+        mock_create.side_effect = None
+        mock_create.return_value = Mock()
+        holder.refresh_if_needed()
+        assert mock_create.call_count == 2
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    def test_refresh_logs_original_error_on_failure(self, mock_create, caplog):
+        """Failed refresh logs the original ValueError."""
+        mock_create.side_effect = ValueError('session creation boom')
+        holder = SessionHolder(Mock())
+
+        holder.mark_needs_refresh()
+        with caplog.at_level(logging.WARNING):
+            holder.refresh_if_needed()
+
+        assert 'Failed to create fresh AWS session' in caplog.text
+        assert 'session creation boom' in caplog.text
+
+
+class TestSanitizeHeaders:
+    """Test cases for the _sanitize_headers function."""
+
+    def test_sanitize_headers_redacts_authorization(self):
+        """Test that Authorization header is redacted."""
+        headers = {
+            'Authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/...',
+            'Content-Type': 'application/json',
+        }
+        result = _sanitize_headers(headers)
+
+        assert result['Authorization'] == '[REDACTED]'
+        assert result['Content-Type'] == 'application/json'
+
+    def test_sanitize_headers_redacts_security_token(self):
+        """Test that x-amz-security-token header is redacted."""
+        headers = {
+            'x-amz-security-token': 'FwoGZXIvYXdzEBYaDK...',
+            'Host': 'example.com',
+        }
+        result = _sanitize_headers(headers)
+
+        assert result['x-amz-security-token'] == '[REDACTED]'
+        assert result['Host'] == 'example.com'
+
+    def test_sanitize_headers_redacts_amz_date(self):
+        """Test that x-amz-date header is redacted."""
+        headers = {
+            'X-Amz-Date': '20260206T120000Z',
+            'Accept': 'application/json',
+        }
+        result = _sanitize_headers(headers)
+
+        assert result['X-Amz-Date'] == '[REDACTED]'
+        assert result['Accept'] == 'application/json'
+
+    def test_sanitize_headers_case_insensitive(self):
+        """Test that header matching is case-insensitive."""
+        headers = {
+            'AUTHORIZATION': 'secret',
+            'X-AMZ-SECURITY-TOKEN': 'secret',
+            'x-amz-date': 'secret',
+        }
+        result = _sanitize_headers(headers)
+
+        assert result['AUTHORIZATION'] == '[REDACTED]'
+        assert result['X-AMZ-SECURITY-TOKEN'] == '[REDACTED]'
+        assert result['x-amz-date'] == '[REDACTED]'
+
+    def test_sanitize_headers_preserves_non_sensitive(self):
+        """Test that non-sensitive headers are preserved."""
+        headers = {
+            'Content-Type': 'application/json',
+            'Content-Length': '123',
+            'Host': 'example.amazonaws.com',
+            'User-Agent': 'test-client/1.0',
+        }
+        result = _sanitize_headers(headers)
+
+        assert result == headers
+
+    def test_sanitize_headers_empty_dict(self):
+        """Test handling of empty headers dictionary."""
+        result = _sanitize_headers({})
+        assert result == {}
+
+    def test_sensitive_headers_constant_is_frozen(self):
+        """Test that SENSITIVE_HEADERS is immutable."""
+        assert isinstance(SENSITIVE_HEADERS, frozenset)
+        assert 'authorization' in SENSITIVE_HEADERS
+        assert 'x-amz-security-token' in SENSITIVE_HEADERS
+        assert 'x-amz-date' in SENSITIVE_HEADERS
