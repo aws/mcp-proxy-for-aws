@@ -353,8 +353,10 @@ For long-running sessions, consider using long-lived credentials:
 - Use an AWS profile via `--profile`
 - Use IAM Identity Center and run `aws sso login` before starting the proxy
 
+If your credentials do expire during a session, the proxy will automatically detect the auth failure and pick up refreshed credentials on the next request — no restart required. Simply refresh your credentials (e.g., `aws sso login`) and retry.
+
 ### Client hangs on tool calls
-If your MCP client hangs waiting for a tool call response (e.g., due to expired credentials or an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
+If your MCP client hangs waiting for a tool call response (e.g., due to an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
 
 ## Development & Contributing
 

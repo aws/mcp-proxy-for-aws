@@ -22,7 +22,7 @@ from mcp_proxy_for_aws.utils import (
     determine_service_name,
     validate_endpoint_url,
 )
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 
 class TestValidateEndpointUrl:
@@ -153,7 +153,7 @@ class TestCreateTransportWithSigv4:
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                session_holder=ANY,
                 region=region,
                 headers={'test': 'header'},
                 timeout=custom_timeout,
@@ -195,7 +195,7 @@ class TestCreateTransportWithSigv4:
 
             mock_create_sigv4_client.assert_called_once_with(
                 service=service,
-                session=mock_session,
+                session_holder=ANY,
                 region=region,
                 headers=None,
                 timeout=custom_timeout,
@@ -233,7 +233,7 @@ class TestCreateTransportWithSigv4:
 
         mock_create_sigv4_client.assert_called_once_with(
             service=service,
-            session=mock_session,
+            session_holder=ANY,
             region=region,
             headers=None,
             timeout=custom_timeout,
