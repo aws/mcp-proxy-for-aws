@@ -91,6 +91,12 @@ class ProfileOverrideMiddleware(Middleware):
             params = copy.deepcopy(tool.parameters)
             if 'properties' not in params:
                 params['properties'] = {}
+            if 'proxy_profile' in params['properties']:
+                logger.warning(
+                    'Tool %r already defines a "proxy_profile" parameter; '
+                    'the middleware override is shadowing the backend definition.',
+                    tool.name,
+                )
             params['properties']['proxy_profile'] = {
                 'type': 'string',
                 'description': (
