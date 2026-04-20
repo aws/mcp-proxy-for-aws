@@ -98,7 +98,7 @@ docker build -t mcp-proxy-for-aws .
 | ---	                 | ---	                                                                                                                                                                                                                                    | ---	                                                                        |---	|
 | `--service`	         | AWS service name for SigV4 signing, if omitted we try to infer this from the url	                                                                                                                                                       | Inferred from endpoint if not provided	                                     |No	|
 | `--profile`	         | AWS profile for AWS credentials to use	                                                                                                                                                                                                 | Uses `AWS_PROFILE` environment variable if not set                          |No	|
-| `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set, defaults to `us-east-1`	 |No	|
+| `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set	                           |No	|
 | `--metadata`	        | Metadata to inject into MCP requests as key=value pairs (e.g., `--metadata KEY1=value1 KEY2=value2`)                                                                                                                                    | `AWS_REGION` is automatically injected based on `--region` if not provided    |No	|
 | `--read-only`	       | Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint)) | `False`	                                                                    |No	|
 | `--retries`          | Configures number of retries done when calling upstream services, setting this to 0 disables retries.                                                                                                                                   | 0                                                                           |No |
@@ -386,8 +386,10 @@ For long-running sessions, consider using long-lived credentials:
 - Use an AWS profile via `--profile`
 - Use IAM Identity Center and run `aws sso login` before starting the proxy
 
+If your credentials do expire during a session, the proxy will automatically detect the auth failure and pick up refreshed credentials on the next request — no restart required. Simply refresh your credentials (e.g., `aws sso login`) and retry.
+
 ### Client hangs on tool calls
-If your MCP client hangs waiting for a tool call response (e.g., due to expired credentials or an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
+If your MCP client hangs waiting for a tool call response (e.g., due to an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
 
 ## Development & Contributing
 
