@@ -67,13 +67,14 @@ class AWSMCPProxyClient(StatefulProxyClient):
             try:
                 logger.warning('encountered runtime error, try force disconnect.', exc_info=e)
                 await self._disconnect(force=True)
-            except httpx.TimeoutException:
-                # _disconnect awaits on the session_task,
-                # which raises the timeout error that caused the client session to be terminated.
-                # the error is ignored as long as the counter is force set to 0.
-                # TODO: investigate how timeout error is handled by fastmcp and httpx
-                logger.exception(
-                    'Session was terminated due to timeout error, ignore and reconnect'
+            except (httpx.TimeoutException, httpx.HTTPStatusError):
+                # _disconnect(force=True) resets the nesting counter then awaits the
+                # session_task. That task may re-raise the exception that killed the
+                # session (e.g. HTTPStatusError from a prior 401) or a TimeoutException.
+                # Either way the error is safe to ignore: the counter is already 0 and
+                # the retry below will establish a fresh session with refreshed credentials.
+                logger.warning(
+                    'Session cleanup failed during force disconnect, ignore and reconnect'
                 )
 
             return await self._connect(retry + 1)
