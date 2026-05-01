@@ -168,8 +168,7 @@ class ProfileOverrideMiddleware(Middleware):
         if profile not in self._allowed_profiles:
             allowed = ', '.join(sorted(self._allowed_profiles))
             raise ToolError(
-                f'Profile {profile!r} is not in the allowed list. '
-                f'Allowed profiles: {allowed}'
+                f'Profile {profile!r} is not in the allowed list. Allowed profiles: {allowed}'
             )
 
         # Strip proxy_profile before forwarding to the backend
