@@ -31,7 +31,7 @@ from collections.abc import Sequence
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.tool import Tool, ToolResult
+from fastmcp.tools import Tool, ToolResult
 from mcp_proxy_for_aws.utils import create_transport_with_sigv4
 from typing import Any, cast
 from typing_extensions import override
