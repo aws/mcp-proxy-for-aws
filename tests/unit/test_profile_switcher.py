@@ -52,7 +52,9 @@ class TestOnListTools:
     """Tests for the on_list_tools method."""
 
     @pytest.mark.asyncio
-    async def test_injects_proxy_profile_property_into_tool_schemas(self, middleware, mock_context):
+    async def test_injects_proxy_profile_property_into_tool_schemas(
+        self, middleware, mock_context
+    ):
         """Every proxied tool gets a proxy_profile property in its schema."""
         tool = Mock()
         tool.name = 'some_tool'
@@ -229,12 +231,15 @@ class TestGetProfileClient:
 
         mock_transport = Mock()
 
-        with patch(
-            'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
-            return_value=mock_transport,
-        ), patch(
-            'mcp_proxy_for_aws.middleware.profile_switcher.Client',
-            return_value=mock_client,
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=mock_transport,
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=mock_client,
+            ),
         ):
             results = await asyncio.gather(
                 middleware._get_profile_client('dev-profile'),
