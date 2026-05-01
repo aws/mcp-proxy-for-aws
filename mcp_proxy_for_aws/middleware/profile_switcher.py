@@ -29,8 +29,8 @@ import logging
 import mcp.types as mt
 from collections.abc import Sequence
 from fastmcp import Client
-from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.tool import Tool, ToolResult
 from mcp_proxy_for_aws.utils import create_transport_with_sigv4
 from typing import Any, cast
