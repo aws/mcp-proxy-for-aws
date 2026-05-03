@@ -109,6 +109,10 @@ docker build -t mcp-proxy-for-aws .
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
 | `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
+| `--transport`         | Transport protocol to use (`stdio` or `streamable-http`)                                                                                                                                                                                | `stdio`                                                                     |No	|
+| `--host`	            | Host address to bind to when using `streamable-http` transport                                                                                                                                                                          | `127.0.0.1`                                                                 |No	|
+| `--port`	            | Port to bind to when using `streamable-http` transport                                                                                                                                                                                  | `8080`                                                                      |No	|
+| `--path`	            | Path for the Streamable HTTP endpoint                                                                                                                                                                                                   | `/mcp`                                                                      |No	|
 
 ### Optional Environment Variables
 
@@ -126,6 +130,25 @@ export AWS_SESSION_TOKEN=<session_token>
 # AWS Region
 export AWS_REGION=<aws_region>
 ```
+
+### Running with Streamable HTTP Transport
+
+The proxy can also serve MCP clients over HTTP using the Streamable HTTP transport. This is useful when you want to run the proxy as a standalone HTTP service rather than a stdio subprocess.
+
+```bash
+# Run with streamable-http transport (default: 127.0.0.1:8080/mcp)
+uv run mcp-proxy-for-aws <SigV4 MCP endpoint URL> --transport streamable-http
+
+# Run with custom host, port, and path
+uv run mcp-proxy-for-aws <SigV4 MCP endpoint URL> --transport streamable-http --host 0.0.0.0 --port 3000 --path /mcp-proxy
+```
+
+The proxy will be accessible at `http://<host>:<port><path>` and supports:
+- **POST** requests for sending JSON-RPC messages
+- **GET** requests for SSE streams (server-initiated notifications)
+- **DELETE** requests for session termination
+
+---
 
 ### Setup Examples
 

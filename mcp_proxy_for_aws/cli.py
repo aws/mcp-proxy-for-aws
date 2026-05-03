@@ -174,4 +174,30 @@ Examples:
         help='Disables telemetry data collection',
     )
 
+    parser.add_argument(
+        '--transport',
+        choices=['stdio', 'streamable-http'],
+        default='stdio',
+        help='Transport protocol to use (default: stdio)',
+    )
+
+    parser.add_argument(
+        '--host',
+        default='127.0.0.1',
+        help='Host address to bind to when using streamable-http transport (default: 127.0.0.1)',
+    )
+
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8080,
+        help='Port to bind to when using streamable-http transport (default: 8080)',
+    )
+
+    parser.add_argument(
+        '--path',
+        default='/mcp',
+        help='Path for the Streamable HTTP endpoint (default: /mcp)',
+    )
+
     return parser.parse_args()
