@@ -63,6 +63,7 @@ class TestServer:
         mock_args.read_timeout = 120.0
         mock_args.write_timeout = 180.0
         mock_args.log_level = 'INFO'
+        mock_args.transport = 'stdio'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
@@ -110,6 +111,73 @@ class TestServer:
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    @patch('mcp_proxy_for_aws.server.add_retry_middleware')
+    async def test_setup_streamable_http_transport(
+        self,
+        mock_add_retry,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_fastmcp_proxy,
+        mock_create_transport,
+        mock_client_factory_class,
+    ):
+        """Test that streamable-http transport is configured correctly."""
+        # Arrange
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
+        mock_args.profile = None
+        mock_args.read_only = True
+        mock_args.retries = 1
+        mock_args.metadata = None
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+        mock_args.transport = 'streamable-http'
+        mock_args.host = '0.0.0.0'
+        mock_args.port = 9000
+        mock_args.path = '/custom-mcp'
+
+        # Mock return values
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-east-1'
+
+        # Mock the transport and client factory
+        mock_transport = Mock(spec=ClientTransport)
+        mock_create_transport.return_value = mock_transport
+
+        mock_client_factory = Mock()
+        mock_client_factory.disconnect = AsyncMock()
+        mock_client_factory_class.return_value = mock_client_factory
+
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_proxy.add_middleware = Mock()
+        mock_fastmcp_proxy.return_value = mock_proxy
+
+        # Act
+        await run_proxy(mock_args)
+
+        # Assert
+        mock_proxy.run_async.assert_called_once_with(
+            show_banner=False,
+            log_level='INFO',
+            host='0.0.0.0',
+            port=9000,
+            path='/custom-mcp',
+            transport='streamable-http',
+        )
+
+    @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
     async def test_setup_mcp_mode_no_retries(
         self,
         mock_add_filtering,
@@ -135,12 +203,12 @@ class TestServer:
         mock_args.read_timeout = 120.0
         mock_args.write_timeout = 180.0
         mock_args.log_level = 'INFO'
+        mock_args.transport = 'stdio'
 
         # Mock return values
         mock_determine_service.return_value = 'test-service'
         mock_determine_region.return_value = 'us-east-1'
 
-        # Mock the transport and client factory
         mock_transport = Mock(spec=ClientTransport)
         mock_create_transport.return_value = mock_transport
 
@@ -208,6 +276,7 @@ class TestServer:
         mock_args.read_timeout = 120.0
         mock_args.write_timeout = 180.0
         mock_args.log_level = 'INFO'
+        mock_args.transport = 'stdio'
 
         mock_determine_service.return_value = 'test-service'
         mock_determine_region.return_value = 'ap-southeast-1'
@@ -263,6 +332,7 @@ class TestServer:
         mock_args.read_timeout = 120.0
         mock_args.write_timeout = 180.0
         mock_args.log_level = 'INFO'
+        mock_args.transport = 'stdio'
 
         mock_determine_service.return_value = 'test-service'
         mock_determine_region.return_value = 'us-west-1'

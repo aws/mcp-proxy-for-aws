@@ -105,7 +105,20 @@ async def run_proxy(args) -> None:
 
         if args.retries:
             add_retry_middleware(proxy, args.retries)
-        await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
+
+        transport_kwargs = {
+            'show_banner': False,
+            'log_level': args.log_level,
+        }
+
+        if args.transport == 'streamable-http':
+            transport_kwargs.update(
+                host=args.host, port=args.port, path=args.path, transport='streamable-http'
+            )
+        else:
+            transport_kwargs['transport'] = 'stdio'
+
+        await proxy.run_async(**transport_kwargs)
     except Exception as e:
         logger.error('Cannot start proxy server: %s', e)
         raise e
