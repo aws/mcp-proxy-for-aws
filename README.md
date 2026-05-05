@@ -113,6 +113,7 @@ docker build -t mcp-proxy-for-aws .
 | `--host`	            | Host address to bind to when using `streamable-http` transport                                                                                                                                                                          | `127.0.0.1`                                                                 |No	|
 | `--port`	            | Port to bind to when using `streamable-http` transport                                                                                                                                                                                  | `8080`                                                                      |No	|
 | `--path`	            | Path for the Streamable HTTP endpoint                                                                                                                                                                                                   | `/mcp`                                                                      |No	|
+| `--health-path`       | Path for the health check endpoint                                                                                                                                                                                                      | `/health`                                                                   |No	|
 
 ### Optional Environment Variables
 
