@@ -258,3 +258,17 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.path == '/custom'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_health_path_default(self):
+        """Test that health_path defaults to /health."""
+        args = parse_args()
+
+        assert args.health_path == '/health'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--health-path', '/ping'])
+    def test_parse_args_health_path_custom(self):
+        """Test that health_path can be customized."""
+        args = parse_args()
+
+        assert args.health_path == '/ping'

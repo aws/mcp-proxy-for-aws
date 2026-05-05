@@ -200,4 +200,10 @@ Examples:
         help='Path for the Streamable HTTP endpoint (default: /mcp)',
     )
 
+    parser.add_argument(
+        '--health-path',
+        default='/health',
+        help='Path for the health check endpoint (default: /health)',
+    )
+
     return parser.parse_args()
