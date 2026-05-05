@@ -202,3 +202,73 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.disable_telemetry is False
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_transport_default_stdio(self):
+        """Test that transport defaults to stdio."""
+        args = parse_args()
+
+        assert args.transport == 'stdio'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--transport', 'streamable-http'])
+    def test_parse_args_transport_streamable_http(self):
+        """Test that transport can be set to streamable-http."""
+        args = parse_args()
+
+        assert args.transport == 'streamable-http'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_host_default(self):
+        """Test that host defaults to 127.0.0.1."""
+        args = parse_args()
+
+        assert args.host == '127.0.0.1'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--host', '0.0.0.0'])
+    def test_parse_args_host_custom(self):
+        """Test that host can be customized."""
+        args = parse_args()
+
+        assert args.host == '0.0.0.0'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_port_default(self):
+        """Test that port defaults to 8080."""
+        args = parse_args()
+
+        assert args.port == 8080
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--port', '3000'])
+    def test_parse_args_port_custom(self):
+        """Test that port can be customized."""
+        args = parse_args()
+
+        assert args.port == 3000
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_path_default(self):
+        """Test that path defaults to /mcp."""
+        args = parse_args()
+
+        assert args.path == '/mcp'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--path', '/custom'])
+    def test_parse_args_path_custom(self):
+        """Test that path can be customized."""
+        args = parse_args()
+
+        assert args.path == '/custom'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_health_path_default(self):
+        """Test that health_path defaults to /health."""
+        args = parse_args()
+
+        assert args.health_path == '/health'
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--health-path', '/ping'])
+    def test_parse_args_health_path_custom(self):
+        """Test that health_path can be customized."""
+        args = parse_args()
+
+        assert args.health_path == '/ping'

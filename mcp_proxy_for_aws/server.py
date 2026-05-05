@@ -41,6 +41,8 @@ from mcp_proxy_for_aws.utils import (
     determine_aws_region,
     determine_service_name,
 )
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +107,21 @@ async def run_proxy(args) -> None:
 
         if args.retries:
             add_retry_middleware(proxy, args.retries)
-        await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
+
+        transport_kwargs = {
+            'show_banner': False,
+            'log_level': args.log_level,
+        }
+
+        if args.transport == 'streamable-http':
+            transport_kwargs.update(
+                host=args.host, port=args.port, path=args.path, transport='streamable-http'
+            )
+            add_healthcheck_endpoint(proxy, args.health_path)
+        else:
+            transport_kwargs['transport'] = 'stdio'
+
+        await proxy.run_async(**transport_kwargs)
     except Exception as e:
         logger.error('Cannot start proxy server: %s', e)
         raise e
@@ -165,6 +181,18 @@ def add_logging_middleware(mcp: FastMCP, log_level: str) -> None:
         )
     )
 
+def add_healthcheck_endpoint(mcp: FastMCP, path: str) -> None:
+    """Add health check endpoint to MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add health check endpoint to
+        path: The path of the healcheck endpoint
+    """
+    logger.info('Adding health check endpoint with path-%s', path)
+
+    @mcp.custom_route(path, methods=['GET'])
+    async def health_check(request: Request) -> PlainTextResponse:
+        return PlainTextResponse('OK')
 
 def main():
     """Run the MCP server."""
