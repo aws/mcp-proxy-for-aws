@@ -294,6 +294,10 @@ async def _sign_request_hook(
     # Get AWS credentials from the session
     credentials = session_holder.session.get_credentials()
 
+    if credentials is None:
+        logger.debug('No AWS credentials available, sending request unsigned')
+        return
+
     # Create SigV4 auth and use its signing logic
     auth = SigV4HTTPXAuth(credentials, service, region)
 

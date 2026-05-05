@@ -24,7 +24,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     _inject_metadata_hook,
     _sign_request_hook,
 )
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 
 def create_request_with_sigv4_headers(
@@ -477,3 +477,45 @@ class TestSignRequestHook:
 
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_skips_signing_when_no_credentials(self):
+        """Request is sent unsigned when credentials are not available."""
+        holder = create_mock_session_holder()
+        holder.session.get_credentials.return_value = None
+
+        request_body = b'{"test": "data"}'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+
+        assert 'authorization' not in request.headers
+        assert 'x-amz-security-token' not in request.headers
+        assert request.headers['content-length'] == str(len(request_body))
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_no_credentials_still_refreshes(self):
+        """refresh_if_needed is called even when credentials end up None."""
+        holder = create_mock_session_holder()
+        holder.session.get_credentials.return_value = None
+
+        request_body = b'test'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+
+        holder.refresh_if_needed.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.SigV4HTTPXAuth')
+    async def test_sign_request_hook_no_credentials_does_not_create_auth(self, mock_auth_class):
+        """SigV4HTTPXAuth is never instantiated when credentials are None."""
+        holder = create_mock_session_holder()
+        holder.session.get_credentials.return_value = None
+
+        request_body = b'test'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+
+        mock_auth_class.assert_not_called()
