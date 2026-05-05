@@ -104,7 +104,7 @@ async def test_aws_mcp_tools(aws_mcp_client: fastmcp.Client, tool_name: str, par
 @pytest.mark.asyncio(loop_scope='module')
 async def test_aws_mcp_tools_retrieve_skill(aws_mcp_client: fastmcp.Client):
     """Test aws___retrieve_skill by retrieving a skill."""
-    test_skill = 'create_production_vpc_multi_az'
+    test_skill = 'creating-production-vpc-multi-az'
     logger.info('Testing with skill: %s', test_skill)
 
     response = await aws_mcp_client.call_tool('aws___retrieve_skill', {'skill_name': test_skill})
