@@ -33,6 +33,7 @@ from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
+from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
@@ -88,6 +89,7 @@ async def run_proxy(args) -> None:
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
+    profile_middleware: ProfileOverrideMiddleware | None = None
     try:
         proxy = FastMCPProxy(
             client_factory=client_factory,
@@ -103,6 +105,10 @@ async def run_proxy(args) -> None:
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
+        profile_middleware = add_profile_override_middleware(
+            proxy, args, service, region, metadata, timeout
+        )
+
         if args.retries:
             add_retry_middleware(proxy, args.retries)
         await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
@@ -110,6 +116,8 @@ async def run_proxy(args) -> None:
         logger.error('Cannot start proxy server: %s', e)
         raise e
     finally:
+        if profile_middleware:
+            await profile_middleware.disconnect_profile_clients()
         await client_factory.disconnect()
 
 
@@ -122,6 +130,43 @@ def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:
     """
     logger.info('Adding tool error middleware with tool_timeout=%s', tool_timeout)
     mcp.add_middleware(ToolErrorMiddleware(tool_call_timeout=tool_timeout))
+
+
+def add_profile_override_middleware(
+    mcp: FastMCP,
+    args,
+    service: str,
+    region: str,
+    metadata: dict,
+    timeout: httpx.Timeout,
+) -> ProfileOverrideMiddleware | None:
+    """Add profile override middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add profile override to
+        args: The parsed CLI arguments
+        service: The AWS service name
+        region: The AWS region
+        metadata: The metadata dictionary
+        timeout: The httpx timeout configuration
+
+    Returns:
+        The ProfileOverrideMiddleware instance if added, None otherwise
+    """
+    allowed_profiles = getattr(args, 'allow_switch_profile', None)
+    if not isinstance(allowed_profiles, list) or not allowed_profiles:
+        return None
+    logger.info('Adding profile override middleware')
+    middleware = ProfileOverrideMiddleware(
+        allowed_profiles=allowed_profiles,
+        service=service,
+        region=region,
+        metadata=metadata,
+        timeout=timeout,
+        endpoint=args.endpoint,
+    )
+    mcp.add_middleware(middleware)
+    return middleware
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:

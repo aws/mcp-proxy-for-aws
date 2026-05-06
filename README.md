@@ -109,6 +109,7 @@ docker build -t mcp-proxy-for-aws .
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
 | `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
+| `--allow-switch-profile` | Enable per-call AWS profile switching by providing an allowlist of profile names. Each tool call can include a `profile` argument to route through a dedicated connection signed with that profile's credentials. | None (disabled) | No |
 
 ### Optional Environment Variables
 
@@ -164,6 +165,38 @@ Add the following configuration to your MCP client config file (e.g., for Kiro C
 
 > [!NOTE]
 > Cline users should not use `--log-level` argument because Cline checks the log messages in stderr for text "error" (case insensitive).
+
+#### Multi-account access with `--allow-switch-profile`
+
+The `--allow-switch-profile` flag lets individual tool calls route through different AWS profiles without restarting the proxy. This is useful when an AI agent needs to query resources across multiple AWS accounts in a single session.
+
+**How it interacts with `--profile`:**
+- `--profile` sets the **default** identity used when a tool call does not specify a profile.
+- `--allow-switch-profile` defines which additional profiles a tool call may request via a `profile` argument. Each profile gets its own dedicated connection to the backend.
+- If a tool call omits `profile`, the default `--profile` connection is used. If it includes `profile`, the request is routed through the matching per-profile connection instead.
+
+```json
+{
+  "mcpServers": {
+    "<mcp server name>": {
+      "disabled": false,
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-proxy-for-aws@latest",
+        "<SigV4 MCP endpoint URL>",
+        "--profile",
+        "default",
+        "--allow-switch-profile",
+        "dev-profile",
+        "staging-profile"
+      ]
+    }
+  }
+}
+```
+
+In the example above, tool calls without a `profile` argument use the `default` profile. A tool call that includes `"profile": "dev-profile"` is routed through a dedicated connection signed with `dev-profile` credentials.
 
 #### Using Docker
 
