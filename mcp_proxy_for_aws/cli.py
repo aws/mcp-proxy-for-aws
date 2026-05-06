@@ -174,4 +174,13 @@ Examples:
         help='Disables telemetry data collection',
     )
 
+    parser.add_argument(
+        '--allow-switch-profile',
+        nargs='+',
+        default=None,
+        metavar='PROFILE',
+        help='Enable the switch_profile tool and restrict it to the specified AWS CLI profile names '
+        '(e.g., --allow-switch-profile dev-profile staging-profile)',
+    )
+
     return parser.parse_args()
