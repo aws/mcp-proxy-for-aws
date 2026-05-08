@@ -517,7 +517,11 @@ class TestSignRequestHook:
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_does_not_block_event_loop(self):
-        """Test that blocking credential resolution runs in a thread."""
+        """Test that the event loop stays responsive while credentials resolve.
+
+        A ticker coroutine runs alongside the signing hook.  If get_credentials()
+        blocked the loop, the ticker would not advance during the sleep.
+        """
         import asyncio
         import time
 
@@ -527,7 +531,7 @@ class TestSignRequestHook:
         mock_credentials.token = None
 
         def slow_get_credentials():
-            time.sleep(0.1)
+            time.sleep(0.3)
             return mock_credentials
 
         mock_session = Mock()
@@ -541,10 +545,22 @@ class TestSignRequestHook:
             headers={'Host': 'example.com'},
         )
 
-        # Should complete without blocking — the event loop stays responsive
-        await asyncio.wait_for(
-            _sign_request_hook('us-east-1', 'aws-mcp', holder, request),
-            timeout=5.0,
-        )
+        tick_count = 0
 
+        async def ticker():
+            nonlocal tick_count
+            while True:
+                await asyncio.sleep(0.05)
+                tick_count += 1
+
+        ticker_task = asyncio.create_task(ticker())
+        try:
+            await _sign_request_hook('us-east-1', 'aws-mcp', holder, request)
+        finally:
+            ticker_task.cancel()
+
+        # If get_credentials() blocked the loop, ticker would not have advanced
+        assert tick_count >= 2, (
+            f'ticker only ticked {tick_count} times — event loop was likely blocked'
+        )
         assert 'Authorization' in request.headers

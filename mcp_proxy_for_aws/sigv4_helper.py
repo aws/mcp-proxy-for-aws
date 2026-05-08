@@ -145,9 +145,11 @@ class SessionHolder:
     async def async_refresh_if_needed(self) -> None:
         """Async version of refresh_if_needed that offloads blocking I/O to a thread.
 
-        For profiles that use assumed IAM roles (chained credentials), session
-        creation involves a blocking STS AssumeRole call.  Running that on the
-        event loop blocks all other coroutines and causes timeouts.
+        Defensive counterpart to :meth:`async_get_credentials`.  While the
+        primary blocking path is ``get_credentials()`` (which triggers a
+        synchronous STS call for assumed-role profiles), session recreation
+        via ``create_aws_session()`` may also perform blocking I/O in the
+        future.  Offloading it to a thread keeps the event loop safe.
         """
         if not self._needs_refresh:
             return
