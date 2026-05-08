@@ -14,6 +14,7 @@
 
 """SigV4 Helper for AWS request signing functionality."""
 
+import asyncio
 import boto3
 import httpx
 import json
@@ -140,6 +141,27 @@ class SessionHolder:
             logger.warning(
                 'Failed to create fresh AWS session, keeping current session', exc_info=True
             )
+
+    async def async_refresh_if_needed(self) -> None:
+        """Async version of refresh_if_needed that offloads blocking I/O to a thread.
+
+        For profiles that use assumed IAM roles (chained credentials), session
+        creation involves a blocking STS AssumeRole call.  Running that on the
+        event loop blocks all other coroutines and causes timeouts.
+        """
+        if not self._needs_refresh:
+            return
+        await asyncio.to_thread(self.refresh_if_needed)
+
+    async def async_get_credentials(self):
+        """Resolve credentials without blocking the event loop.
+
+        ``boto3.Session.get_credentials()`` may trigger a synchronous STS
+        ``AssumeRole`` call when the profile uses chained credentials.
+        Offloading the call to a worker thread prevents the event loop from
+        stalling.
+        """
+        return await asyncio.to_thread(self.session.get_credentials)
 
 
 def create_sigv4_client(
@@ -289,10 +311,14 @@ async def _sign_request_hook(
     # Refresh session if a previous request got an auth error.
     # Done here (at signing time) so the new session reads credentials
     # that the user may have refreshed since the error occurred.
-    session_holder.refresh_if_needed()
+    # Use async variant to avoid blocking the event loop when the profile
+    # requires an STS AssumeRole call (chained credentials).
+    await session_holder.async_refresh_if_needed()
 
-    # Get AWS credentials from the session
-    credentials = session_holder.session.get_credentials()
+    # Get AWS credentials from the session.
+    # Offloaded to a thread because get_credentials() may trigger a
+    # synchronous STS call for assumed-role profiles.
+    credentials = await session_holder.async_get_credentials()
 
     # Create SigV4 auth and use its signing logic
     auth = SigV4HTTPXAuth(credentials, service, region)

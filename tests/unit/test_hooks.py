@@ -24,7 +24,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     _inject_metadata_hook,
     _sign_request_hook,
 )
-from unittest.mock import MagicMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 
 def create_request_with_sigv4_headers(
@@ -55,8 +55,15 @@ def create_mock_session():
 
 def create_mock_session_holder():
     """Helper to create a mocked SessionHolder."""
+    mock_credentials = MagicMock()
+    mock_credentials.access_key = 'test-access-key'
+    mock_credentials.secret_key = 'test-secret-key'
+    mock_credentials.token = 'test-token'
+
     holder = MagicMock(spec=SessionHolder)
     holder.session = create_mock_session()
+    holder.async_refresh_if_needed = AsyncMock()
+    holder.async_get_credentials = AsyncMock(return_value=mock_credentials)
     return holder
 
 
@@ -402,14 +409,14 @@ class TestSignRequestHook:
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_calls_refresh_if_needed(self):
-        """Signing hook calls refresh_if_needed before signing."""
+        """Signing hook calls async_refresh_if_needed before signing."""
         holder = create_mock_session_holder()
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'execute-api', holder, request)
 
-        holder.refresh_if_needed.assert_called_once()
+        holder.async_refresh_if_needed.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_signs_request(self):

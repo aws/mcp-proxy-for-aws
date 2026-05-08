@@ -25,10 +25,11 @@ from mcp_proxy_for_aws.sigv4_helper import (
     SessionHolder,
     SigV4HTTPXAuth,
     _sanitize_headers,
+    _sign_request_hook,
     create_aws_session,
     create_sigv4_client,
 )
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestSigV4HTTPXAuth:
@@ -369,6 +370,44 @@ class TestSessionHolder:
         assert 'Failed to create fresh AWS session' in caplog.text
         assert 'session creation boom' in caplog.text
 
+    @pytest.mark.asyncio
+    async def test_async_refresh_if_needed_noop_when_not_marked(self):
+        """async_refresh_if_needed does nothing when not marked."""
+        mock_session = Mock()
+        holder = SessionHolder(mock_session)
+
+        await holder.async_refresh_if_needed()
+
+        assert holder.session is mock_session
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_async_refresh_if_needed_creates_new_session_when_marked(self, mock_create):
+        """async_refresh_if_needed replaces session after mark_needs_refresh."""
+        old_session = Mock()
+        new_session = Mock()
+        mock_create.return_value = new_session
+        holder = SessionHolder(old_session, profile='my-profile')
+
+        holder.mark_needs_refresh()
+        await holder.async_refresh_if_needed()
+
+        mock_create.assert_called_once_with('my-profile')
+        assert holder.session is new_session
+
+    @pytest.mark.asyncio
+    async def test_async_get_credentials_delegates_to_session(self):
+        """async_get_credentials calls session.get_credentials in a thread."""
+        mock_creds = Mock()
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = mock_creds
+        holder = SessionHolder(mock_session)
+
+        result = await holder.async_get_credentials()
+
+        mock_session.get_credentials.assert_called_once()
+        assert result is mock_creds
+
 
 class TestSanitizeHeaders:
     """Test cases for the _sanitize_headers function."""
@@ -442,3 +481,70 @@ class TestSanitizeHeaders:
         assert 'authorization' in SENSITIVE_HEADERS
         assert 'x-amz-security-token' in SENSITIVE_HEADERS
         assert 'x-amz-date' in SENSITIVE_HEADERS
+
+
+class TestSignRequestHook:
+    """Test cases for the _sign_request_hook function."""
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_uses_async_credential_resolution(self):
+        """Test that _sign_request_hook resolves credentials asynchronously."""
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = 'test_token'
+
+        mock_session = Mock()
+        mock_session.get_credentials.return_value = mock_credentials
+        holder = SessionHolder(mock_session)
+
+        # Spy on the async methods to verify they are called
+        holder.async_refresh_if_needed = AsyncMock()
+        holder.async_get_credentials = AsyncMock(return_value=mock_credentials)
+
+        request = httpx.Request(
+            'POST',
+            'https://example.com/mcp',
+            content=b'{"jsonrpc":"2.0"}',
+            headers={'Host': 'example.com'},
+        )
+
+        await _sign_request_hook('us-east-1', 'aws-mcp', holder, request)
+
+        holder.async_refresh_if_needed.assert_awaited_once()
+        holder.async_get_credentials.assert_awaited_once()
+        assert 'Authorization' in request.headers
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_does_not_block_event_loop(self):
+        """Test that blocking credential resolution runs in a thread."""
+        import asyncio
+        import time
+
+        mock_credentials = Mock()
+        mock_credentials.access_key = 'test_access_key'
+        mock_credentials.secret_key = 'test_secret_key'
+        mock_credentials.token = None
+
+        def slow_get_credentials():
+            time.sleep(0.1)
+            return mock_credentials
+
+        mock_session = Mock()
+        mock_session.get_credentials.side_effect = slow_get_credentials
+        holder = SessionHolder(mock_session)
+
+        request = httpx.Request(
+            'POST',
+            'https://example.com/mcp',
+            content=b'{"jsonrpc":"2.0"}',
+            headers={'Host': 'example.com'},
+        )
+
+        # Should complete without blocking — the event loop stays responsive
+        await asyncio.wait_for(
+            _sign_request_hook('us-east-1', 'aws-mcp', holder, request),
+            timeout=5.0,
+        )
+
+        assert 'Authorization' in request.headers
