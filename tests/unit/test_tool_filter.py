@@ -113,6 +113,62 @@ class TestOnListTools:
         call_next_mock.assert_called_once_with(mock_context)
 
     @pytest.mark.asyncio
+    async def test_read_only_prefix_tools_pass_through(
+        self, mock_context, read_only_tool
+    ):
+        """Test that tools with read-only name prefixes pass through even without readOnlyHint=True."""
+        # Arrange
+        list_tool = Mock()
+        list_tool.name = 'list_regions'
+        list_tool.annotations = MockAnnotationsWithoutReadOnlyHint()
+
+        read_tool = Mock()
+        read_tool.name = 'read_documentation'
+        read_tool.annotations = MockAnnotationsWithoutReadOnlyHint()
+
+        search_tool = Mock()
+        search_tool.name = 'search_documentation'
+        search_tool.annotations = MockAnnotationsWithoutReadOnlyHint()
+
+        get_tool = Mock()
+        get_tool.name = 'get_tasks'
+        get_tool.annotations = MockAnnotationsWithoutReadOnlyHint()
+
+        tools = [read_only_tool, list_tool, read_tool, search_tool, get_tool]
+        call_next_mock = AsyncMock(return_value=tools)
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act
+        result = await middleware.on_list_tools(mock_context, call_next_mock)
+
+        # Assert - all tools should pass through
+        assert len(result) == 5
+        assert result == tools
+        call_next_mock.assert_called_once_with(mock_context)
+
+    @pytest.mark.asyncio
+    async def test_read_only_prefix_does_not_pass_write_tools(
+        self, mock_context, read_only_tool
+    ):
+        """Test that tools with write-like names are still filtered if no readOnlyHint."""
+        # Arrange
+        write_tool = Mock()
+        write_tool.name = 'call_aws'
+        write_tool.annotations = MockAnnotationsWithoutReadOnlyHint()
+
+        tools = [read_only_tool, write_tool]
+        call_next_mock = AsyncMock(return_value=tools)
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act
+        result = await middleware.on_list_tools(mock_context, call_next_mock)
+
+        # Assert - only read_only_tool passes
+        assert len(result) == 1
+        assert result[0] == read_only_tool
+        call_next_mock.assert_called_once_with(mock_context)
+
+    @pytest.mark.asyncio
     async def test_read_only_true_filters_write_tools(
         self, mock_context, read_only_tool, write_tool
     ):
