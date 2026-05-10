@@ -20,12 +20,18 @@ from fastmcp.tools import Tool
 from typing import Sequence
 
 
-# Tool name prefixes that are inherently read-only.
+# Assumes AWS API naming conventions (get_/list_/describe_ = read-only).
+# File upstream issue on awslabs/mcp for proper readOnlyHint annotations.
+
 # Remote MCP servers may not set readOnlyHint=true for their tools,
 # but tools with these naming patterns never mutate state.
 _READ_ONLY_TOOL_PREFIXES = (
     re.compile(r'^(list|read|search|get|describe|retrieve|recommend)_'),
 )
+
+# Reserved for future edge cases where a tool name matches the heuristic
+# but is actually mutating — override here to force it as write-only.
+_HEURISTIC_DENY_LIST: set[str] = set()
 
 
 class ToolFilteringMiddleware(Middleware):
