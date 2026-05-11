@@ -67,7 +67,7 @@ async def test_expired_credentials():
 
     try:
         async with expired_client:
-            response = await expired_client.call_tool('aws___list_regions')
+            response = await expired_client.call_tool('aws___call_aws')
             logger.info('Tool call completed without exception. Response: %s', response)
     except Exception as e:
         exception_raised = True
