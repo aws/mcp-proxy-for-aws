@@ -38,7 +38,7 @@ OPENAI_API_KEY=sk-...
 import asyncio
 import dotenv
 import os
-from agent_framework import ChatAgent
+from agent_framework import Agent
 from agent_framework._mcp import MCPStreamableHTTPTool
 from agent_framework.openai import OpenAIChatClient
 from contextlib import asynccontextmanager
@@ -86,8 +86,8 @@ async def create_agent():
 
     # Connect to the MCP server and create the agent
     async with mcp_tools:
-        agent = ChatAgent(
-            chat_client=OpenAIChatClient(model_id='gpt-4.1-mini', api_key=OPENAI_API_KEY),
+        agent = Agent(
+            client=OpenAIChatClient(model=OPENAI_MODEL_ID, api_key=OPENAI_API_KEY),
             tools=[mcp_tools],
         )
 
