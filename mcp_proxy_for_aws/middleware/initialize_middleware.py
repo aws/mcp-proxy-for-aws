@@ -31,6 +31,23 @@ class InitializeMiddleware(Middleware):
         super().__init__()
         self._client_factory = client_factory
 
+    def _overwrite_init_options(
+        self, context: MiddlewareContext, init_result: mt.InitializeResult
+    ):
+        """Overwrite the session's _init_options with the backend server's info.
+
+        The MCP SDK builds the InitializeResult from session._init_options
+        inside call_next. By modifying _init_options before call_next runs,
+        the response sent to the client will contain the backend server's
+        info instead of the proxy's defaults.
+        """
+        fastmcp_ctx = context.fastmcp_context
+        if fastmcp_ctx is None or fastmcp_ctx._session is None:
+            logger.debug('No session available, skipping init_options overwrite.')
+            return
+
+        fastmcp_ctx._session._init_options.capabilities = init_result.capabilities
+
     @override
     async def on_initialize(
         self,
@@ -59,6 +76,12 @@ class InitializeMiddleware(Middleware):
                 # the list_tool call will require the client to be connected again, so the mcp error
                 # will be displayed in the q cli logs.
                 await client._connect()
+
+            # Overwrite the proxy's init_options with the backend server's info
+            # so the InitializeResult sent to the client reflects the backend.
+            if client.initialize_result is not None:
+                self._overwrite_init_options(context, client.initialize_result)
+
             return await call_next(context)
         except Exception:
             logger.exception('Initialize failed in middleware.')

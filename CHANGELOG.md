@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.4.2 (2026-04-30)
+
+### Fixed
+
+- pass-through server capabilities (#264)
+
+## v1.4.1 (2026-04-29)
+
+### Fixed
+
+- catch HTTPStatusError during force disconnect retry (#262)
+- remove incorrect us-east-1 default from --region docs (#253)
+
+## v1.4.0 (2026-04-15)
+
+### Fixed
+
+- increase test timeout for integration tests (#165)
+- disable SBOM upload to immutable GitHub release (#247)
+- remove fast fail credential check from create_aws_session (#233)
+- refresh stale credentials on auth failure without restart (#245)
+- **auth**: remove sensitive credential logging (#242)
+
 ## v1.3.0 (2026-04-10)
 
 ### Added
