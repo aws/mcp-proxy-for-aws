@@ -14,6 +14,7 @@
 
 """Unit tests for sigv4_helper module."""
 
+import asyncio
 import httpx
 import logging
 import pytest
@@ -391,6 +392,59 @@ class TestSessionHolder:
 
         holder.mark_needs_refresh()
         await holder.async_refresh_if_needed()
+
+        mock_create.assert_called_once_with('my-profile')
+        assert holder.session is new_session
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_async_refresh_concurrent_calls_refresh_once(self, mock_create):
+        """Concurrent async_refresh_if_needed calls only refresh once.
+
+        Uses threading.Event to hold the first refresh inside create_aws_session
+        while the other callers enter async_refresh_if_needed, ensuring the
+        lock is actually contended.
+        """
+        import threading
+
+        old_session = Mock()
+        new_session = Mock()
+        entered_create = threading.Event()
+        proceed = threading.Event()
+
+        def blocking_create(profile):
+            entered_create.set()
+            assert proceed.wait(timeout=5), 'proceed event was never set'
+            return new_session
+
+        mock_create.side_effect = blocking_create
+        holder = SessionHolder(old_session, profile='my-profile')
+        holder.mark_needs_refresh()
+
+        loop = asyncio.get_running_loop()
+
+        async def wait_then_refresh():
+            assert await loop.run_in_executor(None, entered_create.wait, 5), (
+                'entered_create event was never set'
+            )
+            await holder.async_refresh_if_needed()
+
+        async def first_refresh_and_unblock():
+            task = asyncio.create_task(holder.async_refresh_if_needed())
+            assert await loop.run_in_executor(None, entered_create.wait, 5), (
+                'entered_create event was never set'
+            )
+            # Yield to give wait_then_refresh coroutines a chance to
+            # enter async_refresh_if_needed before the first refresh completes.
+            await asyncio.sleep(0)
+            proceed.set()
+            await task
+
+        await asyncio.gather(
+            first_refresh_and_unblock(),
+            wait_then_refresh(),
+            wait_then_refresh(),
+        )
 
         mock_create.assert_called_once_with('my-profile')
         assert holder.session is new_session

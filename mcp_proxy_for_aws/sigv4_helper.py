@@ -124,6 +124,7 @@ class SessionHolder:
         self.session = session
         self._profile = profile
         self._needs_refresh = False
+        self._refresh_lock = asyncio.Lock()
 
     def mark_needs_refresh(self) -> None:
         """Mark that the next request should use a fresh session."""
@@ -145,15 +146,17 @@ class SessionHolder:
     async def async_refresh_if_needed(self) -> None:
         """Async version of refresh_if_needed that offloads blocking I/O to a thread.
 
-        Defensive counterpart to :meth:`async_get_credentials`.  While the
-        primary blocking path is ``get_credentials()`` (which triggers a
-        synchronous STS call for assumed-role profiles), session recreation
-        via ``create_aws_session()`` may also perform blocking I/O in the
-        future.  Offloading it to a thread keeps the event loop safe.
+        Uses a lock with double-check to prevent concurrent refresh races
+        when multiple requests are in flight.  The outer check avoids
+        acquiring the lock on the fast path; the inner check ensures only
+        one caller actually performs the refresh.
         """
         if not self._needs_refresh:
             return
-        await asyncio.to_thread(self.refresh_if_needed)
+        async with self._refresh_lock:
+            if not self._needs_refresh:
+                return
+            await asyncio.to_thread(self.refresh_if_needed)
 
     async def async_get_credentials(self):
         """Resolve credentials without blocking the event loop.
