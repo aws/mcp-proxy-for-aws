@@ -407,7 +407,7 @@ class TestSignRequestHook:
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+        await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
         holder.refresh_if_needed.assert_called_once()
 
@@ -422,7 +422,7 @@ class TestSignRequestHook:
         request_body = json.dumps({'test': 'data'}).encode('utf-8')
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        await _sign_request_hook(region, service, holder, request)
+        await _sign_request_hook(region, service, holder, False, request)
 
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
@@ -440,7 +440,7 @@ class TestSignRequestHook:
         request_body = b'test content'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _sign_request_hook(region, service, holder, request)
+        await _sign_request_hook(region, service, holder, False, request)
 
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
@@ -456,7 +456,7 @@ class TestSignRequestHook:
         request_body = b'test content with specific length'
         request = httpx.Request('POST', 'https://example.com/api', content=request_body)
 
-        await _sign_request_hook(region, service, holder, request)
+        await _sign_request_hook(region, service, holder, False, request)
 
         assert request.headers['content-length'] == str(len(request_body))
 
@@ -468,7 +468,7 @@ class TestSignRequestHook:
         region = 'ap-southeast-1'
         service = 'execute-api'
 
-        curried_hook = partial(_sign_request_hook, region, service, holder)
+        curried_hook = partial(_sign_request_hook, region, service, holder, False)
 
         request_body = b'request data'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -479,19 +479,31 @@ class TestSignRequestHook:
         assert 'x-amz-date' in request.headers
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_skips_signing_when_no_credentials(self):
-        """Request is sent unsigned when credentials are not available."""
+    async def test_sign_request_hook_skips_signing_when_skip_auth(self):
+        """Request is sent unsigned when credentials are unavailable and skip_auth is True."""
         holder = create_mock_session_holder()
         holder.session.get_credentials.return_value = None
 
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+        await _sign_request_hook('us-east-1', 'execute-api', holder, True, request)
 
         assert 'authorization' not in request.headers
         assert 'x-amz-security-token' not in request.headers
         assert request.headers['content-length'] == str(len(request_body))
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_raises_when_no_credentials_and_no_skip_auth(self):
+        """ValueError is raised when credentials are unavailable and skip_auth is False."""
+        holder = create_mock_session_holder()
+        holder.session.get_credentials.return_value = None
+
+        request_body = b'{"test": "data"}'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        with pytest.raises(ValueError, match='No AWS credentials available'):
+            await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_no_credentials_still_refreshes(self):
@@ -502,20 +514,21 @@ class TestSignRequestHook:
         request_body = b'test'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+        with pytest.raises(ValueError):
+            await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
         holder.refresh_if_needed.assert_called_once()
 
     @pytest.mark.asyncio
     @patch('mcp_proxy_for_aws.sigv4_helper.SigV4HTTPXAuth')
     async def test_sign_request_hook_no_credentials_does_not_create_auth(self, mock_auth_class):
-        """SigV4HTTPXAuth is never instantiated when credentials are None."""
+        """SigV4HTTPXAuth is never instantiated when credentials are None and skip_auth is True."""
         holder = create_mock_session_holder()
         holder.session.get_credentials.return_value = None
 
         request_body = b'test'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
-        await _sign_request_hook('us-east-1', 'execute-api', holder, request)
+        await _sign_request_hook('us-east-1', 'execute-api', holder, True, request)
 
         mock_auth_class.assert_not_called()

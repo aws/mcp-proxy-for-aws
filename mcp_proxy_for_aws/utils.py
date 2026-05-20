@@ -74,6 +74,7 @@ def create_transport_with_sigv4(
     custom_timeout: httpx.Timeout,
     profile: Optional[str] = None,
     disable_telemetry: bool = False,
+    skip_auth: bool = False,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -85,7 +86,7 @@ def create_transport_with_sigv4(
         custom_timeout: httpx.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
         disable_telemetry: Whether to disable telemetry
-
+        skip_auth: Whether to skip signing when credentials are unavailable
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
@@ -109,6 +110,7 @@ def create_transport_with_sigv4(
             timeout=custom_timeout,
             metadata=metadata,
             disable_telemetry=disable_telemetry,
+            skip_auth=skip_auth,
             auth=auth,
             **kw,
         )
