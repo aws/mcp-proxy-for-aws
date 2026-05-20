@@ -150,13 +150,21 @@ class SessionHolder:
         when multiple requests are in flight.  The outer check avoids
         acquiring the lock on the fast path; the inner check ensures only
         one caller actually performs the refresh.
+
+        The refresh is shielded from cancellation so that a cancelled caller
+        does not release the lock while the worker thread is still running.
         """
         if not self._needs_refresh:
             return
         async with self._refresh_lock:
             if not self._needs_refresh:
                 return
-            await asyncio.to_thread(self.refresh_if_needed)
+            refresh = asyncio.ensure_future(asyncio.to_thread(self.refresh_if_needed))
+            try:
+                await asyncio.shield(refresh)
+            except asyncio.CancelledError:
+                await refresh
+                raise
 
     async def async_get_credentials(self):
         """Resolve credentials without blocking the event loop.

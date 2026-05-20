@@ -450,6 +450,84 @@ class TestSessionHolder:
         assert holder.session is new_session
 
     @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
+    async def test_async_refresh_cancellation_does_not_duplicate(self, mock_create):
+        """Cancelling the caller does not release the lock prematurely.
+
+        Scenario: task1 holds the lock and is inside create_aws_session.
+        task2 is waiting on the lock.  task1 is cancelled.  Without the
+        shield, the lock would be released while the worker thread is still
+        running, allowing task2 to start a duplicate refresh.
+
+        The test distinguishes first and second create_aws_session calls
+        and verifies that a second call never happens.
+        """
+        import threading
+
+        old_session = Mock()
+        new_session = Mock()
+        entered_first = threading.Event()
+        finish_first = threading.Event()
+        entered_second = threading.Event()
+
+        call_count = 0
+
+        def create_side_effect(profile):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                entered_first.set()
+                assert finish_first.wait(timeout=5), 'finish_first event was never set'
+                return new_session
+            else:
+                entered_second.set()
+                return new_session
+
+        mock_create.side_effect = create_side_effect
+        holder = SessionHolder(old_session, profile='my-profile')
+        holder.mark_needs_refresh()
+
+        loop = asyncio.get_running_loop()
+
+        # task1 enters create_aws_session and blocks on finish_first.
+        task1 = asyncio.create_task(holder.async_refresh_if_needed())
+        assert await loop.run_in_executor(None, entered_first.wait, 5), (
+            'entered_first event was never set'
+        )
+
+        # task2 passes the outer _needs_refresh check and blocks on the lock.
+        task2 = asyncio.create_task(holder.async_refresh_if_needed())
+        await asyncio.sleep(0)
+
+        # Cancel task1 while the worker thread is still blocked.
+        task1.cancel()
+
+        # Give the event loop time to process the cancellation and let
+        # task2 potentially acquire the lock and start a second refresh.
+        # run_in_executor yields control to the event loop while waiting.
+        duplicate_started = await loop.run_in_executor(
+            None, entered_second.wait, 0.5
+        )
+        assert not duplicate_started, (
+            'task2 started a duplicate refresh — lock was released prematurely'
+        )
+
+        # Now let the first worker thread finish.
+        finish_first.set()
+
+        # task1 re-raises CancelledError after the refresh completes.
+        with pytest.raises(asyncio.CancelledError):
+            await task1
+
+        # task2 acquires the lock, sees _needs_refresh == False, returns.
+        await task2
+
+        # create_aws_session was called exactly once.
+        mock_create.assert_called_once_with('my-profile')
+        assert holder.session is new_session
+        assert not entered_second.is_set()
+
+    @pytest.mark.asyncio
     async def test_async_get_credentials_delegates_to_session(self):
         """async_get_credentials calls session.get_credentials in a thread."""
         mock_creds = Mock()
