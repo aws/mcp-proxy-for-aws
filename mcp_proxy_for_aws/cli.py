@@ -174,4 +174,10 @@ Examples:
         help='Disables telemetry data collection',
     )
 
+    parser.add_argument(
+        '--skip-auth',
+        action='store_true',
+        help='Skip request signing when AWS credentials are unavailable instead of failing',
+    )
+
     return parser.parse_args()

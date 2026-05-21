@@ -84,7 +84,14 @@ async def run_proxy(args) -> None:
 
     # Create transport with SigV4 authentication
     transport = create_transport_with_sigv4(
-        args.endpoint, service, region, metadata, timeout, profile, args.disable_telemetry
+        args.endpoint,
+        service,
+        region,
+        metadata,
+        timeout,
+        profile,
+        args.disable_telemetry,
+        args.skip_auth,
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
