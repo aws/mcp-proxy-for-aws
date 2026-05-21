@@ -18,6 +18,8 @@ import httpx
 import os
 import pytest
 from fastmcp.client.transports import ClientTransport
+from fastmcp.server.middleware.error_handling import RetryMiddleware
+from mcp_proxy_for_aws.middleware.empty_tools_retry import EmptyToolsRetryMiddleware
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.server import (
     add_profile_override_middleware,
@@ -323,12 +325,12 @@ class TestServer:
         add_retry_middleware(mock_mcp, retries=5)
 
         # Assert
-        mock_mcp.add_middleware.assert_called_once()
-        # Verify that the middleware added is a RetryMiddleware
-        call_args = mock_mcp.add_middleware.call_args[0][0]
-        from fastmcp.server.middleware.error_handling import RetryMiddleware
+        assert mock_mcp.add_middleware.call_count == 2
+        empty_tools_retry = mock_mcp.add_middleware.call_args_list[0][0][0]
+        retry_middleware = mock_mcp.add_middleware.call_args_list[1][0][0]
 
-        assert isinstance(call_args, RetryMiddleware)
+        assert isinstance(empty_tools_retry, EmptyToolsRetryMiddleware)
+        assert isinstance(retry_middleware, RetryMiddleware)
 
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):

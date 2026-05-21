@@ -33,6 +33,7 @@ from fastmcp.server.server import FastMCP
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
+from mcp_proxy_for_aws.middleware.empty_tools_retry import EmptyToolsRetryMiddleware
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
@@ -235,6 +236,7 @@ def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
         retries: number of retries with which to configure the retry middleware
     """
     logger.info('Adding retry middleware')
+    mcp.add_middleware(EmptyToolsRetryMiddleware(retries))
     mcp.add_middleware(RetryMiddleware(retries))
 
 
