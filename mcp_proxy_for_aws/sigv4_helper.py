@@ -185,6 +185,7 @@ def create_sigv4_client(
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     disable_telemetry: bool = False,
+    skip_auth: bool = False,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
@@ -198,6 +199,7 @@ def create_sigv4_client(
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
         disable_telemetry: Whether to disable telemetry
+        skip_auth: Whether to skip signing when credentials are unavailable
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:
@@ -239,7 +241,7 @@ def create_sigv4_client(
             'response': [partial(_handle_error_response, session_holder)],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                partial(_sign_request_hook, region, service, session_holder),
+                partial(_sign_request_hook, region, service, session_holder, skip_auth),
             ],
         },
     )
@@ -304,6 +306,7 @@ async def _sign_request_hook(
     region: str,
     service: str,
     session_holder: SessionHolder,
+    skip_auth: bool,
     request: httpx.Request,
 ) -> None:
     """Request hook to sign HTTP requests with AWS SigV4.
@@ -316,6 +319,7 @@ async def _sign_request_hook(
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
         session_holder: Holder providing the current boto3 session (refreshed on auth errors)
+        skip_auth: Whether to skip signing when credentials are unavailable
         request: The HTTP request object to sign (modified in-place)
     """
     # Set Content-Length for signing
@@ -332,6 +336,14 @@ async def _sign_request_hook(
     # Offloaded to a thread because get_credentials() may trigger a
     # synchronous STS call for assumed-role profiles.
     credentials = await session_holder.async_get_credentials()
+
+    if credentials is None:
+        if skip_auth:
+            logger.debug('No AWS credentials available, sending request unsigned (--skip-auth)')
+            return
+        raise ValueError(
+            'No AWS credentials available. Configure credentials or use --skip-auth to send unsigned requests.'
+        )
 
     # Create SigV4 auth and use its signing logic
     auth = SigV4HTTPXAuth(credentials, service, region)

@@ -108,6 +108,7 @@ docker build -t mcp-proxy-for-aws .
 | `--read-timeout`	    | Set desired read timeout in seconds	                                                                                                                                                                                                    | 120	                                                                        |No	|
 | `--write-timeout`	   | Set desired write timeout in seconds	                                                                                                                                                                                                   | 180	                                                                        |No	|
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
+| `--skip-auth`         | Skip request signing when AWS credentials are unavailable instead of failing                                                                                                                                                             | `False`                                                                     |No	|
 | `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
 
 ### Optional Environment Variables
@@ -357,6 +358,16 @@ If your credentials do expire during a session, the proxy will automatically det
 
 ### Client hangs on tool calls
 If your MCP client hangs waiting for a tool call response (e.g., due to an unresponsive endpoint), use `--tool-timeout` to set a maximum duration in seconds for each tool call. When the timeout is exceeded, the proxy returns a graceful error to the agent instead of hanging indefinitely.
+
+### Unsigned requests
+
+By default, the proxy signs all outgoing requests with [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) using your local AWS credentials. If you need to connect to an MCP endpoint that does not require SigV4 credentials (e.g., a local development server or a publicly accessible endpoint), use the `--skip-auth` flag:
+
+```bash
+uvx mcp-proxy-for-aws@latest https://my-endpoint.example.com/mcp --skip-auth
+```
+
+When `--skip-auth` is set, the proxy sends requests without signing them if AWS credentials are unavailable. If credentials _are_ available, requests are still signed as usual — the flag only changes behavior when credentials cannot be resolved.
 
 ## Development & Contributing
 
