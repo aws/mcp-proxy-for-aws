@@ -18,9 +18,11 @@ import boto3
 import httpx
 import json
 import logging
+import subprocess
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials
+from botocore.compat import compat_shell_split
+from botocore.credentials import Credentials, ProcessProvider
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
@@ -29,6 +31,58 @@ from typing import Any, Dict, Generator, Optional
 
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_credential_process_stdin():
+    """Patch botocore ProcessProvider to pass stdin=subprocess.DEVNULL.
+
+    When mcp-proxy-for-aws runs in stdio transport mode, its stdin is the MCP
+    JSON-RPC pipe. Botocore's ProcessProvider spawns credential_process
+    subprocesses without specifying stdin, so the child inherits the MCP pipe.
+    On Windows this causes the subprocess to hang indefinitely because it holds
+    an open handle to the pipe, blocking Popen.communicate() from completing.
+    """
+    from botocore.exceptions import CredentialRetrievalError
+
+    def _retrieve_credentials_using(self, credential_process):
+        process_list = compat_shell_split(credential_process)
+        p = self._popen(
+            process_list,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+        )
+        stdout, stderr = p.communicate()
+        if p.returncode != 0:
+            raise CredentialRetrievalError(provider=self.METHOD, error_msg=stderr.decode('utf-8'))
+        parsed = json.loads(stdout.decode('utf-8'))
+        version = parsed.get('Version', '<Version key not provided>')
+        if version != 1:
+            raise CredentialRetrievalError(
+                provider=self.METHOD,
+                error_msg=(
+                    f"Unsupported version '{version}' for credential process "
+                    f'provider, supported versions: 1'
+                ),
+            )
+        try:
+            return {
+                'access_key': parsed['AccessKeyId'],
+                'secret_key': parsed['SecretAccessKey'],
+                'token': parsed.get('SessionToken'),
+                'expiry_time': parsed.get('Expiration'),
+                'account_id': self._get_account_id(parsed),
+            }
+        except KeyError as e:
+            raise CredentialRetrievalError(
+                provider=self.METHOD,
+                error_msg=f'Missing required key in response: {e}',
+            )
+
+    ProcessProvider._retrieve_credentials_using = _retrieve_credentials_using
+
+
+_patch_credential_process_stdin()
 
 # Headers that should be redacted when logging to prevent credential exposure
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})
