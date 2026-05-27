@@ -37,11 +37,28 @@ class TestCredentialProcessStdinInheritanceIssue:
     """Validate that the stdin inheritance issue exists and the fix works."""
 
     def test_process_provider_passes_stdin_devnull_after_patch(self):
-        """Confirm our monkey-patch is active: ProcessProvider passes stdin=DEVNULL."""
-        import inspect
+        """Confirm our monkey-patch is active: ProcessProvider._popen injects stdin=DEVNULL."""
+        import mcp_proxy_for_aws.sigv4_helper  # noqa: F401 - ensure patch is applied
 
-        source = inspect.getsource(ProcessProvider._retrieve_credentials_using)
-        assert 'stdin' in source and 'DEVNULL' in source, (
+        popen_kwargs = {}
+
+        def mock_popen(*args, **kwargs):
+            popen_kwargs.update(kwargs)
+            mock = MagicMock()
+            mock.returncode = 0
+            mock.communicate.return_value = (
+                b'{"Version":1,"AccessKeyId":"A","SecretAccessKey":"B"}',
+                b'',
+            )
+            return mock
+
+        provider = ProcessProvider(
+            profile_name='test',
+            load_config=lambda: {'profiles': {'test': {'credential_process': 'echo hi'}}},
+            popen=mock_popen,
+        )
+        provider.load()
+        assert popen_kwargs.get('stdin') == subprocess.DEVNULL, (
             'The monkey-patch for stdin=subprocess.DEVNULL is not active — '
             'credential_process will hang on Windows in stdio mode'
         )

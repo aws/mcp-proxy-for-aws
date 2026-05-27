@@ -21,7 +21,6 @@ import logging
 import subprocess
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.compat import compat_shell_split
 from botocore.credentials import Credentials, ProcessProvider
 from functools import partial
 from httpx import __version__ as httpx_version
@@ -42,44 +41,19 @@ def _patch_credential_process_stdin():
     On Windows this causes the subprocess to hang indefinitely because it holds
     an open handle to the pipe, blocking Popen.communicate() from completing.
     """
-    from botocore.exceptions import CredentialRetrievalError
+    original_init = ProcessProvider.__init__
 
-    def _retrieve_credentials_using(self, credential_process):
-        process_list = compat_shell_split(credential_process)
-        p = self._popen(
-            process_list,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-        )
-        stdout, stderr = p.communicate()
-        if p.returncode != 0:
-            raise CredentialRetrievalError(provider=self.METHOD, error_msg=stderr.decode('utf-8'))
-        parsed = json.loads(stdout.decode('utf-8'))
-        version = parsed.get('Version', '<Version key not provided>')
-        if version != 1:
-            raise CredentialRetrievalError(
-                provider=self.METHOD,
-                error_msg=(
-                    f"Unsupported version '{version}' for credential process "
-                    f'provider, supported versions: 1'
-                ),
-            )
-        try:
-            return {
-                'access_key': parsed['AccessKeyId'],
-                'secret_key': parsed['SecretAccessKey'],
-                'token': parsed.get('SessionToken'),
-                'expiry_time': parsed.get('Expiration'),
-                'account_id': self._get_account_id(parsed),
-            }
-        except KeyError as e:
-            raise CredentialRetrievalError(
-                provider=self.METHOD,
-                error_msg=f'Missing required key in response: {e}',
-            )
+    def _patched_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        original_popen = self._popen
 
-    ProcessProvider._retrieve_credentials_using = _retrieve_credentials_using
+        def _popen_with_devnull_stdin(*popen_args, **popen_kwargs):
+            popen_kwargs.setdefault('stdin', subprocess.DEVNULL)
+            return original_popen(*popen_args, **popen_kwargs)
+
+        self._popen = _popen_with_devnull_stdin
+
+    ProcessProvider.__init__ = _patched_init
 
 
 _patch_credential_process_stdin()
