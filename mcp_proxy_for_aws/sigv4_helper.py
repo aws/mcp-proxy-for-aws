@@ -112,34 +112,20 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
 
 
 class SessionHolder:
-    """Holds a boto3 session that can be refreshed on credential errors.
+    """Provides fresh boto3 sessions so every request reads current credentials from disk.
 
-    Wraps a boto3.Session so the signing hook always uses the current session,
-    and can create a fresh session when the previous request got an auth error.
+    Instead of caching a session and refreshing reactively on auth errors,
+    this always creates a new session so account switches and credential
+    refreshes take effect immediately.
     """
 
-    def __init__(self, session: boto3.Session, profile: Optional[str] = None) -> None:
-        """Initialize SessionHolder with the given session and optional profile."""
-        self.session = session
+    def __init__(self, profile: Optional[str] = None) -> None:
+        """Initialize SessionHolder with the given profile."""
         self._profile = profile
-        self._needs_refresh = False
 
-    def mark_needs_refresh(self) -> None:
-        """Mark that the next request should use a fresh session."""
-        self._needs_refresh = True
-
-    def refresh_if_needed(self) -> None:
-        """Create a fresh session if a previous request got an auth error."""
-        if not self._needs_refresh:
-            return
-        logger.info('Refreshing AWS session to pick up new credentials')
-        try:
-            self.session = create_aws_session(self._profile)
-            self._needs_refresh = False
-        except Exception:
-            logger.warning(
-                'Failed to create fresh AWS session, keeping current session', exc_info=True
-            )
+    def get_session(self) -> boto3.Session:
+        """Create and return a fresh boto3 session reading current credentials from disk."""
+        return create_aws_session(self._profile)
 
 
 def create_sigv4_client(
@@ -219,17 +205,13 @@ async def _handle_error_response(session_holder: SessionHolder, response: httpx.
     and provide more detailed error information when requests fail.
 
     Args:
-        session_holder: SessionHolder to refresh on credential errors
+        session_holder: SessionHolder (unused, kept for hook signature compatibility)
         response: The HTTP response object
 
     Raises:
         No raises. let the mcp http client handle the errors.
     """
     if response.is_error:
-        # Mark session for refresh so the next request picks up new credentials
-        if response.status_code in (401, 403):
-            session_holder.mark_needs_refresh()
-
         # warning only because the SDK logs error
         log_level = logging.WARNING
         if (
@@ -290,13 +272,10 @@ async def _sign_request_hook(
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
 
-    # Refresh session if a previous request got an auth error.
-    # Done here (at signing time) so the new session reads credentials
-    # that the user may have refreshed since the error occurred.
-    session_holder.refresh_if_needed()
-
-    # Get AWS credentials from the session
-    credentials = session_holder.session.get_credentials()
+    # Always read fresh credentials from disk so account switches
+    # and credential refreshes take effect immediately.
+    session = session_holder.get_session()
+    credentials = session.get_credentials()
 
     if credentials is None:
         if skip_auth:

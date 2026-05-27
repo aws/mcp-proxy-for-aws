@@ -406,9 +406,7 @@ class TestServer:
     @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
     def test_create_sigv4_client(self, mock_async_client):
         """Test creating SigV4 authenticated client with request hooks."""
-        mock_session = Mock()
-        mock_session.get_credentials.return_value = Mock(access_key='test-key')
-        session_holder = SessionHolder(mock_session, profile='test-profile')
+        session_holder = SessionHolder(profile='test-profile')
 
         create_sigv4_client(
             service='test-service', region='us-west-2', session_holder=session_holder
@@ -423,8 +421,7 @@ class TestServer:
 
     def test_create_sigv4_client_no_credentials(self):
         """Test that credential check happens in sign_request_hook, not during client creation."""
-        mock_session = Mock()
-        session_holder = SessionHolder(mock_session)
+        session_holder = SessionHolder()
 
         client = create_sigv4_client(
             service='test-service', region='test-region', session_holder=session_holder

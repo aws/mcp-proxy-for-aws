@@ -56,7 +56,7 @@ def create_mock_session():
 def create_mock_session_holder():
     """Helper to create a mocked SessionHolder."""
     holder = MagicMock(spec=SessionHolder)
-    holder.session = create_mock_session()
+    holder.get_session.return_value = create_mock_session()
     return holder
 
 
@@ -64,8 +64,8 @@ class TestHandleErrorResponse:
     """Test cases for the _handle_error_response function."""
 
     @pytest.mark.asyncio
-    async def test_handle_error_response_marks_refresh_on_401(self):
-        """401 response marks the session holder for refresh."""
+    async def test_handle_error_response_logs_401(self):
+        """401 response is handled without error."""
         request = httpx.Request('POST', 'https://example.com/mcp')
         response = httpx.Response(
             status_code=401,
@@ -77,11 +77,9 @@ class TestHandleErrorResponse:
 
         await _handle_error_response(holder, response)
 
-        holder.mark_needs_refresh.assert_called_once()
-
     @pytest.mark.asyncio
-    async def test_handle_error_response_marks_refresh_on_403(self):
-        """403 response marks the session holder for refresh."""
+    async def test_handle_error_response_logs_403(self):
+        """403 response is handled without error."""
         request = httpx.Request('POST', 'https://example.com/mcp')
         response = httpx.Response(
             status_code=403,
@@ -92,25 +90,6 @@ class TestHandleErrorResponse:
         holder = create_mock_session_holder()
 
         await _handle_error_response(holder, response)
-
-        holder.mark_needs_refresh.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_handle_error_response_does_not_mark_refresh_on_other_errors(self):
-        """Non-auth error codes (400, 404, 500) do not mark refresh."""
-        for status_code in (400, 404, 500):
-            request = httpx.Request('POST', 'https://example.com/mcp')
-            response = httpx.Response(
-                status_code=status_code,
-                headers={'content-type': 'text/plain'},
-                content=b'Error',
-                request=request,
-            )
-            holder = create_mock_session_holder()
-
-            await _handle_error_response(holder, response)
-
-            holder.mark_needs_refresh.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_handle_error_response_with_json_error(self):
@@ -401,15 +380,15 @@ class TestSignRequestHook:
     """Test cases for sign_request_hook function."""
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_calls_refresh_if_needed(self):
-        """Signing hook calls refresh_if_needed before signing."""
+    async def test_sign_request_hook_calls_get_session(self):
+        """Signing hook calls get_session to read fresh credentials."""
         holder = create_mock_session_holder()
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
-        holder.refresh_if_needed.assert_called_once()
+        holder.get_session.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_signs_request(self):
@@ -482,7 +461,7 @@ class TestSignRequestHook:
     async def test_sign_request_hook_skips_signing_when_skip_auth(self):
         """Request is sent unsigned when credentials are unavailable and skip_auth is True."""
         holder = create_mock_session_holder()
-        holder.session.get_credentials.return_value = None
+        holder.get_session.return_value.get_credentials.return_value = None
 
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -497,7 +476,7 @@ class TestSignRequestHook:
     async def test_sign_request_hook_raises_when_no_credentials_and_no_skip_auth(self):
         """ValueError is raised when credentials are unavailable and skip_auth is False."""
         holder = create_mock_session_holder()
-        holder.session.get_credentials.return_value = None
+        holder.get_session.return_value.get_credentials.return_value = None
 
         request_body = b'{"test": "data"}'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -506,10 +485,10 @@ class TestSignRequestHook:
             await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
     @pytest.mark.asyncio
-    async def test_sign_request_hook_no_credentials_still_refreshes(self):
-        """refresh_if_needed is called even when credentials end up None."""
+    async def test_sign_request_hook_no_credentials_still_calls_get_session(self):
+        """get_session is called even when credentials end up None."""
         holder = create_mock_session_holder()
-        holder.session.get_credentials.return_value = None
+        holder.get_session.return_value.get_credentials.return_value = None
 
         request_body = b'test'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
@@ -517,14 +496,14 @@ class TestSignRequestHook:
         with pytest.raises(ValueError):
             await _sign_request_hook('us-east-1', 'execute-api', holder, False, request)
 
-        holder.refresh_if_needed.assert_called_once()
+        holder.get_session.assert_called_once()
 
     @pytest.mark.asyncio
     @patch('mcp_proxy_for_aws.sigv4_helper.SigV4HTTPXAuth')
     async def test_sign_request_hook_no_credentials_does_not_create_auth(self, mock_auth_class):
         """SigV4HTTPXAuth is never instantiated when credentials are None and skip_auth is True."""
         holder = create_mock_session_holder()
-        holder.session.get_credentials.return_value = None
+        holder.get_session.return_value.get_credentials.return_value = None
 
         request_body = b'test'
         request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)

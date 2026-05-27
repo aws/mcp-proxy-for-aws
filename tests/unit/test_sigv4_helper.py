@@ -15,7 +15,6 @@
 """Unit tests for sigv4_helper module."""
 
 import httpx
-import logging
 import pytest
 from httpx import __version__ as httpx_version
 from mcp.types import Implementation
@@ -117,8 +116,7 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        mock_session = Mock()
-        session_holder = SessionHolder(mock_session)
+        session_holder = SessionHolder()
 
         # Test client creation
         result = create_sigv4_client(
@@ -146,7 +144,7 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder(Mock())
+        session_holder = SessionHolder()
 
         # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
@@ -173,9 +171,7 @@ class TestCreateSigv4Client:
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
-        mock_session = Mock()
-        mock_session.get_credentials.return_value = Mock(access_key='test-key')
-        session_holder = SessionHolder(mock_session, profile='test-profile')
+        session_holder = SessionHolder(profile='test-profile')
 
         # Test client creation with custom parameters
         result = create_sigv4_client(
@@ -190,7 +186,7 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder(Mock())
+        session_holder = SessionHolder()
 
         # Test client creation with additional kwargs
         result = create_sigv4_client(
@@ -215,7 +211,7 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client when prompts exist in the system context."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder(Mock())
+        session_holder = SessionHolder()
 
         prompt_context_headers = {
             'X-MCP-Prompt-Context': 'enabled',
@@ -256,7 +252,7 @@ class TestCreateSigv4Client:
         """Test that User-Agent omits client info when disable_telemetry is True."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder(Mock())
+        session_holder = SessionHolder()
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
@@ -281,7 +277,7 @@ class TestCreateSigv4Client:
         """Test that User-Agent includes client info when disable_telemetry is False."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder(Mock())
+        session_holder = SessionHolder()
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
@@ -302,72 +298,42 @@ class TestCreateSigv4Client:
 class TestSessionHolder:
     """Test cases for the SessionHolder class."""
 
-    def test_refresh_if_needed_noop_when_not_marked(self):
-        """refresh_if_needed does nothing when not marked."""
-        mock_session = Mock()
-        holder = SessionHolder(mock_session)
-
-        holder.refresh_if_needed()
-
-        assert holder.session is mock_session
-
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_refresh_if_needed_creates_new_session_when_marked(self, mock_create):
-        """refresh_if_needed replaces the session after mark_needs_refresh."""
-        old_session = Mock()
+    def test_get_session_creates_fresh_session(self, mock_create):
+        """get_session always creates a fresh boto3 session."""
         new_session = Mock()
         mock_create.return_value = new_session
-        holder = SessionHolder(old_session, profile='my-profile')
+        holder = SessionHolder(profile='my-profile')
 
-        holder.mark_needs_refresh()
-        holder.refresh_if_needed()
+        result = holder.get_session()
 
         mock_create.assert_called_once_with('my-profile')
-        assert holder.session is new_session
+        assert result is new_session
 
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_refresh_clears_flag_on_success(self, mock_create):
-        """After a successful refresh the flag is cleared — second call is a no-op."""
-        mock_create.return_value = Mock()
-        holder = SessionHolder(Mock())
+    def test_get_session_creates_new_session_each_call(self, mock_create):
+        """Each call to get_session creates a new session (no caching)."""
+        session_a = Mock()
+        session_b = Mock()
+        mock_create.side_effect = [session_a, session_b]
+        holder = SessionHolder(profile='default')
 
-        holder.mark_needs_refresh()
-        holder.refresh_if_needed()
-        mock_create.reset_mock()
+        first = holder.get_session()
+        second = holder.get_session()
 
-        holder.refresh_if_needed()
-        mock_create.assert_not_called()
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_refresh_keeps_flag_on_failure(self, mock_create):
-        """If refresh fails the flag stays set so the next call retries."""
-        old_session = Mock()
-        mock_create.side_effect = ValueError('no creds')
-        holder = SessionHolder(old_session)
-
-        holder.mark_needs_refresh()
-        holder.refresh_if_needed()
-
-        # Session unchanged
-        assert holder.session is old_session
-        # Flag still set — next call retries
-        mock_create.side_effect = None
-        mock_create.return_value = Mock()
-        holder.refresh_if_needed()
+        assert first is session_a
+        assert second is session_b
         assert mock_create.call_count == 2
 
     @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_refresh_logs_original_error_on_failure(self, mock_create, caplog):
-        """Failed refresh logs the original ValueError."""
-        mock_create.side_effect = ValueError('session creation boom')
-        holder = SessionHolder(Mock())
+    def test_get_session_passes_none_profile(self, mock_create):
+        """get_session passes None profile when none was configured."""
+        mock_create.return_value = Mock()
+        holder = SessionHolder()
 
-        holder.mark_needs_refresh()
-        with caplog.at_level(logging.WARNING):
-            holder.refresh_if_needed()
+        holder.get_session()
 
-        assert 'Failed to create fresh AWS session' in caplog.text
-        assert 'session creation boom' in caplog.text
+        mock_create.assert_called_once_with(None)
 
 
 class TestSanitizeHeaders:
