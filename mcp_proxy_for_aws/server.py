@@ -178,7 +178,8 @@ def add_profile_override_middleware(
     """
     if len(all_profiles) < 2:
         return None
-    assert default_profile is not None
+    if default_profile is None:
+        return None
     logger.info('Adding profile override middleware with profiles: %s', all_profiles)
     middleware = ProfileOverrideMiddleware(
         allowed_profiles=all_profiles,

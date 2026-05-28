@@ -82,7 +82,7 @@ class ProfileOverrideMiddleware(Middleware):
         'aws___call_aws',
         'aws___run_script',
         'aws___get_presigned_url',
-        'aws___get_tasks',
+        'aws___suggest_aws_commands',
     }
 
     # ── tool listing ────────────────────────────────────────────────

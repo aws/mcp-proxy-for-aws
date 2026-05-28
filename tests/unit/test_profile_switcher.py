@@ -354,7 +354,7 @@ class TestFix1OnlyAuthToolsGetInjection:
             'aws___call_aws',
             'aws___run_script',
             'aws___get_presigned_url',
-            'aws___get_tasks',
+            'aws___suggest_aws_commands',
         ]:
             tool = Mock()
             tool.name = name
@@ -379,8 +379,8 @@ class TestFix1OnlyAuthToolsGetInjection:
             'list_regions',
             'recommend',
             'retrieve_skill',
-            'suggest_aws_commands',
             'get_regional_availability',
+            'aws___get_tasks',
         ]:
             tool = Mock()
             tool.name = name
@@ -528,3 +528,198 @@ class TestFix5IsErrorPropagation:
             result = await middleware.on_call_tool(mock_context, call_next)
 
         assert result.content is not None
+
+
+class TestRaiseOnErrorFalseEnforced:
+    """Verify raise_on_error=False is critical for error extraction logic."""
+
+    @pytest.mark.asyncio
+    async def test_raise_on_error_false_allows_is_error_extraction(self, middleware, mock_context):
+        """If raise_on_error were True, backend errors would bypass our extraction logic.
+
+        This test confirms the middleware correctly passes raise_on_error=False
+        and handles the is_error field from the result object.
+        """
+        mock_client = AsyncMock()
+        mock_call_result = MagicMock()
+        mock_content_block = MagicMock()
+        mock_content_block.text = 'ThrottlingException: Rate exceeded'
+        mock_call_result.content = [mock_content_block]
+        mock_call_result.is_error = True
+        mock_client.call_tool.return_value = mock_call_result
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'cli_command': 'aws s3 ls', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with patch.object(middleware, '_get_profile_client', return_value=mock_client):
+            with pytest.raises(ToolError, match='ThrottlingException'):
+                await middleware.on_call_tool(mock_context, call_next)
+
+        # Confirm raise_on_error=False was passed
+        mock_client.call_tool.assert_called_once_with(
+            'aws___call_aws', {'cli_command': 'aws s3 ls'}, raise_on_error=False
+        )
+
+
+class TestStructuredContentAndMetaPassthrough:
+    """Verify structured_content and meta are propagated on success."""
+
+    @pytest.mark.asyncio
+    async def test_non_none_structured_content_and_meta_propagated(self, middleware, mock_context):
+        """Non-None structured_content and meta values are passed through to ToolResult."""
+        mock_client = AsyncMock()
+        mock_call_result = MagicMock()
+        mock_call_result.content = [MagicMock(text='ok')]
+        mock_call_result.structured_content = {'key': 'value', 'nested': [1, 2, 3]}
+        mock_call_result.meta = {'request_id': 'abc-123', 'latency_ms': 42}
+        mock_call_result.is_error = False
+        mock_client.call_tool.return_value = mock_call_result
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'cli_command': 'aws s3 ls', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with patch.object(middleware, '_get_profile_client', return_value=mock_client):
+            result = await middleware.on_call_tool(mock_context, call_next)
+
+        assert result.structured_content == {'key': 'value', 'nested': [1, 2, 3]}
+        assert result.meta == {'request_id': 'abc-123', 'latency_ms': 42}
+
+
+class TestAwsProfileAlreadyInSchema:
+    """Verify warning path when tool already defines aws_profile."""
+
+    @pytest.mark.asyncio
+    async def test_existing_aws_profile_is_overwritten_with_warning(
+        self, middleware, mock_context, caplog
+    ):
+        """Tool with pre-existing aws_profile gets it overwritten and a warning is logged."""
+        tool = Mock()
+        tool.name = 'aws___call_aws'
+        tool.parameters = {
+            'type': 'object',
+            'properties': {
+                'cli_command': {'type': 'string'},
+                'aws_profile': {
+                    'type': 'string',
+                    'description': 'Original backend definition',
+                    'enum': ['old-profile'],
+                },
+            },
+        }
+        call_next = AsyncMock(return_value=[tool])
+
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            result = await middleware.on_list_tools(mock_context, call_next)
+
+        # The middleware's version should overwrite the backend's
+        profile_schema = result[0].parameters['properties']['aws_profile']
+        assert profile_schema['enum'] == sorted(ALLOWED_PROFILES)
+        assert 'shadowing the backend definition' in caplog.text
+
+
+class TestLockWithDeterministicSynchronization:
+    """Deterministic lock test using asyncio.Event instead of sleep."""
+
+    @pytest.mark.asyncio
+    async def test_lock_prevents_duplicate_creation_deterministic(self, middleware):
+        """Concurrent calls for the same profile only create one client (event-based)."""
+        creation_count = 0
+        gate = asyncio.Event()
+        mock_client = AsyncMock()
+
+        async def slow_aenter(*args, **kwargs):
+            nonlocal creation_count
+            creation_count += 1
+            # Wait for the gate — simulates slow connection setup
+            await gate.wait()
+            return mock_client
+
+        mock_client.__aenter__ = slow_aenter
+
+        mock_transport = Mock()
+
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=mock_transport,
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=mock_client,
+            ),
+        ):
+            # Start 3 concurrent requests for the same profile
+            tasks = [
+                asyncio.create_task(middleware._get_profile_client('staging-profile'))
+                for _ in range(3)
+            ]
+            # Let the event loop schedule all tasks
+            await asyncio.sleep(0)
+            # Release the gate
+            gate.set()
+            results = await asyncio.gather(*tasks)
+
+        assert all(r is mock_client for r in results)
+        assert creation_count == 1
+
+
+class TestRetryMiddlewareIntegration:
+    """Integration test: ProfileOverrideMiddleware + RetryMiddleware chained together."""
+
+    @pytest.mark.asyncio
+    async def test_retry_middleware_recognizes_connection_error_cause(self):
+        """RetryMiddleware._should_retry returns True for ToolError from ConnectionError."""
+        from fastmcp.server.middleware.error_handling import RetryMiddleware
+
+        retry_mw = RetryMiddleware(max_retries=2)
+
+        # Simulate what ProfileOverrideMiddleware does: raise ToolError(...) from ConnectionError
+        original = ConnectionError('connection reset by peer')
+        tool_error = ToolError("Tool call failed using profile 'dev'.")
+        tool_error.__cause__ = original
+
+        assert retry_mw._should_retry(tool_error) is True
+
+    @pytest.mark.asyncio
+    async def test_retry_middleware_recognizes_timeout_error_cause(self):
+        """RetryMiddleware._should_retry returns True for ToolError from TimeoutError."""
+        from fastmcp.server.middleware.error_handling import RetryMiddleware
+
+        retry_mw = RetryMiddleware(max_retries=2)
+
+        original = TimeoutError('connect timed out')
+        tool_error = ToolError("Failed to create connection for profile 'dev'.")
+        tool_error.__cause__ = original
+
+        assert retry_mw._should_retry(tool_error) is True
+
+    @pytest.mark.asyncio
+    async def test_retry_middleware_does_not_retry_non_transient_cause(self):
+        """RetryMiddleware._should_retry returns False for ToolError from ValueError."""
+        from fastmcp.server.middleware.error_handling import RetryMiddleware
+
+        retry_mw = RetryMiddleware(max_retries=2)
+
+        original = ValueError('invalid profile name')
+        tool_error = ToolError('Profile not in allowed list.')
+        tool_error.__cause__ = original
+
+        assert retry_mw._should_retry(tool_error) is False
+
+    @pytest.mark.asyncio
+    async def test_retry_middleware_does_not_retry_tool_error_without_cause(self):
+        """RetryMiddleware._should_retry returns False for ToolError with no __cause__."""
+        from fastmcp.server.middleware.error_handling import RetryMiddleware
+
+        retry_mw = RetryMiddleware(max_retries=2)
+
+        tool_error = ToolError("Profile 'evil' is not in the allowed list.")
+        # No __cause__ set (e.g., disallowed profile validation error)
+
+        assert retry_mw._should_retry(tool_error) is False
