@@ -55,7 +55,7 @@ class TestCredentialProcessStdinInheritanceIssue:
         provider = ProcessProvider(
             profile_name='test',
             load_config=lambda: {'profiles': {'test': {'credential_process': 'echo hi'}}},
-            popen=mock_popen,
+            popen=mock_popen,  # type: ignore[arg-type]
         )
         provider.load()
         assert popen_kwargs.get('stdin') == subprocess.DEVNULL, (
