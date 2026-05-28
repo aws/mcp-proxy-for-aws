@@ -25,6 +25,7 @@ This server provides a unified interface to backend servers by:
 import asyncio
 import httpx
 import logging
+import os
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.providers.proxy import FastMCPProxy
@@ -33,6 +34,7 @@ from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
+from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
@@ -63,16 +65,27 @@ async def run_proxy(args) -> None:
     if args.metadata:
         metadata.update(args.metadata)
 
-    # Get profile
-    profile = args.profile
+    # Get profile(s) from CLI args or env var
+    # AWS_MCP_PROXY_PROFILES takes precedence over --profile/AWS_PROFILE
+    env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
+    if env_profiles:
+        profiles = env_profiles.split()
+    elif args.profiles:
+        profiles = args.profiles
+    else:
+        profiles = []
+    default_profile = profiles[0] if profiles else None
+    # Dedup profiles, preserve order, include all (including default)
+    all_profiles = list(dict.fromkeys(profiles))
 
     # Log server configuration
     logger.info(
-        'Using service: %s, region: %s, metadata: %s, profile: %s',
+        'Using service: %s, region: %s, metadata: %s, profile: %s, switch profiles: %s',
         service,
         region,
         metadata,
-        profile,
+        default_profile,
+        all_profiles[1:] if len(all_profiles) > 1 else [],
     )
 
     timeout = httpx.Timeout(
@@ -89,12 +102,13 @@ async def run_proxy(args) -> None:
         region,
         metadata,
         timeout,
-        profile,
+        default_profile,
         args.disable_telemetry,
         args.skip_auth,
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
+    profile_middleware: ProfileOverrideMiddleware | None = None
     try:
         proxy = FastMCPProxy(
             client_factory=client_factory,
@@ -110,6 +124,10 @@ async def run_proxy(args) -> None:
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
+        profile_middleware = add_profile_override_middleware(
+            proxy, all_profiles, default_profile, service, region, metadata, timeout, args.endpoint
+        )
+
         if args.retries:
             add_retry_middleware(proxy, args.retries)
         await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
@@ -117,6 +135,8 @@ async def run_proxy(args) -> None:
         logger.error('Cannot start proxy server: %s', e)
         raise e
     finally:
+        if profile_middleware:
+            await profile_middleware.disconnect_profile_clients()
         await client_factory.disconnect()
 
 
@@ -129,6 +149,48 @@ def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:
     """
     logger.info('Adding tool error middleware with tool_timeout=%s', tool_timeout)
     mcp.add_middleware(ToolErrorMiddleware(tool_call_timeout=tool_timeout))
+
+
+def add_profile_override_middleware(
+    mcp: FastMCP,
+    all_profiles: list[str],
+    default_profile: str | None,
+    service: str,
+    region: str,
+    metadata: dict,
+    timeout: httpx.Timeout,
+    endpoint: str,
+) -> ProfileOverrideMiddleware | None:
+    """Add profile override middleware to target MCP server.
+
+    Args:
+        mcp: The FastMCP instance to add profile override to
+        all_profiles: List of all allowed profiles (including default)
+        default_profile: The default profile name (first in the list)
+        service: The AWS service name
+        region: The AWS region
+        metadata: The metadata dictionary
+        timeout: The httpx timeout configuration
+        endpoint: The MCP endpoint URL
+
+    Returns:
+        The ProfileOverrideMiddleware instance if added, None otherwise
+    """
+    if len(all_profiles) < 2:
+        return None
+    assert default_profile is not None
+    logger.info('Adding profile override middleware with profiles: %s', all_profiles)
+    middleware = ProfileOverrideMiddleware(
+        allowed_profiles=all_profiles,
+        default_profile=default_profile,
+        service=service,
+        region=region,
+        metadata=metadata,
+        timeout=timeout,
+        endpoint=endpoint,
+    )
+    mcp.add_middleware(middleware)
+    return middleware
 
 
 def add_tool_filtering_middleware(mcp: FastMCP, read_only: bool = False) -> None:
