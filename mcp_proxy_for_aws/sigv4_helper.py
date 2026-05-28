@@ -111,27 +111,10 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
     return session
 
 
-class SessionHolder:
-    """Provides fresh boto3 sessions so every request reads current credentials from disk.
-
-    Instead of caching a session and refreshing reactively on auth errors,
-    this always creates a new session so account switches and credential
-    refreshes take effect immediately.
-    """
-
-    def __init__(self, profile: Optional[str] = None) -> None:
-        """Initialize SessionHolder with the given profile."""
-        self._profile = profile
-
-    def get_session(self) -> boto3.Session:
-        """Create and return a fresh boto3 session reading current credentials from disk."""
-        return create_aws_session(self._profile)
-
-
 def create_sigv4_client(
     service: str,
     region: str,
-    session_holder: SessionHolder,
+    profile: Optional[str] = None,
     timeout: Optional[httpx.Timeout] = None,
     headers: Optional[Dict[str, str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
@@ -144,8 +127,7 @@ def create_sigv4_client(
     Args:
         service: AWS service name for SigV4 signing
         region: AWS region for SigV4 signing
-        session_holder: SessionHolder that provides the current boto3 session
-            and can refresh it on credential errors
+        profile: AWS profile name for credentials (optional)
         timeout: Timeout configuration for the HTTP client
         headers: Headers to include in requests
         metadata: Metadata to inject into MCP _meta field
@@ -189,27 +171,23 @@ def create_sigv4_client(
     return httpx.AsyncClient(
         **client_kwargs,
         event_hooks={
-            'response': [partial(_handle_error_response, session_holder)],
+            'response': [_handle_error_response],
             'request': [
                 partial(_inject_metadata_hook, metadata or {}),
-                partial(_sign_request_hook, region, service, session_holder, skip_auth),
+                partial(_sign_request_hook, region, service, profile, skip_auth),
             ],
         },
     )
 
 
-async def _handle_error_response(session_holder: SessionHolder, response: httpx.Response) -> None:
+async def _handle_error_response(response: httpx.Response) -> None:
     """Event hook to handle HTTP error responses and extract details.
 
     This function is called for every HTTP response to check for errors
     and provide more detailed error information when requests fail.
 
     Args:
-        session_holder: SessionHolder (unused, kept for hook signature compatibility)
         response: The HTTP response object
-
-    Raises:
-        No raises. let the mcp http client handle the errors.
     """
     if response.is_error:
         # warning only because the SDK logs error
@@ -252,7 +230,7 @@ async def _handle_error_response(session_holder: SessionHolder, response: httpx.
 async def _sign_request_hook(
     region: str,
     service: str,
-    session_holder: SessionHolder,
+    profile: Optional[str],
     skip_auth: bool,
     request: httpx.Request,
 ) -> None:
@@ -265,7 +243,7 @@ async def _sign_request_hook(
     Args:
         region: AWS region for SigV4 signing
         service: AWS service name for SigV4 signing
-        session_holder: Holder providing the current boto3 session (refreshed on auth errors)
+        profile: AWS profile name for credentials (optional)
         skip_auth: Whether to skip signing when credentials are unavailable
         request: The HTTP request object to sign (modified in-place)
     """
@@ -274,7 +252,7 @@ async def _sign_request_hook(
 
     # Always read fresh credentials from disk so account switches
     # and credential refreshes take effect immediately.
-    session = session_holder.get_session()
+    session = create_aws_session(profile)
     credentials = session.get_credentials()
 
     if credentials is None:

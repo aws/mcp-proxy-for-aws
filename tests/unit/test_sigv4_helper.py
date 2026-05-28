@@ -21,7 +21,6 @@ from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
-    SessionHolder,
     SigV4HTTPXAuth,
     _sanitize_headers,
     create_aws_session,
@@ -116,12 +115,8 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
 
-        # Test client creation
-        result = create_sigv4_client(
-            service='test-service', region='test-region', session_holder=session_holder
-        )
+        result = create_sigv4_client(service='test-service', region='test-region')
 
         # Check that AsyncClient was called with correct parameters
         call_args = mock_client_class.call_args
@@ -144,14 +139,11 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with custom headers."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
 
-        # Test client creation with custom headers
         custom_headers = {'Custom-Header': 'custom-value'}
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
-            session_holder=session_holder,
             headers=custom_headers,
         )
 
@@ -171,14 +163,10 @@ class TestCreateSigv4Client:
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
-        session_holder = SessionHolder(profile='test-profile')
-
-        # Test client creation with custom parameters
         result = create_sigv4_client(
-            service='custom-service', session_holder=session_holder, region='us-east-1'
+            service='custom-service', region='us-east-1', profile='test-profile'
         )
 
-        # Verify client was created
         assert result == mock_client
 
     @patch('httpx.AsyncClient')
@@ -186,13 +174,10 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
 
-        # Test client creation with additional kwargs
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
-            session_holder=session_holder,
             verify=False,
             proxies={'http': 'http://proxy:8080'},
         )
@@ -211,7 +196,6 @@ class TestCreateSigv4Client:
         """Test creating SigV4 client when prompts exist in the system context."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
 
         prompt_context_headers = {
             'X-MCP-Prompt-Context': 'enabled',
@@ -220,7 +204,6 @@ class TestCreateSigv4Client:
 
         result = create_sigv4_client(
             service='test-service',
-            session_holder=session_holder,
             headers=prompt_context_headers,
             region='us-west-2',
         )
@@ -252,13 +235,11 @@ class TestCreateSigv4Client:
         """Test that User-Agent omits client info when disable_telemetry is True."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
-            session_holder=session_holder,
             disable_telemetry=True,
         )
 
@@ -277,13 +258,11 @@ class TestCreateSigv4Client:
         """Test that User-Agent includes client info when disable_telemetry is False."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
-        session_holder = SessionHolder()
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
 
         result = create_sigv4_client(
             service='test-service',
             region='test-region',
-            session_holder=session_holder,
             disable_telemetry=False,
         )
 
@@ -293,47 +272,6 @@ class TestCreateSigv4Client:
         assert 'mcp-proxy-for-aws' in user_agent
         assert 'my-client/2.0' in user_agent
         assert result == mock_client
-
-
-class TestSessionHolder:
-    """Test cases for the SessionHolder class."""
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_get_session_creates_fresh_session(self, mock_create):
-        """get_session always creates a fresh boto3 session."""
-        new_session = Mock()
-        mock_create.return_value = new_session
-        holder = SessionHolder(profile='my-profile')
-
-        result = holder.get_session()
-
-        mock_create.assert_called_once_with('my-profile')
-        assert result is new_session
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_get_session_creates_new_session_each_call(self, mock_create):
-        """Each call to get_session creates a new session (no caching)."""
-        session_a = Mock()
-        session_b = Mock()
-        mock_create.side_effect = [session_a, session_b]
-        holder = SessionHolder(profile='default')
-
-        first = holder.get_session()
-        second = holder.get_session()
-
-        assert first is session_a
-        assert second is session_b
-        assert mock_create.call_count == 2
-
-    @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')
-    def test_get_session_passes_none_profile(self, mock_create):
-        """get_session passes None profile when none was configured."""
-        mock_create.return_value = Mock()
-        holder = SessionHolder()
-
-        holder.get_session()
-
-        mock_create.assert_called_once_with(None)
 
 
 class TestSanitizeHeaders:

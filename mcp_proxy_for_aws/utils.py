@@ -19,7 +19,7 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import SessionHolder, create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -91,9 +91,6 @@ def create_transport_with_sigv4(
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
     """
-    # Create session holder that reads fresh credentials on every request
-    logger.debug('Creating session holder with profile: %s', profile)
-    session_holder = SessionHolder(profile=profile)
 
     def client_factory(
         headers: Optional[Dict[str, str]] = None,
@@ -103,8 +100,8 @@ def create_transport_with_sigv4(
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
             service=service,
-            session_holder=session_holder,
             region=region,
+            profile=profile,
             headers=headers,
             timeout=custom_timeout,
             metadata=metadata,
