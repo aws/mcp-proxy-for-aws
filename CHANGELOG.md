@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v1.6.0 (2026-05-29)
+
+### Added
+
+- Per-call AWS profile override middleware for dynamic credential switching (#266)
+
 ### Fixed
 
 - Always read fresh credentials from disk on every request instead of caching and refreshing reactively on auth errors (#294)
+- Prevent credential_process hang on Windows in stdio transport mode (#293)
 
 ## v1.5.0 (2026-05-22)
 
