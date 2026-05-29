@@ -64,6 +64,8 @@ class ProfileOverrideMiddleware(Middleware):
         metadata: dict[str, Any],
         timeout: httpx.Timeout,
         endpoint: str,
+        disable_telemetry: bool = False,
+        skip_auth: bool = False,
     ) -> None:
         """Initialize the middleware with connection and profile configuration."""
         super().__init__()
@@ -74,6 +76,8 @@ class ProfileOverrideMiddleware(Middleware):
         self._region = region
         self._metadata = metadata
         self._timeout = timeout
+        self._disable_telemetry = disable_telemetry
+        self._skip_auth = skip_auth
         self._profile_clients: dict[str, Client] = {}
         self._lock = asyncio.Lock()
 
@@ -82,6 +86,7 @@ class ProfileOverrideMiddleware(Middleware):
         'aws___call_aws',
         'aws___run_script',
         'aws___get_presigned_url',
+        'aws___get_tasks',
         'aws___suggest_aws_commands',
     }
 
@@ -134,6 +139,13 @@ class ProfileOverrideMiddleware(Middleware):
         """Intercept ``aws_profile`` and route through a dedicated per-profile client."""
         arguments = context.message.arguments
         if isinstance(arguments, dict) and 'aws_profile' in arguments:
+            # Only process aws_profile for auth-requiring tools.
+            # If an agent hallucinates the parameter on a non-auth tool,
+            # strip it silently and route through the normal path.
+            if context.message.name not in self.AUTH_REQUIRING_TOOLS:
+                logger.warning('Ignoring aws_profile on non-auth tool %r', context.message.name)
+                arguments.pop('aws_profile', None)
+                return await call_next(context)
             profile = arguments['aws_profile']
             return await self._call_with_profile(profile, context, call_next)
 
@@ -158,6 +170,8 @@ class ProfileOverrideMiddleware(Middleware):
                     self._metadata,
                     self._timeout,
                     profile,
+                    self._disable_telemetry,
+                    self._skip_auth,
                 )
                 client = Client(transport=transport)
                 await client.__aenter__()

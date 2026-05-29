@@ -65,8 +65,11 @@ async def run_proxy(args) -> None:
     if args.metadata:
         metadata.update(args.metadata)
 
-    # Get profile(s) from CLI args or env var
-    # AWS_MCP_PROXY_PROFILES takes precedence over --profile/AWS_PROFILE
+    # Get profile(s) from CLI args or env var.
+    # AWS_MCP_PROXY_PROFILES: Space-separated list of AWS profile names for multi-account
+    # support. The first profile is the default; additional profiles are available for
+    # per-call override via the aws_profile tool parameter. Takes precedence over
+    # --profile / AWS_PROFILE to allow runtime configuration without CLI changes.
     env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
     if env_profiles:
         profiles = env_profiles.split()
@@ -85,7 +88,7 @@ async def run_proxy(args) -> None:
         region,
         metadata,
         default_profile,
-        all_profiles[1:] if len(all_profiles) > 1 else [],
+        all_profiles[1:],
     )
 
     timeout = httpx.Timeout(
@@ -125,7 +128,16 @@ async def run_proxy(args) -> None:
         add_tool_filtering_middleware(proxy, args.read_only)
 
         profile_middleware = add_profile_override_middleware(
-            proxy, all_profiles, default_profile, service, region, metadata, timeout, args.endpoint
+            proxy,
+            all_profiles,
+            default_profile,
+            service,
+            region,
+            metadata,
+            timeout,
+            args.endpoint,
+            args.disable_telemetry,
+            args.skip_auth,
         )
 
         if args.retries:
@@ -160,6 +172,8 @@ def add_profile_override_middleware(
     metadata: dict,
     timeout: httpx.Timeout,
     endpoint: str,
+    disable_telemetry: bool = False,
+    skip_auth: bool = False,
 ) -> ProfileOverrideMiddleware | None:
     """Add profile override middleware to target MCP server.
 
@@ -172,6 +186,8 @@ def add_profile_override_middleware(
         metadata: The metadata dictionary
         timeout: The httpx timeout configuration
         endpoint: The MCP endpoint URL
+        disable_telemetry: Whether to disable telemetry on profile transports
+        skip_auth: Whether to skip signing when credentials are unavailable
 
     Returns:
         The ProfileOverrideMiddleware instance if added, None otherwise
@@ -189,6 +205,8 @@ def add_profile_override_middleware(
         metadata=metadata,
         timeout=timeout,
         endpoint=endpoint,
+        disable_telemetry=disable_telemetry,
+        skip_auth=skip_auth,
     )
     mcp.add_middleware(middleware)
     return middleware

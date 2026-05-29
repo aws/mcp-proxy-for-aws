@@ -41,6 +41,8 @@ def middleware():
         metadata={'proxy': 'test'},
         timeout=httpx.Timeout(30),
         endpoint='https://test.us-east-1.api.aws/mcp',
+        disable_telemetry=False,
+        skip_auth=False,
     )
 
 
@@ -164,7 +166,7 @@ class TestPerCallProfileOverride:
     async def test_profile_override_disallowed(self, middleware, mock_context):
         """Disallowed profile raises ToolError."""
         mock_context.message = Mock()
-        mock_context.message.name = 'some_tool'
+        mock_context.message.name = 'aws___call_aws'
         mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'evil-profile'}
         call_next = AsyncMock()
 
@@ -185,7 +187,7 @@ class TestPerCallProfileOverride:
         mock_client.call_tool.return_value = mock_call_result
 
         mock_context.message = Mock()
-        mock_context.message.name = 'some_tool'
+        mock_context.message.name = 'aws___call_aws'
         mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
@@ -193,7 +195,7 @@ class TestPerCallProfileOverride:
             await middleware.on_call_tool(mock_context, call_next)
 
         mock_client.call_tool.assert_called_once_with(
-            'some_tool', {'arg': 'value'}, raise_on_error=False
+            'aws___call_aws', {'arg': 'value'}, raise_on_error=False
         )
         call_next.assert_not_called()
 
@@ -227,7 +229,7 @@ class TestPerCallProfileOverride:
         mock_client.call_tool.return_value = mock_call_result
 
         mock_context.message = Mock()
-        mock_context.message.name = 'some_tool'
+        mock_context.message.name = 'aws___call_aws'
         mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
@@ -239,7 +241,7 @@ class TestPerCallProfileOverride:
     async def test_profile_override_connection_failure(self, middleware, mock_context):
         """Connection failure raises ToolError with sanitized message."""
         mock_context.message = Mock()
-        mock_context.message.name = 'some_tool'
+        mock_context.message.name = 'aws___call_aws'
         mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
@@ -258,7 +260,7 @@ class TestPerCallProfileOverride:
         mock_client.call_tool.side_effect = Exception('backend error')
 
         mock_context.message = Mock()
-        mock_context.message.name = 'some_tool'
+        mock_context.message.name = 'aws___call_aws'
         mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
         call_next = AsyncMock()
 
@@ -354,6 +356,7 @@ class TestFix1OnlyAuthToolsGetInjection:
             'aws___call_aws',
             'aws___run_script',
             'aws___get_presigned_url',
+            'aws___get_tasks',
             'aws___suggest_aws_commands',
         ]:
             tool = Mock()
@@ -380,7 +383,6 @@ class TestFix1OnlyAuthToolsGetInjection:
             'recommend',
             'retrieve_skill',
             'get_regional_availability',
-            'aws___get_tasks',
         ]:
             tool = Mock()
             tool.name = name
@@ -723,3 +725,87 @@ class TestRetryMiddlewareIntegration:
         # No __cause__ set (e.g., disallowed profile validation error)
 
         assert retry_mw._should_retry(tool_error) is False
+
+
+class TestNonAuthToolIgnoresAwsProfile:
+    """Verify aws_profile on non-auth tools is stripped and routed normally."""
+
+    @pytest.mark.asyncio
+    async def test_non_auth_tool_with_aws_profile_strips_and_passes_through(
+        self, middleware, mock_context
+    ):
+        """Non-auth tool with aws_profile has it stripped and routes through call_next."""
+        mock_context.message = Mock()
+        mock_context.message.name = 'search_documentation'
+        mock_context.message.arguments = {
+            'query': 'lambda cold starts',
+            'aws_profile': 'dev-profile',
+        }
+        expected_result = Mock()
+        call_next = AsyncMock(return_value=expected_result)
+
+        result = await middleware.on_call_tool(mock_context, call_next)
+
+        assert result == expected_result
+        call_next.assert_called_once_with(mock_context)
+        # aws_profile should be stripped
+        assert 'aws_profile' not in mock_context.message.arguments
+        # Original args preserved
+        assert mock_context.message.arguments['query'] == 'lambda cold starts'
+
+    @pytest.mark.asyncio
+    async def test_non_auth_tool_does_not_create_profile_client(self, middleware, mock_context):
+        """Non-auth tool with aws_profile does not create a dedicated client."""
+        mock_context.message = Mock()
+        mock_context.message.name = 'list_regions'
+        mock_context.message.arguments = {'aws_profile': 'staging-profile'}
+        call_next = AsyncMock(return_value=Mock())
+
+        await middleware.on_call_tool(mock_context, call_next)
+
+        assert 'staging-profile' not in middleware._profile_clients
+
+
+class TestProfileClientTransportParams:
+    """Verify all constructor params are forwarded to create_transport_with_sigv4."""
+
+    @pytest.mark.asyncio
+    async def test_all_params_forwarded_to_transport_factory(self, mock_context):
+        """_get_profile_client passes all config params to create_transport_with_sigv4."""
+        mw = ProfileOverrideMiddleware(
+            allowed_profiles=['default-profile', 'dev-profile'],
+            default_profile='default-profile',
+            service='bedrock-agentcore',
+            region='eu-west-1',
+            metadata={'AWS_REGION': 'eu-west-1', 'custom': 'val'},
+            timeout=httpx.Timeout(60),
+            endpoint='https://bedrock-agentcore.eu-west-1.api.aws/mcp',
+            disable_telemetry=True,
+            skip_auth=True,
+        )
+
+        mock_transport = Mock()
+        mock_client = AsyncMock()
+
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=mock_transport,
+            ) as mock_create,
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=mock_client,
+            ),
+        ):
+            await mw._get_profile_client('dev-profile')
+
+        mock_create.assert_called_once_with(
+            'https://bedrock-agentcore.eu-west-1.api.aws/mcp',
+            'bedrock-agentcore',
+            'eu-west-1',
+            {'AWS_REGION': 'eu-west-1', 'custom': 'val'},
+            httpx.Timeout(60),
+            'dev-profile',
+            True,
+            True,
+        )
