@@ -97,7 +97,7 @@ docker build -t mcp-proxy-for-aws .
 | `endpoint`	          | MCP endpoint URL (e.g., `https://your-service.us-east-1.amazonaws.com/mcp`)	                                                                                                                                                            | N/A	                                                                        |Yes	|
 | ---	                 | ---	                                                                                                                                                                                                                                    | ---	                                                                        |---	|
 | `--service`	         | AWS service name for SigV4 signing, if omitted we try to infer this from the url	                                                                                                                                                       | Inferred from endpoint if not provided	                                     |No	|
-| `--profile`	         | AWS profile for AWS credentials to use	                                                                                                                                                                                                 | Uses `AWS_PROFILE` environment variable if not set                          |No	|
+| `--profile`	         | AWS profile(s) to use. First profile is the default. Additional profiles enable per-call switching via `aws_profile` tool parameter (e.g., `--profile default dev staging`)	| Uses `AWS_PROFILE` environment variable if not set                          |No	|
 | `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set	                           |No	|
 | `--metadata`	        | Metadata to inject into MCP requests as key=value pairs (e.g., `--metadata KEY1=value1 KEY2=value2`)                                                                                                                                    | `AWS_REGION` is automatically injected based on `--region` if not provided    |No	|
 | `--read-only`	       | Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint)) | `False`	                                                                    |No	|
@@ -126,6 +126,49 @@ export AWS_SESSION_TOKEN=<session_token>
 
 # AWS Region
 export AWS_REGION=<aws_region>
+
+# Multi-profile switching (alternative to --profile flag, useful for plugin integration)
+export AWS_MCP_PROXY_PROFILES="default dev staging"
+```
+
+> **Note:** `AWS_MCP_PROXY_PROFILES` takes precedence over `--profile` / `AWS_PROFILE` when set.
+
+### Multi-account access
+
+The proxy supports per-call AWS profile switching, allowing agents to work across multiple accounts without restarting.
+
+**Configuration:**
+
+```bash
+# Via CLI flag (first profile is default, rest are switchable)
+mcp-proxy-for-aws https://aws-mcp.us-east-1.api.aws/mcp --profile default dev staging
+
+# Via environment variable (same behavior, for plugin integration)
+AWS_MCP_PROXY_PROFILES="default dev staging" mcp-proxy-for-aws https://aws-mcp.us-east-1.api.aws/mcp
+```
+
+**How it works:**
+
+- The proxy injects an `aws_profile` parameter into auth-requiring tools (`call_aws`, `run_script`, `get_presigned_url`, `get_tasks`)
+- The agent can pass `aws_profile` on any call to route it through a specific profile's credentials
+- If `aws_profile` is omitted, the default (first) profile is used
+- Invalid profiles are rejected with an error listing allowed values
+- Each non-default profile gets its own dedicated connection to the backend
+
+**Example MCP config (Kiro):**
+
+```json
+{
+  "mcpServers": {
+    "aws": {
+      "command": "uvx",
+      "args": ["mcp-proxy-for-aws@latest", "https://aws-mcp.us-east-1.api.aws/mcp"],
+      "env": {
+        "AWS_MCP_PROXY_PROFILES": "default dev staging"
+      }
+    }
+  }
+}
 ```
 
 ### Setup Examples
