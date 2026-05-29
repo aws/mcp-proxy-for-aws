@@ -18,9 +18,10 @@ import boto3
 import httpx
 import json
 import logging
+import subprocess
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials
+from botocore.credentials import Credentials, ProcessProvider
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
@@ -29,6 +30,33 @@ from typing import Any, Dict, Generator, Optional
 
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_credential_process_stdin():
+    """Patch botocore ProcessProvider to pass stdin=subprocess.DEVNULL.
+
+    When mcp-proxy-for-aws runs in stdio transport mode, its stdin is the MCP
+    JSON-RPC pipe. Botocore's ProcessProvider spawns credential_process
+    subprocesses without specifying stdin, so the child inherits the MCP pipe.
+    On Windows this causes the subprocess to hang indefinitely because it holds
+    an open handle to the pipe, blocking Popen.communicate() from completing.
+    """
+    original_init = ProcessProvider.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        original_popen = self._popen
+
+        def _popen_with_devnull_stdin(*popen_args, **popen_kwargs):
+            popen_kwargs.setdefault('stdin', subprocess.DEVNULL)
+            return original_popen(*popen_args, **popen_kwargs)
+
+        self._popen = _popen_with_devnull_stdin
+
+    ProcessProvider.__init__ = _patched_init
+
+
+_patch_credential_process_stdin()
 
 # Headers that should be redacted when logging to prevent credential exposure
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})

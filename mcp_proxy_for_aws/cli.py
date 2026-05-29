@@ -91,8 +91,13 @@ Examples:
 
     parser.add_argument(
         '--profile',
-        help='AWS profile to use (uses AWS_PROFILE environment variable if not provided)',
-        default=os.getenv('AWS_PROFILE'),
+        nargs='+',
+        dest='profiles',
+        help='AWS profile(s) to use. First profile is the default. '
+        'Additional profiles enable per-call switching via aws_profile tool parameter '
+        '(e.g., --profile default dev staging)',
+        default=[os.getenv('AWS_PROFILE')] if os.getenv('AWS_PROFILE') else None,
+        metavar='PROFILE',
     )
 
     parser.add_argument(
