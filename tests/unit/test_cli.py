@@ -29,7 +29,7 @@ class TestParseArgs:
 
         assert args.endpoint == 'https://test.example.com'
         assert args.service is None
-        assert args.profile is None
+        assert args.profiles is None
         assert args.region is None
         assert args.read_only is False
         assert args.log_level == 'ERROR'
@@ -73,7 +73,7 @@ class TestParseArgs:
 
         assert args.endpoint == 'https://test.example.com'
         assert args.service == 'lambda'
-        assert args.profile == 'prod'
+        assert args.profiles == ['prod']
         assert args.region == 'eu-west-1'
         assert args.read_only is True
         assert args.log_level == 'WARNING'
@@ -96,7 +96,7 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.endpoint == 'https://test.example.com'
-        assert args.profile == 'env-profile'
+        assert args.profiles == ['env-profile']
 
     @patch.dict('os.environ', {'AWS_PROFILE': 'env-profile'})
     @patch(
@@ -107,7 +107,7 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.endpoint == 'https://test.example.com'
-        assert args.profile == 'cli-profile'
+        assert args.profiles == ['cli-profile']
 
     @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--retries', '0'])
     def test_parse_args_retries_minimum(self):

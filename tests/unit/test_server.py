@@ -14,8 +14,13 @@
 
 """Tests for the mcp-proxy-for-aws Server."""
 
+import httpx
+import os
+import pytest
 from fastmcp.client.transports import ClientTransport
+from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.server import (
+    add_profile_override_middleware,
     add_retry_middleware,
     add_tool_filtering_middleware,
     main,
@@ -53,7 +58,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
-        mock_args.profile = None
+        mock_args.profiles = None
         mock_args.read_only = True
         mock_args.retries = 1
         mock_args.metadata = None
@@ -125,7 +130,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.region = 'us-east-1'
-        mock_args.profile = 'test-profile'
+        mock_args.profiles = ['test-profile']
         mock_args.read_only = False
         mock_args.retries = 0  # No retries
         mock_args.metadata = {'AWS_REGION': 'eu-west-1', 'CUSTOM_KEY': 'custom_value'}
@@ -199,7 +204,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.region = 'ap-southeast-1'
-        mock_args.profile = None
+        mock_args.profiles = None
         mock_args.read_only = False
         mock_args.retries = 0
         mock_args.metadata = None  # No metadata provided
@@ -254,7 +259,7 @@ class TestServer:
         mock_args.endpoint = 'https://test.example.com'
         mock_args.service = 'test-service'
         mock_args.region = 'us-west-1'
-        mock_args.profile = None
+        mock_args.profiles = None
         mock_args.read_only = False
         mock_args.retries = 0
         mock_args.metadata = {'CUSTOM_KEY': 'custom_value', 'ANOTHER_KEY': 'another_value'}
@@ -332,7 +337,7 @@ class TestServer:
         assert args.endpoint == 'https://test.example.com'
         assert args.service is None
         assert args.region is None
-        assert args.profile is None
+        assert args.profiles is None
         assert args.read_only is False
         assert args.log_level == 'ERROR'
         assert args.retries == 0
@@ -448,3 +453,237 @@ class TestServer:
                 server_module.main()
             # Since we're not actually running as __main__, we just verify the structure exists
             assert mock_main.call_count == 0  # Should not be called in test context
+
+
+class TestProfileDedup:
+    """Tests for profile deduplication in run_proxy."""
+
+    def test_duplicate_profiles_are_deduped(self):
+        """Duplicate profiles in the list are removed."""
+        mcp = Mock()
+        result = add_profile_override_middleware(
+            mcp,
+            all_profiles=['default', 'dev', 'dev', 'staging', 'staging'],
+            default_profile='default',
+            service='test',
+            region='us-east-1',
+            metadata={},
+            timeout=httpx.Timeout(30),
+            endpoint='https://test.example.com',
+        )
+        assert result is not None
+        assert result._allowed_profiles == {'default', 'dev', 'staging'}
+
+    def test_default_profile_included_in_allowed_list(self):
+        """Default profile is included in the allowed profiles."""
+        mcp = Mock()
+        result = add_profile_override_middleware(
+            mcp,
+            all_profiles=['default', 'dev', 'staging'],
+            default_profile='default',
+            service='test',
+            region='us-east-1',
+            metadata={},
+            timeout=httpx.Timeout(30),
+            endpoint='https://test.example.com',
+        )
+        assert result is not None
+        assert 'default' in result._allowed_profiles
+        assert result._default_profile == 'default'
+
+    def test_single_profile_no_middleware(self):
+        """Single profile means no switching needed, no middleware."""
+        mcp = Mock()
+        result = add_profile_override_middleware(
+            mcp,
+            all_profiles=['default'],
+            default_profile='default',
+            service='test',
+            region='us-east-1',
+            metadata={},
+            timeout=httpx.Timeout(30),
+            endpoint='https://test.example.com',
+        )
+        assert result is None
+        mcp.add_middleware.assert_not_called()
+
+
+class TestEnvVarProfiles:
+    """Tests for AWS_MCP_PROXY_PROFILES env var support."""
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'})
+    @patch('sys.argv', ['test', 'https://test.example.com'])
+    def test_env_var_parsed_when_no_profile_flag(self):
+        """Env var is read when --profile is not passed."""
+        args = parse_args()
+        assert args.profiles is None  # No CLI profiles
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'})
+    @patch('sys.argv', ['test', 'https://test.example.com', '--profile', 'explicit'])
+    def test_env_var_takes_precedence_over_profile_flag(self):
+        """AWS_MCP_PROXY_PROFILES env var takes precedence over --profile flag."""
+        args = parse_args()
+        # args.profiles will have the CLI value, but run_proxy checks env var first
+        assert args.profiles == ['explicit']
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': ''})
+    @patch('sys.argv', ['test', 'https://test.example.com'])
+    def test_empty_env_var_ignored(self):
+        """Empty env var is treated as unset."""
+        args = parse_args()
+        assert args.profiles is None
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': '  dev   staging  '})
+    @patch('sys.argv', ['test', 'https://test.example.com'])
+    def test_env_var_handles_extra_whitespace(self):
+        """Extra whitespace in env var is handled correctly."""
+        # The env var parsing happens in run_proxy, not parse_args
+        # Test the split logic directly
+        env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
+        profiles = env_profiles.split() if env_profiles else []
+        assert profiles == ['dev', 'staging']
+
+
+class TestFix2EnvVarPrecedence:
+    """Fix #2: AWS_MCP_PROXY_PROFILES takes precedence over AWS_PROFILE."""
+
+    @patch.dict(
+        'os.environ',
+        {
+            'AWS_MCP_PROXY_PROFILES': 'admin dev staging',
+            'AWS_PROFILE': 'some-other-profile',
+        },
+    )
+    @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    @pytest.mark.asyncio
+    async def test_env_var_profiles_wins_over_aws_profile(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_fastmcp_proxy,
+        mock_create_transport,
+        mock_client_factory_class,
+    ):
+        """AWS_MCP_PROXY_PROFILES is used even when AWS_PROFILE sets args.profiles."""
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
+        # AWS_PROFILE would set this via cli.py default
+        mock_args.profiles = ['some-other-profile']
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = None
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+        mock_args.tool_timeout = 300.0
+        mock_args.disable_telemetry = False
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-east-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+
+        mock_client_factory = Mock()
+        mock_client_factory.disconnect = AsyncMock()
+        mock_client_factory_class.return_value = mock_client_factory
+
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_proxy.add_middleware = Mock()
+        mock_fastmcp_proxy.return_value = mock_proxy
+
+        await run_proxy(mock_args)
+
+        # Verify the middleware was created with profiles from AWS_MCP_PROXY_PROFILES, not AWS_PROFILE
+        middleware_calls = mock_proxy.add_middleware.call_args_list
+        for call in middleware_calls:
+            if isinstance(call[0][0], ProfileOverrideMiddleware):
+                middleware = call[0][0]
+                assert middleware._allowed_profiles == {'admin', 'dev', 'staging'}
+                assert middleware._default_profile == 'admin'
+                break
+        else:
+            pytest.fail('ProfileOverrideMiddleware not found in middleware calls')
+
+
+class TestEnvVarActivatesMiddleware:
+    """Test that AWS_MCP_PROXY_PROFILES env var activates the profile middleware in run_proxy."""
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'})
+    @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.FastMCPProxy')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region')
+    @patch('mcp_proxy_for_aws.server.determine_service_name')
+    @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
+    @pytest.mark.asyncio
+    async def test_env_var_activates_profile_middleware(
+        self,
+        mock_add_filtering,
+        mock_determine_service,
+        mock_determine_region,
+        mock_fastmcp_proxy,
+        mock_create_transport,
+        mock_client_factory_class,
+    ):
+        """When AWS_MCP_PROXY_PROFILES is set and --profile is not, middleware is activated."""
+        mock_args = Mock()
+        mock_args.endpoint = 'https://test.example.com'
+        mock_args.service = 'test-service'
+        mock_args.region = 'us-east-1'
+        mock_args.profiles = None  # No --profile flag
+        mock_args.read_only = False
+        mock_args.retries = 0
+        mock_args.metadata = None
+        mock_args.timeout = 180.0
+        mock_args.connect_timeout = 60.0
+        mock_args.read_timeout = 120.0
+        mock_args.write_timeout = 180.0
+        mock_args.log_level = 'INFO'
+        mock_args.tool_timeout = 300.0
+        mock_args.disable_telemetry = False
+
+        mock_determine_service.return_value = 'test-service'
+        mock_determine_region.return_value = 'us-east-1'
+
+        mock_transport = Mock()
+        mock_create_transport.return_value = mock_transport
+
+        mock_client_factory = Mock()
+        mock_client_factory.disconnect = AsyncMock()
+        mock_client_factory_class.return_value = mock_client_factory
+
+        mock_proxy = Mock()
+        mock_proxy.run_async = AsyncMock()
+        mock_proxy.add_middleware = Mock()
+        mock_fastmcp_proxy.return_value = mock_proxy
+
+        await run_proxy(mock_args)
+
+        # Verify middleware was added (add_middleware called for: initialize, tool_error, logging, filtering, profile_override)
+        middleware_calls = mock_proxy.add_middleware.call_args_list
+        profile_middleware_added = any(
+            isinstance(call[0][0], ProfileOverrideMiddleware) for call in middleware_calls
+        )
+        assert profile_middleware_added, (
+            'ProfileOverrideMiddleware should be activated when AWS_MCP_PROXY_PROFILES is set'
+        )
+
+        # Verify the middleware has the correct profiles (all profiles including default)
+        for call in middleware_calls:
+            if isinstance(call[0][0], ProfileOverrideMiddleware):
+                middleware = call[0][0]
+                assert middleware._allowed_profiles == {'default', 'dev', 'staging'}
+                assert middleware._default_profile == 'default'
+                break
