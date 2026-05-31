@@ -14,6 +14,7 @@
 
 """SigV4 Helper for AWS request signing functionality."""
 
+import asyncio
 import boto3
 import httpx
 import json
@@ -255,6 +256,21 @@ async def _handle_error_response(response: httpx.Response) -> None:
                 )
 
 
+def _resolve_credentials(profile: Optional[str] = None):
+    """Resolve AWS credentials synchronously (intended for asyncio.to_thread).
+
+    Calls get_frozen_credentials() to eagerly resolve any deferred
+    credential provider (e.g. STS AssumeRole) inside the worker thread,
+    preventing lazy resolution from blocking the event loop later when
+    SigV4Auth reads the access_key / secret_key attributes.
+    """
+    session = create_aws_session(profile)
+    credentials = session.get_credentials()
+    if credentials is None:
+        return None
+    return credentials.get_frozen_credentials()
+
+
 async def _sign_request_hook(
     region: str,
     service: str,
@@ -280,8 +296,11 @@ async def _sign_request_hook(
 
     # Always read fresh credentials from disk so account switches
     # and credential refreshes take effect immediately.
-    session = create_aws_session(profile)
-    credentials = session.get_credentials()
+    # Offloaded to a thread because create_aws_session() and
+    # get_credentials() may trigger synchronous I/O (e.g. STS
+    # AssumeRole for chained credentials) that would block the
+    # event loop.
+    credentials = await asyncio.to_thread(_resolve_credentials, profile)
 
     if credentials is None:
         if skip_auth:

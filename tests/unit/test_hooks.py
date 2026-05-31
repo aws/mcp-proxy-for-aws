@@ -14,16 +14,18 @@
 
 """Unit tests for hooks module."""
 
+import asyncio
 import httpx
 import json
 import pytest
+import threading
 from functools import partial
 from mcp_proxy_for_aws.sigv4_helper import (
     _handle_error_response,
     _inject_metadata_hook,
     _sign_request_hook,
 )
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 
 def create_request_with_sigv4_headers(
@@ -48,6 +50,7 @@ def create_mock_session():
     mock_credentials.access_key = 'test-access-key'
     mock_credentials.secret_key = 'test-secret-key'
     mock_credentials.token = 'test-token'
+    mock_credentials.get_frozen_credentials.return_value = mock_credentials
     mock_session.get_credentials.return_value = mock_credentials
     return mock_session
 
@@ -501,3 +504,87 @@ class TestSignRequestHook:
         await _sign_request_hook('us-east-1', 'execute-api', None, True, request)
 
         mock_auth_class.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_uses_to_thread(self, mock_create_session):
+        """Credential resolution is offloaded via asyncio.to_thread."""
+        mock_creds = MagicMock()
+        mock_creds.access_key = 'test-access-key'
+        mock_creds.secret_key = 'test-secret-key'
+        mock_creds.token = 'test-token'
+
+        request_body = b'{"test": "data"}'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+        with patch('mcp_proxy_for_aws.sigv4_helper.asyncio') as mock_asyncio:
+            mock_asyncio.to_thread = AsyncMock(return_value=mock_creds)
+            await _sign_request_hook('us-east-1', 'execute-api', 'my-profile', False, request)
+
+            mock_asyncio.to_thread.assert_awaited_once()
+            args = mock_asyncio.to_thread.call_args
+            from mcp_proxy_for_aws.sigv4_helper import _resolve_credentials
+
+            assert args[0][0] is _resolve_credentials
+            assert args[0][1] == 'my-profile'
+
+    @pytest.mark.asyncio
+    async def test_sign_request_hook_does_not_block_event_loop(self, mock_create_session):
+        """Event loop remains responsive while credentials are resolved in a thread."""
+        started = threading.Event()
+        release = threading.Event()
+
+        mock_creds = MagicMock()
+        mock_creds.access_key = 'test-access-key'
+        mock_creds.secret_key = 'test-secret-key'
+        mock_creds.token = 'test-token'
+
+        def blocking_resolve(profile=None):
+            started.set()
+            release.wait(timeout=5)
+            return mock_creds
+
+        ticks = []
+
+        async def ticker():
+            while not release.is_set():
+                ticks.append(True)
+                await asyncio.sleep(0.01)
+
+        with patch(
+            'mcp_proxy_for_aws.sigv4_helper._resolve_credentials',
+            side_effect=blocking_resolve,
+        ):
+            request_body = b'{"test": "data"}'
+            request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+
+            ticker_task = asyncio.create_task(ticker())
+            sign_task = asyncio.create_task(
+                _sign_request_hook('us-east-1', 'execute-api', None, False, request)
+            )
+
+            # Wait for the blocking function to start in the thread
+            # (poll instead of asyncio.to_thread to avoid consuming threadpool)
+            for _ in range(200):
+                if started.is_set():
+                    break
+                await asyncio.sleep(0.01)
+            assert started.is_set(), 'blocking_resolve did not start'
+
+            # Credential resolution is still in progress (offloaded to thread)
+            assert not sign_task.done(), 'Credential resolution did not remain offloaded'
+
+            ticks_after_start = len(ticks)
+            await asyncio.sleep(0.05)
+
+            # Event loop should still be responsive (ticker advanced while blocked)
+            assert len(ticks) > ticks_after_start, (
+                'Event loop was blocked during credential resolution'
+            )
+
+            release.set()
+            await sign_task
+            ticker_task.cancel()
+            try:
+                await ticker_task
+            except asyncio.CancelledError:
+                pass
