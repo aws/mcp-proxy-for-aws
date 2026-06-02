@@ -276,6 +276,24 @@ mcp_client = aws_iam_streamablehttp_client(
 )
 ```
 
+#### Injecting Metadata
+
+You can inject metadata into the MCP `_meta` field on every request using the `metadata` parameter. This is useful for passing additional context to the server that cannot be sent as HTTP headers due to size limits.
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint=mcp_url,
+    aws_region=region,
+    aws_service=service,
+    metadata={
+        "custom/session-context": "my-value",
+        "custom/tracking-id": "abc-123",
+    },
+)
+```
+
 ### Integration Patterns
 
 The library supports two integration patterns depending on your framework:
