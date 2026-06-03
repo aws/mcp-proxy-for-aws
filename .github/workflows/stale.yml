@@ -41,3 +41,4 @@ jobs:
           days-before-issue-close: 14
           stale-pr-label: stale
           stale-issue-label: stale
+          exempt-issue-labels: feature-request,enhancement
