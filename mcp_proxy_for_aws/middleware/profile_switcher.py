@@ -138,6 +138,17 @@ class ProfileOverrideMiddleware(Middleware):
     ) -> ToolResult:
         """Intercept ``aws_profile`` and route through a dedicated per-profile client."""
         arguments = context.message.arguments
+        if isinstance(arguments, dict):
+            # Parse --profile from cli_command for 'aws___call_aws'
+            if context.message.name == 'aws___call_aws' and 'cli_command' in arguments:
+                command = arguments['cli_command']
+                if isinstance(command, str) and '--profile' in command:
+                    profile, cleaned_command = self._extract_profile_from_command(command)
+                    if profile:
+                        arguments['cli_command'] = cleaned_command
+                        arguments['aws_profile'] = profile
+
+        arguments = context.message.arguments
         if isinstance(arguments, dict) and 'aws_profile' in arguments:
             # Only process aws_profile for auth-requiring tools.
             # If an agent hallucinates the parameter on a non-auth tool,
@@ -150,6 +161,42 @@ class ProfileOverrideMiddleware(Middleware):
             return await self._call_with_profile(profile, context, call_next)
 
         return await call_next(context)
+
+    def _extract_profile_from_command(self, command_str: str) -> tuple[str | None, str]:
+        """Extract profile from command string and return (profile_name, cleaned_command)."""
+        import shlex
+
+        try:
+            parts = shlex.split(command_str)
+        except Exception:
+            parts = command_str.split()
+
+        profile = None
+        cleaned_parts = []
+        i = 0
+        while i < len(parts):
+            if parts[i] == '--profile':
+                if i + 1 < len(parts):
+                    profile = parts[i + 1]
+                    i += 2
+                    continue
+            elif parts[i].startswith('--profile='):
+                profile = parts[i].split('=', 1)[1]
+                i += 1
+                continue
+            cleaned_parts.append(parts[i])
+            i += 1
+
+        if profile:
+            # Reconstruct the command line string without the --profile argument
+            import shlex
+
+            if hasattr(shlex, 'join'):
+                cleaned_command = shlex.join(cleaned_parts)
+            else:
+                cleaned_command = ' '.join(cleaned_parts)
+            return profile, cleaned_command
+        return None, command_str
 
     # ── internals ─────────────────────────────────────────────────
 

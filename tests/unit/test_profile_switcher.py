@@ -158,6 +158,58 @@ class TestOnCallTool:
         assert result == expected_result
         call_next.assert_called_once_with(mock_context)
 
+    @pytest.mark.asyncio
+    async def test_extracts_profile_from_cli_command(self, middleware, mock_context):
+        """When calling call_aws with --profile, it is extracted and used as aws_profile."""
+        mock_client = AsyncMock()
+        mock_call_result = MagicMock()
+        mock_call_result.content = 'result'
+        mock_call_result.structured_content = None
+        mock_call_result.meta = None
+        mock_call_result.is_error = False
+        mock_client.call_tool.return_value = mock_call_result
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {
+            'cli_command': 'aws --profile dev-profile sts get-caller-identity'
+        }
+        call_next = AsyncMock()
+
+        with patch.object(middleware, '_get_profile_client', return_value=mock_client):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        mock_client.call_tool.assert_called_once_with(
+            'aws___call_aws', {'cli_command': 'aws sts get-caller-identity'}, raise_on_error=False
+        )
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extracts_profile_equals_format_from_cli_command(self, middleware, mock_context):
+        """When calling call_aws with --profile=name, it is extracted and used as aws_profile."""
+        mock_client = AsyncMock()
+        mock_call_result = MagicMock()
+        mock_call_result.content = 'result'
+        mock_call_result.structured_content = None
+        mock_call_result.meta = None
+        mock_call_result.is_error = False
+        mock_client.call_tool.return_value = mock_call_result
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {
+            'cli_command': 'aws --profile=dev-profile sts get-caller-identity'
+        }
+        call_next = AsyncMock()
+
+        with patch.object(middleware, '_get_profile_client', return_value=mock_client):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        mock_client.call_tool.assert_called_once_with(
+            'aws___call_aws', {'cli_command': 'aws sts get-caller-identity'}, raise_on_error=False
+        )
+        call_next.assert_not_called()
+
 
 class TestPerCallProfileOverride:
     """Tests for the profile per-call override path."""

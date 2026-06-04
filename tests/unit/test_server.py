@@ -87,7 +87,10 @@ class TestServer:
         mock_fastmcp_proxy.return_value = mock_proxy
 
         # Act
-        await run_proxy(mock_args)
+        with patch('boto3.Session') as mock_session_class:
+            mock_session = mock_session_class.return_value
+            mock_session.available_profiles = []
+            await run_proxy(mock_args)
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')

@@ -77,6 +77,19 @@ async def run_proxy(args) -> None:
         profiles = args.profiles
     else:
         profiles = []
+
+    # If no profiles list was explicitly configured, try loading all available profiles
+    # from the local AWS configuration so the user has access to all their profiles.
+    if not profiles:
+        try:
+            import boto3
+
+            available = boto3.Session().available_profiles
+            if available:
+                profiles = available
+        except Exception:
+            pass
+
     default_profile = profiles[0] if profiles else None
     # Dedup profiles, preserve order, include all (including default)
     all_profiles = list(dict.fromkeys(profiles))
