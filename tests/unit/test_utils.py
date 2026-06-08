@@ -154,6 +154,8 @@ class TestCreateTransportWithSigv4:
                 metadata=metadata,
                 disable_telemetry=False,
                 skip_auth=False,
+                max_connections=5,
+                max_keepalive_connections=1,
             )
         else:
             assert result is not None
@@ -186,6 +188,8 @@ class TestCreateTransportWithSigv4:
                 metadata=metadata,
                 disable_telemetry=False,
                 skip_auth=False,
+                max_connections=5,
+                max_keepalive_connections=1,
             )
         else:
             assert result is not None
@@ -218,6 +222,8 @@ class TestCreateTransportWithSigv4:
             metadata=metadata,
             disable_telemetry=False,
             skip_auth=False,
+            max_connections=5,
+            max_keepalive_connections=1,
             follow_redirects=True,
         )
 
