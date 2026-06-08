@@ -808,4 +808,6 @@ class TestProfileClientTransportParams:
             'dev-profile',
             True,
             True,
+            5,
+            1,
         )
