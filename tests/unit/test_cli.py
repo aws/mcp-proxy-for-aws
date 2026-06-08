@@ -202,3 +202,93 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.disable_telemetry is False
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_connection_pool_defaults(self):
+        """Pool sizing flags default to today's 5/1 behavior when unset."""
+        args = parse_args()
+
+        assert args.max_connections == 5
+        assert args.max_keepalive_connections == 1
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--max-connections',
+            '25',
+            '--max-keepalive-connections',
+            '10',
+        ],
+    )
+    def test_parse_args_connection_pool_flags(self):
+        """Pool sizing flags parse from the command line."""
+        args = parse_args()
+
+        assert args.max_connections == 25
+        assert args.max_keepalive_connections == 10
+
+    @patch.dict(
+        'os.environ',
+        {
+            'MCP_PROXY_MAX_CONNECTIONS': '40',
+            'MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS': '8',
+        },
+        clear=True,
+    )
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_parse_args_connection_pool_from_env(self):
+        """Pool sizing falls back to env vars when flags are absent."""
+        args = parse_args()
+
+        assert args.max_connections == 40
+        assert args.max_keepalive_connections == 8
+
+    @patch.dict(
+        'os.environ',
+        {
+            'MCP_PROXY_MAX_CONNECTIONS': '40',
+            'MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS': '8',
+        },
+        clear=True,
+    )
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--max-connections',
+            '25',
+            '--max-keepalive-connections',
+            '10',
+        ],
+    )
+    def test_parse_args_connection_pool_cli_overrides_env(self):
+        """Explicit pool flags take precedence over env vars."""
+        args = parse_args()
+
+        assert args.max_connections == 25
+        assert args.max_keepalive_connections == 10
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--max-connections', '0'],
+    )
+    def test_parse_args_max_connections_below_minimum(self):
+        """--max-connections must be >= 1 (within_range validation)."""
+        with pytest.raises(SystemExit):
+            parse_args()
+
+    @patch.dict('os.environ', {}, clear=True)
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--max-keepalive-connections', '-1'],
+    )
+    def test_parse_args_max_keepalive_connections_below_minimum(self):
+        """--max-keepalive-connections must be >= 0 (within_range validation)."""
+        with pytest.raises(SystemExit):
+            parse_args()

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Configurable HTTP connection pool size via `--max-connections` / `--max-keepalive-connections` flags and `MCP_PROXY_MAX_CONNECTIONS` / `MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS` environment variables. Defaults (5/1) preserve existing behavior (#295)
+
 ## v1.6.0 (2026-05-29)
 
 ### Added

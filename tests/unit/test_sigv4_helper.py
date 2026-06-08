@@ -273,6 +273,47 @@ class TestCreateSigv4Client:
         assert 'my-client/2.0' in user_agent
         assert result == mock_client
 
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_default_connection_limits(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Default limits MUST preserve historical 5/1 pool behavior byte-for-byte."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        create_sigv4_client(service='test-service', region='test-region')
+
+        call_args = mock_client_class.call_args
+        limits = call_args[1]['limits']
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_connections == 5
+        assert limits.max_keepalive_connections == 1
+        # Backward compatibility guard: identical to the original hardcoded Limits.
+        assert limits == httpx.Limits(max_keepalive_connections=1, max_connections=5)
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_custom_connection_limits(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Explicit pool overrides MUST flow into the httpx.AsyncClient limits."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        create_sigv4_client(
+            service='test-service',
+            region='test-region',
+            max_connections=25,
+            max_keepalive_connections=10,
+        )
+
+        call_args = mock_client_class.call_args
+        limits = call_args[1]['limits']
+        assert isinstance(limits, httpx.Limits)
+        assert limits.max_connections == 25
+        assert limits.max_keepalive_connections == 10
+
 
 class TestSanitizeHeaders:
     """Test cases for the _sanitize_headers function."""
