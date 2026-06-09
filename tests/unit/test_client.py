@@ -336,6 +336,7 @@ async def test_http_localhost_endpoint_allowed(mock_session, mock_streams):
             ):
                 pass
 
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     'metadata',

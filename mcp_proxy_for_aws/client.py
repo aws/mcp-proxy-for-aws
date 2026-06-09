@@ -132,7 +132,9 @@ def aws_iam_streamablehttp_client(
 
     # Append metadata injection hook if metadata is provided
     if metadata:
-        http_client.event_hooks.setdefault('request', []).insert(0, partial(_inject_metadata_hook, metadata))
+        http_client.event_hooks.setdefault('request', []).insert(
+            0, partial(_inject_metadata_hook, metadata)
+        )
         logger.debug('Metadata injection enabled with %d keys', len(metadata))
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
