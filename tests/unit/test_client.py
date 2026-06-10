@@ -335,3 +335,107 @@ async def test_http_localhost_endpoint_allowed(mock_session, mock_streams):
                 httpx_client_factory=mock_factory,
             ):
                 pass
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'metadata',
+    [
+        {'com.example/tracking-id': 'abc-123'},
+        {'com.example/key1': 'value1', 'com.example/key2': 'value2'},
+        {'traceparent': '00-0af7651916cd43dd8448eb211c80319c-00f067aa0ba902b7-01'},
+    ],
+    ids=['single-key', 'multiple-keys', 'otel-trace-context'],
+)
+async def test_metadata_adds_event_hook(mock_session, mock_streams, metadata):
+    """Test that providing metadata adds a request event hook to the http client."""
+    mock_read, mock_write, mock_get_session = mock_streams
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+            mock_http_client = Mock()
+            mock_http_client.event_hooks = {'request': []}
+            mock_factory = Mock(return_value=mock_http_client)
+            mock_stream_client.return_value.__aenter__ = AsyncMock(
+                return_value=(mock_read, mock_write, mock_get_session)
+            )
+            mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            async with aws_iam_streamablehttp_client(
+                endpoint='https://test.example.com/mcp',
+                aws_service='bedrock-agentcore',
+                metadata=metadata,
+                httpx_client_factory=mock_factory,
+            ):
+                pass
+
+            # Factory should always be used
+            mock_factory.assert_called_once()
+            # Event hook should be added to the client
+            assert len(mock_http_client.event_hooks['request']) == 1
+            assert mock_stream_client.call_args[1]['http_client'] is mock_http_client
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'metadata',
+    [None, {}],
+    ids=['none', 'empty-dict'],
+)
+async def test_metadata_falsy_no_hook_added(mock_session, mock_streams, metadata):
+    """Test that falsy metadata (None or empty) does not add event hooks."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    mock_http_client = Mock()
+    mock_http_client.event_hooks = {'request': []}
+    mock_factory = Mock(return_value=mock_http_client)
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+            mock_stream_client.return_value.__aenter__ = AsyncMock(
+                return_value=(mock_read, mock_write, mock_get_session)
+            )
+            mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            async with aws_iam_streamablehttp_client(
+                endpoint='https://test.example.com/mcp',
+                aws_service='bedrock-agentcore',
+                metadata=metadata,
+                httpx_client_factory=mock_factory,
+            ):
+                pass
+
+            mock_factory.assert_called_once()
+            assert len(mock_http_client.event_hooks['request']) == 0
+
+
+@pytest.mark.asyncio
+async def test_metadata_preserves_factory_headers_and_auth(mock_session, mock_streams):
+    """Test that headers and SigV4 auth are passed to the factory when metadata is set."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    headers = {'X-Custom-Header': 'test123'}
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth') as mock_auth_cls:
+            with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+                mock_auth = Mock()
+                mock_auth_cls.return_value = mock_auth
+                mock_http_client = Mock()
+                mock_http_client.event_hooks = {'request': []}
+                mock_factory = Mock(return_value=mock_http_client)
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    metadata={'com.example/key': 'value'},
+                    headers=headers,
+                    httpx_client_factory=mock_factory,
+                ):
+                    pass
+
+                factory_kwargs = mock_factory.call_args[1]
+                assert factory_kwargs['headers'] == headers
+                assert factory_kwargs['auth'] is mock_auth
