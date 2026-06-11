@@ -66,6 +66,8 @@ class ProfileOverrideMiddleware(Middleware):
         endpoint: str,
         disable_telemetry: bool = False,
         skip_auth: bool = False,
+        max_connections: int = 5,
+        max_keepalive_connections: int = 1,
     ) -> None:
         """Initialize the middleware with connection and profile configuration."""
         super().__init__()
@@ -78,6 +80,8 @@ class ProfileOverrideMiddleware(Middleware):
         self._timeout = timeout
         self._disable_telemetry = disable_telemetry
         self._skip_auth = skip_auth
+        self._max_connections = max_connections
+        self._max_keepalive_connections = max_keepalive_connections
         self._profile_clients: dict[str, Client] = {}
         self._lock = asyncio.Lock()
 
@@ -172,6 +176,8 @@ class ProfileOverrideMiddleware(Middleware):
                     profile,
                     self._disable_telemetry,
                     self._skip_auth,
+                    self._max_connections,
+                    self._max_keepalive_connections,
                 )
                 client = Client(transport=transport)
                 await client.__aenter__()
