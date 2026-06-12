@@ -133,7 +133,10 @@ Examples:
         default=0,
         choices=range(0, 11),
         metavar='[0-10]',
-        help='Number of retries when calling endpoint mcp (default: 0) - setting this to 0 disables retries.',
+        help=(
+            'Number of retries when calling endpoint mcp, including empty tools/list responses '
+            '(default: 0) - setting this to 0 disables retries.'
+        ),
     )
 
     parser.add_argument(
