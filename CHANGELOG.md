@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v1.6.1 (2026-06-12)
+
+### Added
+
+- Metadata parameter to `aws_iam_streamablehttp_client` for passing additional context (#301)
+
+### Fixed
+
+- Pin the version of the MCP Proxy for AWS to respect best security practices (#311)
+
 ## v1.6.0 (2026-05-29)
 
 ### Added
