@@ -55,8 +55,10 @@ The MCP Proxy serves as a lightweight, client-side bridge between MCP clients (A
 
 ```bash
 # Run the server
-uvx mcp-proxy-for-aws@latest <SigV4 MCP endpoint URL>
+uvx mcp-proxy-for-aws@1.6.0 <SigV4 MCP endpoint URL>
 ```
+
+**Note:** It is recommended to pin to a specific version (e.g., `@1.6.0`) to ensure reproducible behavior. Using `@latest` may pull in breaking changes. Check [PyPI](https://pypi.org/project/mcp-proxy-for-aws/) for the latest stable version.
 
 **Note:** The first run may take tens of seconds as `uvx` downloads and caches dependencies. Subsequent runs will start in seconds. Actual startup time depends on your network and hardware.
 
@@ -162,7 +164,7 @@ AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws https://aws
   "mcpServers": {
     "aws": {
       "command": "uvx",
-      "args": ["mcp-proxy-for-aws@latest", "https://aws-mcp.us-east-1.api.aws/mcp"],
+      "args": ["mcp-proxy-for-aws@1.6.0", "https://aws-mcp.us-east-1.api.aws/mcp"],
       "env": {
         "AWS_MCP_PROXY_PROFILES": "prod-readonly dev staging"
       }
@@ -273,6 +275,24 @@ mcp_client = aws_iam_streamablehttp_client(
     aws_region=region,
     aws_service=service,
     credentials=creds,  # Optional: explicitly pass AWS credentials
+)
+```
+
+#### Injecting Metadata
+
+You can inject metadata into the MCP `_meta` field on every request using the `metadata` parameter. This is useful for passing additional context to the server that cannot be sent as HTTP headers due to size limits.
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint=mcp_url,
+    aws_region=region,
+    aws_service=service,
+    metadata={
+        "custom/session-context": "my-value",
+        "custom/tracking-id": "abc-123",
+    },
 )
 ```
 
@@ -407,7 +427,7 @@ If your MCP client hangs waiting for a tool call response (e.g., due to an unres
 By default, the proxy signs all outgoing requests with [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) using your local AWS credentials. If you need to connect to an MCP endpoint that does not require SigV4 credentials (e.g., a local development server or a publicly accessible endpoint), use the `--skip-auth` flag:
 
 ```bash
-uvx mcp-proxy-for-aws@latest https://my-endpoint.example.com/mcp --skip-auth
+uvx mcp-proxy-for-aws@1.6.0 https://my-endpoint.example.com/mcp --skip-auth
 ```
 
 When `--skip-auth` is set, the proxy sends requests without signing them if AWS credentials are unavailable. If credentials _are_ available, requests are still signed as usual — the flag only changes behavior when credentials cannot be resolved.

@@ -19,10 +19,11 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
+from functools import partial
 from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
-from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
+from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
 from mcp_proxy_for_aws.utils import validate_endpoint_url
 from typing import Optional
 
@@ -37,6 +38,7 @@ def aws_iam_streamablehttp_client(
     aws_profile: Optional[str] = None,
     credentials: Optional[Credentials] = None,
     headers: Optional[dict[str, str]] = None,
+    metadata: Optional[dict[str, str]] = None,
     timeout: float | timedelta = 30,
     sse_read_timeout: float | timedelta = 60 * 5,
     terminate_on_close: bool = True,
@@ -62,6 +64,9 @@ def aws_iam_streamablehttp_client(
         aws_profile: The AWS profile to use for authentication.
         credentials: Optional AWS credentials from boto3/botocore. If provided, takes precedence over aws_profile.
         headers: Optional additional HTTP headers to include in requests.
+        metadata: Optional metadata to inject into the MCP _meta field on every request.
+            Useful for passing additional context to the server that cannot be sent as
+            HTTP headers due to size limits.
         timeout: Request timeout in seconds or timedelta object. Defaults to 30 seconds.
         sse_read_timeout: Server-sent events read timeout in seconds or timedelta object.
         terminate_on_close: Whether to terminate the connection on close.
@@ -124,6 +129,13 @@ def aws_iam_streamablehttp_client(
         timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
     )
     http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)
+
+    # Append metadata injection hook if metadata is provided
+    if metadata:
+        http_client.event_hooks.setdefault('request', []).insert(
+            0, partial(_inject_metadata_hook, metadata)
+        )
+        logger.debug('Metadata injection enabled with %d keys', len(metadata))
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
     return streamable_http_client(
