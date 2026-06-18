@@ -536,20 +536,12 @@ class TestEnvVarProfiles:
 class TestFix2EnvVarPrecedence:
     """Fix #2: AWS_MCP_PROXY_PROFILES takes precedence over AWS_PROFILE."""
 
-    @patch.dict(
-        'os.environ',
-        {
-            'AWS_MCP_PROXY_PROFILES': 'admin dev staging',
-            'AWS_PROFILE': 'some-other-profile',
-        },
-    )
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
     @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
-    @pytest.mark.asyncio
     async def test_env_var_profiles_wins_over_aws_profile(
         self,
         mock_add_filtering,
@@ -592,7 +584,14 @@ class TestFix2EnvVarPrecedence:
         mock_proxy.add_middleware = Mock()
         mock_fastmcp_proxy.return_value = mock_proxy
 
-        await run_proxy(mock_args)
+        with patch.dict(
+            'os.environ',
+            {
+                'AWS_MCP_PROXY_PROFILES': 'admin dev staging',
+                'AWS_PROFILE': 'some-other-profile',
+            },
+        ):
+            await run_proxy(mock_args)
 
         # Verify the middleware was created with profiles from AWS_MCP_PROXY_PROFILES, not AWS_PROFILE
         middleware_calls = mock_proxy.add_middleware.call_args_list
@@ -609,14 +608,12 @@ class TestFix2EnvVarPrecedence:
 class TestEnvVarActivatesMiddleware:
     """Test that AWS_MCP_PROXY_PROFILES env var activates the profile middleware in run_proxy."""
 
-    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'})
     @patch('mcp_proxy_for_aws.server.AWSMCPProxyClientFactory')
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
     @patch('mcp_proxy_for_aws.server.FastMCPProxy')
     @patch('mcp_proxy_for_aws.server.determine_aws_region')
     @patch('mcp_proxy_for_aws.server.determine_service_name')
     @patch('mcp_proxy_for_aws.server.add_tool_filtering_middleware')
-    @pytest.mark.asyncio
     async def test_env_var_activates_profile_middleware(
         self,
         mock_add_filtering,
@@ -658,7 +655,8 @@ class TestEnvVarActivatesMiddleware:
         mock_proxy.add_middleware = Mock()
         mock_fastmcp_proxy.return_value = mock_proxy
 
-        await run_proxy(mock_args)
+        with patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'}):
+            await run_proxy(mock_args)
 
         # Verify middleware was added (add_middleware called for: initialize, tool_error, logging, filtering, profile_override)
         middleware_calls = mock_proxy.add_middleware.call_args_list
