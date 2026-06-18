@@ -83,11 +83,29 @@ class ProfileOverrideMiddleware(Middleware):
 
     # Tools that require AWS authentication and support profile switching
     AUTH_REQUIRING_TOOLS = {
+        # AWS API MCP server
         'aws___call_aws',
         'aws___run_script',
         'aws___get_presigned_url',
         'aws___get_tasks',
         'aws___suggest_aws_commands',
+        # EKS MCP server (tools that call AWS/EKS/Kubernetes; doc/guidance tools omitted)
+        'add_inline_policy',
+        'apply_yaml',
+        'describe_eks_resource',
+        'get_cloudwatch_logs',
+        'get_cloudwatch_metrics',
+        'get_eks_insights',
+        'get_eks_vpc_config',
+        'get_k8s_events',
+        'get_pod_logs',
+        'get_policies_for_role',
+        'list_api_versions',
+        'list_eks_resources',
+        'list_k8s_resources',
+        'manage_eks_stacks',
+        'manage_k8s_resource',
+        'read_k8s_resource',
     }
 
     # ── tool listing ────────────────────────────────────────────────
