@@ -21,7 +21,7 @@ import logging
 import subprocess
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials, ProcessProvider
+from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials, ProcessProvider
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
@@ -56,7 +56,28 @@ def _patch_credential_process_stdin():
     ProcessProvider.__init__ = _patched_init
 
 
+DEFAULT_ROLE_SESSION_NAME = 'mcp-proxy-for-aws'
+
+
+def _patch_default_role_session_name():
+    """Patch botocore to use a stable default role_session_name.
+
+    When a profile assumes a role without specifying a role_session_name,
+    botocore generates ``botocore-session-{int(time.time())}``. The embedded
+    timestamp makes the session name non-deterministic, which does not work for
+    us. Override the generator to use a fixed ``DEFAULT_ROLE_SESSION_NAME``.
+    """
+
+    def _generate_assume_role_name(self):
+        self._role_session_name = DEFAULT_ROLE_SESSION_NAME
+        self._assume_kwargs['RoleSessionName'] = self._role_session_name
+        self._using_default_session_name = True
+
+    BaseAssumeRoleCredentialFetcher._generate_assume_role_name = _generate_assume_role_name
+
+
 _patch_credential_process_stdin()
+_patch_default_role_session_name()
 
 # Headers that should be redacted when logging to prevent credential exposure
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})
