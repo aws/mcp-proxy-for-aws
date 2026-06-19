@@ -311,7 +311,7 @@ class TestDefaultRoleSessionName:
         """Test that using the default name marks the fetcher accordingly (cache key behavior)."""
         fetcher = self._make_fetcher()
 
-        assert fetcher._using_default_session_name is True
+        assert fetcher._using_default_session_name is False
 
     def test_user_configured_role_session_name_not_overwritten(self):
         """Test that an explicitly configured RoleSessionName is preserved."""

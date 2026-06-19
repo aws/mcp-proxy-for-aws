@@ -73,7 +73,7 @@ def _patch_default_role_session_name():
     def _generate_assume_role_name(self):
         self._role_session_name = DEFAULT_ROLE_SESSION_NAME
         self._assume_kwargs['RoleSessionName'] = self._role_session_name
-        self._using_default_session_name = True
+        self._using_default_session_name = False
 
     BaseAssumeRoleCredentialFetcher._generate_assume_role_name = _generate_assume_role_name
 
