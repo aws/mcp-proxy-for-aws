@@ -295,8 +295,6 @@ class TestDefaultRoleSessionName:
 
         assert fetcher._role_session_name == DEFAULT_ROLE_SESSION_NAME
         assert fetcher._assume_kwargs['RoleSessionName'] == DEFAULT_ROLE_SESSION_NAME
-        # Not botocore's unpatched default.
-        assert not fetcher._role_session_name.startswith('botocore-session-')
         # The timestamp is stamped once at import: a fixed prefix plus an integer suffix.
         prefix, _, suffix = DEFAULT_ROLE_SESSION_NAME.rpartition('-')
         assert prefix == 'mcp-proxy-for-aws'
