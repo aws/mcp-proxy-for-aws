@@ -16,10 +16,12 @@
 
 import httpx
 import pytest
+from botocore.credentials import BaseAssumeRoleCredentialFetcher
 from httpx import __version__ as httpx_version
 from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
+    DEFAULT_ROLE_SESSION_NAME,
     SENSITIVE_HEADERS,
     SigV4HTTPXAuth,
     _sanitize_headers,
@@ -272,6 +274,59 @@ class TestCreateSigv4Client:
         assert 'mcp-proxy-for-aws' in user_agent
         assert 'my-client/2.0' in user_agent
         assert result == mock_client
+
+
+class TestDefaultRoleSessionName:
+    """Test cases for the default role_session_name botocore patch."""
+
+    ROLE_ARN = 'arn:aws:iam::123456789012:role/test-role'
+
+    def _make_fetcher(self, extra_args=None):
+        """Create a BaseAssumeRoleCredentialFetcher without triggering network calls."""
+        return BaseAssumeRoleCredentialFetcher(
+            client_creator=Mock(),
+            role_arn=self.ROLE_ARN,
+            extra_args=extra_args,
+        )
+
+    def test_default_role_session_name_is_stable(self):
+        """Test that the patched default role_session_name is our prefixed, timestamped value."""
+        fetcher = self._make_fetcher()
+
+        assert fetcher._role_session_name == DEFAULT_ROLE_SESSION_NAME
+        assert fetcher._assume_kwargs['RoleSessionName'] == DEFAULT_ROLE_SESSION_NAME
+        # The timestamp is stamped once at import: a fixed prefix plus an integer suffix.
+        prefix, _, suffix = DEFAULT_ROLE_SESSION_NAME.rpartition('-')
+        assert prefix == 'mcp-proxy-for-aws'
+        assert suffix.isdigit()
+
+    def test_default_role_session_name_is_deterministic(self):
+        """Test that two fetchers with no configured session name produce identical names."""
+        first = self._make_fetcher()
+        second = self._make_fetcher()
+
+        assert first._role_session_name == second._role_session_name == DEFAULT_ROLE_SESSION_NAME
+
+    def test_default_role_session_name_flag_set(self):
+        """Test that using the default name marks the fetcher accordingly (cache key behavior)."""
+        fetcher = self._make_fetcher()
+
+        assert fetcher._using_default_session_name is False
+
+    def test_user_configured_role_session_name_not_overwritten(self):
+        """Test that an explicitly configured RoleSessionName is preserved."""
+        fetcher = self._make_fetcher(extra_args={'RoleSessionName': 'my-custom-session'})
+
+        assert fetcher._role_session_name == 'my-custom-session'
+        assert fetcher._assume_kwargs['RoleSessionName'] == 'my-custom-session'
+        # The default-name flag must remain False so the name is part of the cache key.
+        assert fetcher._using_default_session_name is False
+
+    def test_user_configured_role_session_name_not_replaced_by_default(self):
+        """Test that a user session name is not silently replaced with the default value."""
+        fetcher = self._make_fetcher(extra_args={'RoleSessionName': 'my-custom-session'})
+
+        assert fetcher._role_session_name != DEFAULT_ROLE_SESSION_NAME
 
 
 class TestSanitizeHeaders:
