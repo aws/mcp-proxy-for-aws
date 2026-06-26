@@ -418,7 +418,8 @@ class TestServer:
         assert 'event_hooks' in call_args[1]
         assert 'request' in call_args[1]['event_hooks']
         assert 'response' in call_args[1]['event_hooks']
-        assert len(call_args[1]['event_hooks']['request']) == 2
+        # user-agent + metadata + sign hooks
+        assert len(call_args[1]['event_hooks']['request']) == 3
 
     def test_create_sigv4_client_no_credentials(self):
         """Test that credential check happens in sign_request_hook, not during client creation."""

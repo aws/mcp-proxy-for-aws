@@ -97,6 +97,18 @@ def _sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
     return {k: '[REDACTED]' if k.lower() in SENSITIVE_HEADERS else v for k, v in headers.items()}
 
 
+def _build_user_agent(disable_telemetry: bool) -> str:
+    """Build the User-Agent header value, including client telemetry when available."""
+    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+
+    client_info = get_client_info()
+    if client_info and not disable_telemetry:
+        client_name = client_info.name.lower().replace(' ', '-').replace('/', '-')
+        user_agent += f' {client_name}/{client_info.version}'
+
+    return user_agent
+
+
 class SigV4HTTPXAuth(httpx.Auth):
     """HTTPX Auth class that signs requests with AWS SigV4."""
 
@@ -197,12 +209,7 @@ def create_sigv4_client(
         **kwargs,
     }
 
-    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
-
-    client_info = get_client_info()
-    if client_info and not disable_telemetry:
-        client_name = client_info.name.lower().replace(' ', '-').replace('/', '-')
-        user_agent += f' {client_name}/{client_info.version}'
+    user_agent = _build_user_agent(disable_telemetry)
 
     # Add headers if provided
     default_headers = {
@@ -224,11 +231,17 @@ def create_sigv4_client(
         event_hooks={
             'response': [_handle_error_response],
             'request': [
+                partial(_set_user_agent_hook, disable_telemetry),
                 partial(_inject_metadata_hook, metadata or {}),
                 partial(_sign_request_hook, region, service, profile, skip_auth),
             ],
         },
     )
+
+
+async def _set_user_agent_hook(disable_telemetry: bool, request: httpx.Request) -> None:
+    """Request hook to set the User-Agent header with up-to-date client telemetry."""
+    request.headers['User-Agent'] = _build_user_agent(disable_telemetry)
 
 
 async def _handle_error_response(response: httpx.Response) -> None:
