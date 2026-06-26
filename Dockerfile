@@ -15,16 +15,12 @@
 # Using Amazon Linux for consistency and compliance
 FROM public.ecr.aws/amazonlinux/amazonlinux:latest
 
-# Python optimization
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONUNBUFFERED=1
 
 # Install runtime dependencies and create application user
 RUN yum update -y && \
     yum install -y \
         python3.13 \
-        python3.13-pip \
         ca-certificates \
         shadow-utils \
         lsof && \
@@ -33,8 +29,16 @@ RUN yum update -y && \
     groupadd -r app && \
     useradd -r -g app -d /app app
 
-# Install mcp-proxy-for-aws from PyPI
-RUN python3.13 -m pip install mcp-proxy-for-aws
+COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy project files needed for install
+COPY pyproject.toml uv.lock ./
+COPY mcp_proxy_for_aws/ mcp_proxy_for_aws/
+
+# Install from lockfile (production deps only, no dev)
+RUN uv sync --frozen --no-dev --no-editable
 
 # Get healthcheck script
 COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
@@ -46,4 +50,4 @@ USER app
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
 
 # Application entrypoint
-ENTRYPOINT ["mcp-proxy-for-aws"]
+ENTRYPOINT ["/app/.venv/bin/mcp-proxy-for-aws"]
