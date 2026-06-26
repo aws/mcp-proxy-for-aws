@@ -97,6 +97,30 @@ def _sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
     return {k: '[REDACTED]' if k.lower() in SENSITIVE_HEADERS else v for k, v in headers.items()}
 
 
+def _build_user_agent(disable_telemetry: bool) -> str:
+    """Build the User-Agent header value, including client telemetry when available.
+
+    The client's ``Implementation`` (name/version) is only known after the MCP
+    ``initialize`` handshake captures it via ``set_client_info``. This reads
+    ``get_client_info()`` at call time so callers can recompute the value per
+    request instead of freezing it when the HTTP client is constructed.
+
+    Args:
+        disable_telemetry: When True, omit the client info from the User-Agent.
+
+    Returns:
+        The User-Agent string.
+    """
+    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+
+    client_info = get_client_info()
+    if client_info and not disable_telemetry:
+        client_name = client_info.name.lower().replace(' ', '-').replace('/', '-')
+        user_agent += f' {client_name}/{client_info.version}'
+
+    return user_agent
+
+
 class SigV4HTTPXAuth(httpx.Auth):
     """HTTPX Auth class that signs requests with AWS SigV4."""
 
@@ -197,12 +221,11 @@ def create_sigv4_client(
         **kwargs,
     }
 
-    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
-
-    client_info = get_client_info()
-    if client_info and not disable_telemetry:
-        client_name = client_info.name.lower().replace(' ', '-').replace('/', '-')
-        user_agent += f' {client_name}/{client_info.version}'
+    # Build an initial User-Agent. The client info captured during the MCP
+    # initialize handshake may not be available yet (the backend connection can
+    # be established before set_client_info runs), so the value is recomputed
+    # per request by _set_user_agent_hook below.
+    user_agent = _build_user_agent(disable_telemetry)
 
     # Add headers if provided
     default_headers = {
@@ -224,11 +247,29 @@ def create_sigv4_client(
         event_hooks={
             'response': [_handle_error_response],
             'request': [
+                partial(_set_user_agent_hook, disable_telemetry),
                 partial(_inject_metadata_hook, metadata or {}),
                 partial(_sign_request_hook, region, service, profile, skip_auth),
             ],
         },
     )
+
+
+async def _set_user_agent_hook(disable_telemetry: bool, request: httpx.Request) -> None:
+    """Request hook to set the User-Agent header with up-to-date client telemetry.
+
+    The HTTP client may be constructed before the MCP initialize handshake
+    captures the client info, so the User-Agent baked in at construction time
+    can be missing the client name/version. Recompute it on every request so the
+    captured client info is reflected once available. SigV4 does not sign the
+    User-Agent header (it is in botocore's blacklist), so updating it here does
+    not affect request signing.
+
+    Args:
+        disable_telemetry: Whether to omit client info from the User-Agent.
+        request: The HTTP request object (modified in-place).
+    """
+    request.headers['User-Agent'] = _build_user_agent(disable_telemetry)
 
 
 async def _handle_error_response(response: httpx.Response) -> None:
