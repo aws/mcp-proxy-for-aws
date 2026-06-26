@@ -50,7 +50,7 @@ jobs:
         run: uv sync --frozen --all-extras
 
       - name: Run pip-audit
-        run: uv tool run pip-audit --require-hashes --no-deps -r <(uv export --frozen --no-dev)
+        run: uv tool run pip-audit --require-hashes --no-deps -r <(uv export --frozen --no-dev --no-emit-project)
 
   build:
     needs: [call-test, call-integ-tests, audit]
