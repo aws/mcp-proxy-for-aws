@@ -98,19 +98,7 @@ def _sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
 
 
 def _build_user_agent(disable_telemetry: bool) -> str:
-    """Build the User-Agent header value, including client telemetry when available.
-
-    The client's ``Implementation`` (name/version) is only known after the MCP
-    ``initialize`` handshake captures it via ``set_client_info``. This reads
-    ``get_client_info()`` at call time so callers can recompute the value per
-    request instead of freezing it when the HTTP client is constructed.
-
-    Args:
-        disable_telemetry: When True, omit the client info from the User-Agent.
-
-    Returns:
-        The User-Agent string.
-    """
+    """Build the User-Agent header value, including client telemetry when available."""
     user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
 
     client_info = get_client_info()
@@ -221,10 +209,6 @@ def create_sigv4_client(
         **kwargs,
     }
 
-    # Build an initial User-Agent. The client info captured during the MCP
-    # initialize handshake may not be available yet (the backend connection can
-    # be established before set_client_info runs), so the value is recomputed
-    # per request by _set_user_agent_hook below.
     user_agent = _build_user_agent(disable_telemetry)
 
     # Add headers if provided
@@ -256,19 +240,7 @@ def create_sigv4_client(
 
 
 async def _set_user_agent_hook(disable_telemetry: bool, request: httpx.Request) -> None:
-    """Request hook to set the User-Agent header with up-to-date client telemetry.
-
-    The HTTP client may be constructed before the MCP initialize handshake
-    captures the client info, so the User-Agent baked in at construction time
-    can be missing the client name/version. Recompute it on every request so the
-    captured client info is reflected once available. SigV4 does not sign the
-    User-Agent header (it is in botocore's blacklist), so updating it here does
-    not affect request signing.
-
-    Args:
-        disable_telemetry: Whether to omit client info from the User-Agent.
-        request: The HTTP request object (modified in-place).
-    """
+    """Request hook to set the User-Agent header with up-to-date client telemetry."""
     request.headers['User-Agent'] = _build_user_agent(disable_telemetry)
 
 
