@@ -36,7 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@85856786d1ce8acfbcc2f13a5f3fbd6b938f9f41 # v7.1.2
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -44,7 +44,7 @@ jobs:
         run: uv sync --frozen --all-extras --dev
 
       - name: Configure AWS Credentials for Tests
-        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
         with:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.IntegTestRoleArn }}
