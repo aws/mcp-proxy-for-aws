@@ -157,6 +157,17 @@ AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws https://aws
 - Invalid profiles are rejected with an error listing allowed values
 - Each non-default profile gets its own dedicated connection to the backend
 
+This works for both the AWS API MCP server and the EKS MCP server. For example, pointing the
+proxy at the eks-mcp endpoint lets an agent read or manage Kubernetes resources across accounts:
+
+```bash
+mcp-proxy-for-aws https://eks-mcp.us-east-1.api.aws/mcp --profile prod-readonly dev
+```
+
+The agent can then call an eks tool such as `list_k8s_resources` with `aws_profile: "dev"` to
+target the dev account. Pure documentation/guidance tools (e.g. `search_eks_documentation`) make
+no AWS call and so do not expose the `aws_profile` parameter.
+
 **Example MCP config (Kiro):**
 
 ```json
