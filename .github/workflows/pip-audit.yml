@@ -1,0 +1,33 @@
+name: pip-audit
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["uv.lock"]
+  pull_request:
+    branches: ["main"]
+    paths: ["uv.lock"]
+
+permissions: {}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@85856786d1ce8acfbcc2f13a5f3fbd6b938f9f41 # v7.1.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Run pip-audit
+        run: uv tool run pip-audit --require-hashes --no-deps -r <(uv export --frozen --no-dev --no-emit-project)

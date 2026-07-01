@@ -25,6 +25,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     SENSITIVE_HEADERS,
     SigV4HTTPXAuth,
     _sanitize_headers,
+    _set_user_agent_hook,
     create_aws_session,
     create_sigv4_client,
 )
@@ -127,7 +128,8 @@ class TestCreateSigv4Client:
         assert 'response' in call_args[1]['event_hooks']
         assert 'request' in call_args[1]['event_hooks']
         assert len(call_args[1]['event_hooks']['response']) == 1
-        assert len(call_args[1]['event_hooks']['request']) == 2  # metadata + sign hooks
+        # user-agent + metadata + sign hooks
+        assert len(call_args[1]['event_hooks']['request']) == 3
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
         expected_user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
         assert call_args[1]['headers']['User-Agent'] == expected_user_agent
@@ -274,6 +276,95 @@ class TestCreateSigv4Client:
         assert 'mcp-proxy-for-aws' in user_agent
         assert 'my-client/2.0' in user_agent
         assert result == mock_client
+
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_registers_user_agent_request_hook(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """The first request hook recomputes the User-Agent per request."""
+        mock_client_class.return_value = Mock()
+
+        create_sigv4_client(service='test-service', region='test-region')
+
+        request_hooks = mock_client_class.call_args[1]['event_hooks']['request']
+        # The user-agent hook must run first so a later-captured client info is
+        # reflected on every request, including the signed one.
+        assert request_hooks[0].func is _set_user_agent_hook
+
+
+class TestSetUserAgentHook:
+    """Test cases for the per-request User-Agent hook."""
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
+    async def test_set_user_agent_hook_without_client_info(self, mock_get_client_info):
+        """Hook sets the base User-Agent when no client info is available."""
+        request = httpx.Request('POST', 'https://example.com/mcp')
+
+        await _set_user_agent_hook(False, request)
+
+        expected = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+        assert request.headers['User-Agent'] == expected
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    @patch('httpx.AsyncClient')
+    async def test_request_hook_reflects_client_info_set_after_construction(
+        self, mock_client_class, mock_get_client_info
+    ):
+        """Regression: client info captured after construction reaches the User-Agent.
+
+        This is the core of the bug: the backend HTTP client is created (during
+        the proxy's initialize) before set_client_info runs, so a value baked in
+        at construction time would never include the client info. The per-request
+        hook reads get_client_info() at request time, so it picks it up.
+        """
+        mock_client_class.return_value = Mock()
+
+        # Client built before the initialize handshake captures client info.
+        mock_get_client_info.return_value = None
+        create_sigv4_client(service='test-service', region='test-region')
+
+        # Grab the actual user-agent hook registered on the client.
+        user_agent_hook = mock_client_class.call_args[1]['event_hooks']['request'][0]
+
+        # The User-Agent baked in at construction time has no client info.
+        assert 'my-client' not in mock_client_class.call_args[1]['headers']['User-Agent']
+
+        # Client info becomes available later (after initialize handshake).
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+        request = httpx.Request('POST', 'https://example.com/mcp')
+        await user_agent_hook(request)
+
+        assert request.headers['User-Agent'].endswith('my-client/2.0')
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    async def test_set_user_agent_hook_respects_disable_telemetry(self, mock_get_client_info):
+        """Hook omits client info when telemetry is disabled."""
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+        request = httpx.Request('POST', 'https://example.com/mcp')
+
+        await _set_user_agent_hook(True, request)
+
+        assert 'my-client' not in request.headers['User-Agent']
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
+    async def test_set_user_agent_hook_overwrites_stale_value(self, mock_get_client_info):
+        """Hook overwrites a User-Agent already present on the request."""
+        mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
+        request = httpx.Request(
+            'POST',
+            'https://example.com/mcp',
+            headers={'User-Agent': 'stale/0.0'},
+        )
+
+        await _set_user_agent_hook(False, request)
+
+        assert 'stale' not in request.headers['User-Agent']
+        assert request.headers['User-Agent'].endswith('my-client/2.0')
 
 
 class TestDefaultRoleSessionName:
