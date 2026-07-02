@@ -33,8 +33,13 @@ RUN yum update -y && \
     groupadd -r app && \
     useradd -r -g app -d /app app
 
-# Install mcp-proxy-for-aws from PyPI
-RUN python3.13 -m pip install mcp-proxy-for-aws
+WORKDIR /app
+
+# Install uv from hash-pinned requirements, then install project from lockfile
+COPY pyproject.toml uv.lock uv-requirements.txt README.md ./
+COPY mcp_proxy_for_aws/ mcp_proxy_for_aws/
+RUN python3.13 -m pip install --require-hashes --requirement uv-requirements.txt --no-cache-dir && \
+    uv sync --python 3.13 --frozen --no-dev --no-editable
 
 # Get healthcheck script
 COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
@@ -46,4 +51,4 @@ USER app
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
 
 # Application entrypoint
-ENTRYPOINT ["mcp-proxy-for-aws"]
+ENTRYPOINT ["/app/.venv/bin/mcp-proxy-for-aws"]
