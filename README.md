@@ -112,6 +112,8 @@ docker build -t mcp-proxy-for-aws .
 | `--tool-timeout`	   | Maximum seconds a tool call may take before being cancelled. When set, returns a graceful error to the agent instead of hanging indefinitely	                                                                                             | 300	                                                                    |No	|
 | `--skip-auth`         | Skip request signing when AWS credentials are unavailable instead of failing                                                                                                                                                             | `False`                                                                     |No	|
 | `--disable-telemetry` | Disables telemetry data collection                                                                                                                                                                                                      | `False`                                                                     |No	|
+| `--max-connections`   | Maximum number of concurrent HTTP connections in the shared pool used for all proxied tool calls. Increase this when your MCP client fans out parallel `aws_*` tool calls per turn (e.g. Claude Code, opencode).                          | 5 (falls back to `MCP_PROXY_MAX_CONNECTIONS`)                               |No	|
+| `--max-keepalive-connections` | Maximum number of idle keep-alive connections to retain in the pool                                                                                                                                                             | 1 (falls back to `MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS`)                     |No	|
 
 ### Optional Environment Variables
 
@@ -131,9 +133,16 @@ export AWS_REGION=<aws_region>
 
 # Multi-profile switching (alternative to --profile flag, useful for plugin integration)
 export AWS_MCP_PROXY_PROFILES="prod-readonly dev staging"
+
+# HTTP connection pool sizing (alternative to --max-connections / --max-keepalive-connections)
+# Raise the pool size when your MCP client issues many parallel aws_* tool calls per turn.
+export MCP_PROXY_MAX_CONNECTIONS=25
+export MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS=5
 ```
 
 > **Note:** `AWS_MCP_PROXY_PROFILES` takes precedence over `--profile` / `AWS_PROFILE` when set.
+>
+> **Note:** `--max-connections` / `--max-keepalive-connections` take precedence over `MCP_PROXY_MAX_CONNECTIONS` / `MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS` when explicitly passed. Defaults are `5` / `1`, preserving the previous behavior.
 
 ### Multi-account access
 

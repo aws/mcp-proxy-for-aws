@@ -75,6 +75,8 @@ def create_transport_with_sigv4(
     profile: Optional[str] = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
+    max_connections: int = 5,
+    max_keepalive_connections: int = 1,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -87,6 +89,10 @@ def create_transport_with_sigv4(
         profile: AWS profile to use (optional)
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
+        max_connections: Maximum number of concurrent connections in the pool
+            (default: 5, preserving historical behavior)
+        max_keepalive_connections: Maximum number of idle keep-alive connections
+            to retain (default: 1, preserving historical behavior)
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
@@ -107,6 +113,8 @@ def create_transport_with_sigv4(
             metadata=metadata,
             disable_telemetry=disable_telemetry,
             skip_auth=skip_auth,
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive_connections,
             auth=auth,
             **kw,
         )
@@ -245,5 +253,39 @@ def within_range(min_value: float, max_value: Optional[float] = None):
             raise argparse.ArgumentTypeError(f"'{value}' must be <= {max_value}")
 
         return fvalue
+
+    return validator
+
+
+def positive_int(min_value: int, max_value: Optional[int] = None):
+    """Factory function to create integer range validators.
+
+    Mirrors ``within_range`` but parses and returns ``int`` instead of ``float``,
+    which is the correct type for discrete counts such as connection-pool sizes.
+
+    Args:
+        min_value: Minimum allowed value (inclusive)
+        max_value: Maximum allowed value (inclusive), or None for no upper bound
+
+    Returns:
+        The argparse validator function
+
+    Raises:
+        argparse.ArgumentTypeError: If the value is not an integer within range
+    """
+
+    def validator(value):
+        try:
+            ivalue = int(value)
+        except (ValueError, TypeError):
+            raise argparse.ArgumentTypeError(f"'{value}' is not a valid integer")
+
+        if ivalue < min_value:
+            raise argparse.ArgumentTypeError(f"'{value}' must be >= {min_value}")
+
+        if max_value is not None and ivalue > max_value:
+            raise argparse.ArgumentTypeError(f"'{value}' must be <= {max_value}")
+
+        return ivalue
 
     return validator
