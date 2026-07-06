@@ -51,14 +51,14 @@ wheels = [
 
 [[package]]
 name = "agent-framework"
-version = "1.9.0"
+version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "agent-framework-core", extra = ["all"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1b/06/9f5c6736f1fd449d719bb17afa0ab246cc53cbccca2befa2416cd48b1e1b/agent_framework-1.9.0.tar.gz", hash = "sha256:a8970f47ddbfb1ee823529c972b274b820f1bcaf5c79b5ef45ac0d081c1f07e1", size = 5702648, upload-time = "2026-06-18T09:42:53.57Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/32/98ef892bc948fd787230214fb551f758e4e2b9d633530f6e3a70a1c839e0/agent_framework-1.10.0.tar.gz", hash = "sha256:26d086755011dbff9115c2bfc21e3b6e706937766865d24ae242e252d9467cb8", size = 6298676, upload-time = "2026-06-30T21:08:48.711Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/b6/aa90a8187af2f8fc1cb55143e2b39d2a93c04a6928b4901c8832992bdcf6/agent_framework-1.9.0-py3-none-any.whl", hash = "sha256:3b0778b3995d6cfcedc4d9d8bd612b625cf52bcbbe7704a9498abde9d9989f26", size = 5686, upload-time = "2026-06-18T09:42:55.454Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/3d/623f6fde0ed646846c239620bdd2c2a67e0eaa71f82c0095b0e7fafe4127/agent_framework-1.10.0-py3-none-any.whl", hash = "sha256:a25686d84997c5870ecbb27cee97ccf8fe512846e6e3ded88d14ddbda10031a8", size = 5695, upload-time = "2026-06-30T21:08:50.712Z" },
 ]
 
 [[package]]
@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "agent-framework-core"
-version = "1.9.0"
+version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -205,10 +205,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/38/5b4f1f69cfe62ecf0b66838a09d82678dfc0a90084e16b3f1c0f52aa53c3/agent_framework_core-1.9.0.tar.gz", hash = "sha256:09c5f18a43209f6db53dfe0da25d3dfbf1e5176a930a8ec3859091687d8f80a2", size = 449168, upload-time = "2026-06-18T09:42:48.308Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/4b/1c0140cfbb134c51d335274948bcbdcee837a3bdad86bea92ef6b7235d13/agent_framework_core-1.9.0-py3-none-any.whl", hash = "sha256:aa33c588ec839dc7fc8e4768f4ff3d3cd44d4b38d7aa9733f5ee0a37ff4de956", size = 496431, upload-time = "2026-06-18T09:42:46.613Z" },
-]
+sdist = { url = "https://files.pythonhosted.org/packages/95/92/a3551481406a6c3dc437fc8a0f139352f4ad4271525d39018857cd066ee0/agent_framework_core-1.10.0.tar.gz", hash = "sha256:a373b3bec966e4d186d968e248ac683549cce464a0db345b6ebeebfeafdc7025", size = 476779, upload-time = "2026-06-30T21:00:32.968Z" }
 
 [package.optional-dependencies]
 all = [
@@ -1032,30 +1029,30 @@ wheels = [
 
 [[package]]
 name = "boto3"
-version = "1.43.36"
+version = "1.43.40"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "botocore" },
     { name = "jmespath" },
     { name = "s3transfer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ff/9f/897287e955db0f50b12fd69ef45956e4fd2c7ddb48c736872f7ea2314443/boto3-1.43.36.tar.gz", hash = "sha256:587d7ee92a12e440ad12b0e7f11f3358f0c4d65b19f64726efc94aaf194aff28", size = 112690, upload-time = "2026-06-23T02:47:14.561Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/43/38cdaf9c7bb50f0922ef87e6b6696c6aa589d978e4311a8287537e84ecf7/boto3-1.43.40.tar.gz", hash = "sha256:a7108b9ce25b8f92d1ce96b9e35090794d5c58b219ff2f6a7a65c8986a4ed6f4", size = 112655, upload-time = "2026-07-03T00:28:26.776Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/f1/274303f52483ecf199eae6f8d9b6f5951670397ee4d72c06cfd4eb644612/boto3-1.43.36-py3-none-any.whl", hash = "sha256:42942dde254673abcbc9e6e60017c88341a4f49d99d24e1f2e290fb38138c26f", size = 140031, upload-time = "2026-06-23T02:47:13.178Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/3b/2abcc7f47e955a8cb45a6378ec69cd8ed2dcb3d14ceb67717dea020a794a/boto3-1.43.40-py3-none-any.whl", hash = "sha256:5fa80de4b4b7bab383dd8c563e235d51fcc7df4502662af56f0a2472c3c15651", size = 140029, upload-time = "2026-07-03T00:28:25.028Z" },
 ]
 
 [[package]]
 name = "botocore"
-version = "1.43.36"
+version = "1.43.40"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jmespath" },
     { name = "python-dateutil" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/37/da9e7f6ca73ac73afd7f0bb7f238aa5daba35c081e98d7f48a7c399599c0/botocore-1.43.36.tar.gz", hash = "sha256:4cae47d1b2d426316b85a0087d9e69e048f13bc003b5177d74639fe9dfd28205", size = 15625488, upload-time = "2026-06-23T02:47:03.192Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/50/269986277f852cc83029bccbdcdc0b343a685cfd570599e58029792808d8/botocore-1.43.40.tar.gz", hash = "sha256:2085a4314cfd2c8bc1d08ab8039f76c92e99278db0d2a0e2437010526d5d5d70", size = 15639899, upload-time = "2026-07-03T00:28:16.125Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/19/934f81592527a3f7f9b943c893e334c721a4644948642bc33885d584e9ec/botocore-1.43.36-py3-none-any.whl", hash = "sha256:3c65fdc39ed01d8dfde1e961b34038aed03c459f8ddf80717a12ac006475e49d", size = 15313630, upload-time = "2026-06-23T02:46:59.327Z" },
+    { url = "https://files.pythonhosted.org/packages/dc/8c/5f7e73fd66b28f0705bc55d7060d41ef72328b656b86ca53e75765b3ba2c/botocore-1.43.40-py3-none-any.whl", hash = "sha256:0bc9d352267c9e48415c5d7bb61ff05c3f193eac2fc7e69cfd229a05fbab67d6", size = 15323870, upload-time = "2026-07-03T00:28:12.56Z" },
 ]
 
 [package.optional-dependencies]
@@ -1694,19 +1691,19 @@ wheels = [
 
 [[package]]
 name = "fastmcp"
-version = "3.4.2"
+version = "3.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastmcp-slim", extra = ["client", "server"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/29/18/46beaec18c9f86a599ae3f9cdf6677dd6b50240cfd844d18233710b47f13/fastmcp-3.4.2.tar.gz", hash = "sha256:b468722946fc467c3796a6572f7a14d93d48c014cf8fea12910245220cbbe4e1", size = 28756849, upload-time = "2026-06-06T01:30:35.694Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f2/92/cf0e921675af66534eb6dfffffa1871b5062f01650bcea63b62005a12f50/fastmcp-3.4.3.tar.gz", hash = "sha256:31e212ae9ff223876c6d7af2082e73f90bc692460e7a054568dfa88719f075ff", size = 28789252, upload-time = "2026-07-05T23:27:55.153Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/58/4d/8b1ba42251160e11ca34686344572121432c23a082d56ef6bbdec5888fc1/fastmcp-3.4.2-py3-none-any.whl", hash = "sha256:c87a62b029f0c5400ada85f683629345d2466c39169f0cb853e487b2f7308c08", size = 8018, upload-time = "2026-06-06T01:30:38.118Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/79/64000c2792743877baae152499a951c06a9c14b793309ac4ac06135f1ae7/fastmcp-3.4.3-py3-none-any.whl", hash = "sha256:bdf15277800586a033a6e1e95d20301cd508aaa872df3d508c956a2195de6c72", size = 8019, upload-time = "2026-07-05T23:27:53.241Z" },
 ]
 
 [[package]]
 name = "fastmcp-slim"
-version = "3.4.2"
+version = "3.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "platformdirs" },
@@ -1716,9 +1713,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a3/2e/d627b28b7403ecc526991ef732921b08bde010006e6148635f053fd29f4c/fastmcp_slim-3.4.2.tar.gz", hash = "sha256:290646e0955a516235a317151034559aa48336cb843d3f006131aedad8759bb4", size = 576291, upload-time = "2026-06-06T01:30:12.553Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/fa/500f6362016c34fba01c6412bbfd53435dc75900abd1266d88e111e2e9c2/fastmcp_slim-3.4.3.tar.gz", hash = "sha256:e3e12ac1e87c5195fa59a1c3cd2d31b487a463c269089fb4020b7571cbb57b29", size = 588086, upload-time = "2026-07-05T23:27:33.884Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/58/22afebf18df7260b09148199cbeb90cdcc4b3a4e1b5d7460e3591c3a7add/fastmcp_slim-3.4.2-py3-none-any.whl", hash = "sha256:bdc72492212681ca502755fa8acc0457f559295da1fc3dfc0599adc1c04b82f3", size = 749195, upload-time = "2026-06-06T01:30:11.22Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/4f/66765dfe4fe65b45e134e54ca46118d93189fb10cd8ecb635cf504b68552/fastmcp_slim-3.4.3-py3-none-any.whl", hash = "sha256:21ad50465494edb141eed76b177dc788e00e705a5df09b53a31efebeb4432a95", size = 761455, upload-time = "2026-07-05T23:27:32.547Z" },
 ]
 
 [package.optional-dependencies]
