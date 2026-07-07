@@ -28,7 +28,6 @@ class ToolFilteringMiddleware(Middleware):
         """Initialize the middleware."""
         self.read_only = read_only
         self.logger = logger or logging.getLogger(__name__)
-        self._allowed_tools: set[str] | None = None
 
     async def on_list_tools(
         self,
@@ -58,7 +57,6 @@ class ToolFilteringMiddleware(Middleware):
 
             filtered_tools.append(tool)
 
-        self._allowed_tools = {tool.name for tool in filtered_tools}
         return filtered_tools
 
     async def on_call_tool(
@@ -70,8 +68,11 @@ class ToolFilteringMiddleware(Middleware):
         if not self.read_only:
             return await call_next(context)
 
-        tool_name = context.message.name
-        if self._allowed_tools is not None and tool_name not in self._allowed_tools:
-            raise ToolError(f'Tool {tool_name!r} is not available in read-only mode.')
+        if context.fastmcp_context:
+            tool = await context.fastmcp_context.fastmcp.get_tool(context.message.name)
+            if not tool or not getattr(tool.annotations, 'readOnlyHint', False):
+                raise ToolError(
+                    f'Tool {context.message.name!r} is not available in read-only mode.'
+                )
 
         return await call_next(context)
