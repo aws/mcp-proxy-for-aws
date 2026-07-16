@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import logging
+import mcp.types as mt
 from collections.abc import Awaitable, Callable
-from fastmcp.server.middleware import Middleware, MiddlewareContext
-from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolError
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
+from fastmcp.tools import Tool, ToolResult
 from typing import Sequence
 
 
@@ -56,3 +58,21 @@ class ToolFilteringMiddleware(Middleware):
             filtered_tools.append(tool)
 
         return filtered_tools
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext[mt.CallToolRequestParams],
+        call_next: CallNext[mt.CallToolRequestParams, ToolResult],
+    ) -> ToolResult:
+        """Reject calls to tools that are not allowed in read-only mode."""
+        if not self.read_only:
+            return await call_next(context)
+
+        if context.fastmcp_context:
+            tool = await context.fastmcp_context.fastmcp.get_tool(context.message.name)
+            if not tool or not getattr(tool.annotations, 'readOnlyHint', False):
+                raise ToolError(
+                    f'Tool {context.message.name!r} is not available in read-only mode.'
+                )
+
+        return await call_next(context)
