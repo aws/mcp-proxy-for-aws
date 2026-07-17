@@ -85,6 +85,19 @@ class TestCreateAwsSession:
         assert result == mock_session
 
     @patch('boto3.Session')
+    def test_create_aws_session_with_profile_and_region(self, mock_session_class):
+        """Test creating AWS session with specific profile and region."""
+        mock_session = Mock()
+        mock_session_class.return_value = mock_session
+
+        result = create_aws_session(profile='test-profile', region='us-west-2')
+
+        mock_session_class.assert_called_once_with(
+            profile_name='test-profile', region_name='us-west-2'
+        )
+        assert result == mock_session
+
+    @patch('boto3.Session')
     def test_create_aws_session_no_credentials_returns_session(self, mock_session_class):
         """Test that session is returned even when no credentials are immediately available."""
         mock_session = Mock()

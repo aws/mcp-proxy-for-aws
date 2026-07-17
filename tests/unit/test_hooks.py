@@ -379,7 +379,7 @@ class TestSignRequestHook:
 
         await _sign_request_hook('us-east-1', 'execute-api', 'my-profile', False, request)
 
-        mock_create_session.assert_called_once_with('my-profile')
+        mock_create_session.assert_called_once_with('my-profile', 'us-east-1')
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_signs_request(self, mock_create_session):
@@ -406,7 +406,7 @@ class TestSignRequestHook:
 
         await _sign_request_hook('us-west-2', 'execute-api', 'test-profile', False, request)
 
-        mock_create_session.assert_called_once_with('test-profile')
+        mock_create_session.assert_called_once_with('test-profile', 'us-west-2')
         assert 'authorization' in request.headers
         assert 'x-amz-date' in request.headers
 

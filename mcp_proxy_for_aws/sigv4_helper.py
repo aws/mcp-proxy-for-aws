@@ -154,11 +154,12 @@ class SigV4HTTPXAuth(httpx.Auth):
         yield request
 
 
-def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
-    """Create an AWS session with optional profile.
+def create_aws_session(profile: Optional[str] = None, region: Optional[str] = None) -> boto3.Session:
+    """Create an AWS session with optional profile and region.
 
     Args:
         profile: AWS profile to use (optional)
+        region: AWS region to bind to the boto session (optional)
 
     Returns:
         boto3.Session instance
@@ -167,7 +168,12 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
         ValueError: If session creation fails
     """
     try:
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        session_kwargs: Dict[str, Any] = {}
+        if profile:
+            session_kwargs['profile_name'] = profile
+        if region:
+            session_kwargs['region_name'] = region
+        session = boto3.Session(**session_kwargs)
     except Exception as e:
         raise ValueError(f"Failed to create AWS session with profile '{profile}': {e}")
 
@@ -316,7 +322,7 @@ async def _sign_request_hook(
 
     # Always read fresh credentials from disk so account switches
     # and credential refreshes take effect immediately.
-    session = create_aws_session(profile)
+    session = create_aws_session(profile, region)
     credentials = session.get_credentials()
 
     if credentials is None:
