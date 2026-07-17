@@ -298,6 +298,10 @@ class TestGetProfileClient:
                 return_value=mock_transport,
             ),
             patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='us-east-1',
+            ),
+            patch(
                 'mcp_proxy_for_aws.middleware.profile_switcher.Client',
                 return_value=mock_client,
             ),
@@ -652,6 +656,10 @@ class TestLockWithDeterministicSynchronization:
                 return_value=mock_transport,
             ),
             patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='us-east-1',
+            ),
+            patch(
                 'mcp_proxy_for_aws.middleware.profile_switcher.Client',
                 return_value=mock_client,
             ),
@@ -777,7 +785,7 @@ class TestProfileClientTransportParams:
             default_profile='default-profile',
             service='bedrock-agentcore',
             region='eu-west-1',
-            metadata={'AWS_REGION': 'eu-west-1', 'custom': 'val'},
+            metadata={'custom': 'val'},
             timeout=httpx.Timeout(60),
             endpoint='https://bedrock-agentcore.eu-west-1.api.aws/mcp',
             disable_telemetry=True,
@@ -793,19 +801,61 @@ class TestProfileClientTransportParams:
                 return_value=mock_transport,
             ) as mock_create,
             patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='sa-east-1',
+            ) as mock_determine_region,
+            patch(
                 'mcp_proxy_for_aws.middleware.profile_switcher.Client',
                 return_value=mock_client,
             ),
         ):
             await mw._get_profile_client('dev-profile')
 
+        # AWS_REGION is resolved from the switched profile's configuration,
+        # while the signing region stays pinned to the endpoint.
+        mock_determine_region.assert_called_once_with(
+            'https://bedrock-agentcore.eu-west-1.api.aws/mcp', 'dev-profile'
+        )
         mock_create.assert_called_once_with(
             'https://bedrock-agentcore.eu-west-1.api.aws/mcp',
             'bedrock-agentcore',
             'eu-west-1',
-            {'AWS_REGION': 'eu-west-1', 'custom': 'val'},
+            {'AWS_REGION': 'sa-east-1', 'custom': 'val'},
             httpx.Timeout(60),
             'dev-profile',
             True,
             True,
         )
+
+    @pytest.mark.asyncio
+    async def test_user_metadata_aws_region_wins_over_profile_region(self):
+        """A user-supplied AWS_REGION in --metadata overrides the profile's region."""
+        mw = ProfileOverrideMiddleware(
+            allowed_profiles=['default-profile', 'dev-profile'],
+            default_profile='default-profile',
+            service='lambda',
+            region='eu-west-1',
+            metadata={'AWS_REGION': 'us-west-2'},
+            timeout=httpx.Timeout(60),
+            endpoint='https://lambda.eu-west-1.api.aws/mcp',
+            disable_telemetry=False,
+            skip_auth=False,
+        )
+
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=Mock(),
+            ) as mock_create,
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='sa-east-1',
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=AsyncMock(),
+            ),
+        ):
+            await mw._get_profile_client('dev-profile')
+
+        assert mock_create.call_args[0][3] == {'AWS_REGION': 'us-west-2'}

@@ -42,6 +42,7 @@ from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
+    determine_signing_region,
 )
 
 
@@ -55,15 +56,6 @@ async def run_proxy(args) -> None:
     # Validate and determine service
     service = determine_service_name(args.endpoint, args.service)
     logger.debug('Using service: %s', service)
-
-    # Validate and determine region
-    region = determine_aws_region(args.endpoint, args.region)
-    logger.debug('Using region: %s', region)
-
-    # Build metadata dictionary - start with AWS_REGION, then merge user metadata
-    metadata = {'AWS_REGION': region}
-    if args.metadata:
-        metadata.update(args.metadata)
 
     # Get profile(s) from CLI args or env var.
     # AWS_MCP_PROXY_PROFILES: Space-separated list of AWS profile names for multi-account
@@ -81,10 +73,22 @@ async def run_proxy(args) -> None:
     # Dedup profiles, preserve order, include all (including default)
     all_profiles = list(dict.fromkeys(profiles))
 
+    # The signing region must match the endpoint; the metadata region tells the
+    # backend where to operate and follows the AWS CLI/boto3 resolution chain.
+    signing_region = determine_signing_region(args.endpoint, args.region)
+    region = determine_aws_region(args.endpoint, default_profile)
+    logger.debug('Using signing region: %s, region: %s', signing_region, region)
+
+    # Build metadata dictionary - start with AWS_REGION, then merge user metadata
+    metadata = {'AWS_REGION': region}
+    if args.metadata:
+        metadata.update(args.metadata)
+
     # Log server configuration
     logger.info(
-        'Using service: %s, region: %s, metadata: %s, profile: %s, switch profiles: %s',
+        'Using service: %s, signing region: %s, region: %s, metadata: %s, profile: %s, switch profiles: %s',
         service,
+        signing_region,
         region,
         metadata,
         default_profile,
@@ -102,7 +106,7 @@ async def run_proxy(args) -> None:
     transport = create_transport_with_sigv4(
         args.endpoint,
         service,
-        region,
+        signing_region,
         metadata,
         timeout,
         default_profile,
@@ -127,13 +131,14 @@ async def run_proxy(args) -> None:
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
+        # Pass user metadata only: the middleware resolves AWS_REGION per profile.
         profile_middleware = add_profile_override_middleware(
             proxy,
             all_profiles,
             default_profile,
             service,
-            region,
-            metadata,
+            signing_region,
+            args.metadata or {},
             timeout,
             args.endpoint,
             args.disable_telemetry,
@@ -183,7 +188,7 @@ def add_profile_override_middleware(
         default_profile: The default profile name (first in the list)
         service: The AWS service name
         region: The AWS region
-        metadata: The metadata dictionary
+        metadata: User-supplied metadata (AWS_REGION is resolved per profile by the middleware)
         timeout: The httpx timeout configuration
         endpoint: The MCP endpoint URL
         disable_telemetry: Whether to disable telemetry on profile transports

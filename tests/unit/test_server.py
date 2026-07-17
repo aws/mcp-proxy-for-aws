@@ -69,9 +69,10 @@ class TestServer:
         mock_args.write_timeout = 180.0
         mock_args.log_level = 'INFO'
 
-        # Mock return values
+        # Mock return values — metadata region differs from the signing region
+        # (--region) to catch argument swaps between the two.
         mock_determine_service.return_value = 'test-service'
-        mock_determine_region.return_value = 'us-east-1'
+        mock_determine_region.return_value = 'sa-east-1'
 
         # Mock the transport and client factory
         mock_transport = Mock(spec=ClientTransport)
@@ -91,14 +92,14 @@ class TestServer:
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
-        mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
+        mock_determine_region.assert_called_once_with('https://test.example.com', None)
         # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
         assert mock_create_transport.call_count == 1
         call_args = mock_create_transport.call_args
         assert call_args[0][0] == 'https://test.example.com'
         assert call_args[0][1] == 'test-service'
-        assert call_args[0][2] == 'us-east-1'
-        assert call_args[0][3] == {'AWS_REGION': 'us-east-1'}  # metadata
+        assert call_args[0][2] == 'us-east-1'  # signing region from --region
+        assert call_args[0][3] == {'AWS_REGION': 'sa-east-1'}  # metadata region from profile
         # call_args[0][4] is the Timeout object
         assert call_args[0][5] is None  # profile
         mock_client_factory_class.assert_called_once_with(mock_transport)
@@ -163,7 +164,7 @@ class TestServer:
 
         # Assert
         mock_determine_service.assert_called_once_with('https://test.example.com', 'test-service')
-        mock_determine_region.assert_called_once_with('https://test.example.com', 'us-east-1')
+        mock_determine_region.assert_called_once_with('https://test.example.com', 'test-profile')
         # Verify create_transport was called (we check args differently since Timeout object comparison is complex)
         assert mock_create_transport.call_count == 1
         call_args = mock_create_transport.call_args
