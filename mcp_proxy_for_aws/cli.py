@@ -81,6 +81,7 @@ Examples:
 
     parser.add_argument(
         'endpoint',
+        nargs='?',
         help='SigV4 MCP endpoint URL',
     )
 
@@ -185,4 +186,11 @@ Examples:
         help='Skip request signing when AWS credentials are unavailable instead of failing',
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.endpoint is None:
+        if args.profiles and '://' in args.profiles[-1]:
+            args.endpoint = args.profiles.pop()
+        else:
+            parser.error('the following arguments are required: endpoint')
+
+    return args
