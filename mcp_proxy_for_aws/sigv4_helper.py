@@ -183,6 +183,8 @@ def create_sigv4_client(
     metadata: Optional[Dict[str, Any]] = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
+    max_connections: int = 5,
+    max_keepalive_connections: int = 1,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """Create an httpx.AsyncClient with SigV4 authentication.
@@ -196,6 +198,10 @@ def create_sigv4_client(
         metadata: Metadata to inject into MCP _meta field
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
+        max_connections: Maximum number of concurrent connections in the pool
+            (default: 5, preserving historical behavior)
+        max_keepalive_connections: Maximum number of idle keep-alive connections
+            to retain (default: 1, preserving historical behavior)
         **kwargs: Additional arguments to pass to httpx.AsyncClient
 
     Returns:
@@ -205,7 +211,10 @@ def create_sigv4_client(
     client_kwargs = {
         'follow_redirects': True,
         'timeout': timeout,
-        'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
+        'limits': httpx.Limits(
+            max_keepalive_connections=max_keepalive_connections,
+            max_connections=max_connections,
+        ),
         **kwargs,
     }
 

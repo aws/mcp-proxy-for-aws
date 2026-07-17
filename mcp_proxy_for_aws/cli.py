@@ -17,7 +17,7 @@
 import argparse
 import os
 from mcp_proxy_for_aws import __version__
-from mcp_proxy_for_aws.utils import within_range
+from mcp_proxy_for_aws.utils import positive_int, within_range
 from typing import Any, Dict, Optional, Sequence
 
 
@@ -183,6 +183,24 @@ Examples:
         '--skip-auth',
         action='store_true',
         help='Skip request signing when AWS credentials are unavailable instead of failing',
+    )
+
+    parser.add_argument(
+        '--max-connections',
+        type=positive_int(1),
+        default=positive_int(1)(os.getenv('MCP_PROXY_MAX_CONNECTIONS', '5')),
+        help='Maximum number of concurrent HTTP connections in the pool used for all '
+        'proxied tool calls. Increase this when your MCP client fans out parallel '
+        'aws_* tool calls per turn (default: 5). '
+        'Falls back to MCP_PROXY_MAX_CONNECTIONS if not set.',
+    )
+
+    parser.add_argument(
+        '--max-keepalive-connections',
+        type=positive_int(0),
+        default=positive_int(0)(os.getenv('MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS', '1')),
+        help='Maximum number of idle keep-alive connections to retain in the pool '
+        '(default: 1). Falls back to MCP_PROXY_MAX_KEEPALIVE_CONNECTIONS if not set.',
     )
 
     return parser.parse_args()
