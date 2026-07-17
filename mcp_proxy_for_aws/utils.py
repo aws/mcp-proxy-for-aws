@@ -19,7 +19,7 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -183,12 +183,52 @@ def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
     return determined_service
 
 
-def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
-    """Validate and determine the AWS region.
+def determine_signing_region(endpoint: str, region: Optional[str]) -> str:
+    """Determine the AWS region to use for SigV4 signing.
+
+    The signature's credential scope must match the endpoint's region, so the
+    endpoint takes precedence over profile or environment configuration.
 
     Args:
         endpoint: The endpoint URL
         region: Optional region name
+
+    Returns:
+        Validated signing region
+
+    Raises:
+        ValueError: If region cannot be determined
+    """
+    if region:
+        logger.debug('Signing region determined through explicit parameter')
+        return region
+
+    # Parse AWS region from endpoint URL
+    _, endpoint_region = get_service_name_and_region_from_endpoint(endpoint)
+    if endpoint_region:
+        logger.debug('Signing region determined through endpoint URL')
+        return endpoint_region
+
+    environment_region = os.getenv('AWS_REGION')
+    if environment_region:
+        logger.debug('Signing region determined through environment variable')
+        return environment_region
+
+    raise ValueError(
+        f"Could not determine AWS region from endpoint '{endpoint}' or from environment variable AWS_REGION. "
+        'Please provide the region explicitly using --region argument.'
+    )
+
+
+def determine_aws_region(endpoint: str, profile: Optional[str] = None) -> str:
+    """Determine the AWS region the backend should operate in (injected as AWS_REGION metadata).
+
+    Resolution order matches the AWS CLI and boto3: the profile/environment
+    configuration chain, then the endpoint region as a fallback.
+
+    Args:
+        endpoint: The endpoint URL
+        profile: Optional AWS profile name
 
     Returns:
         Validated AWS region
@@ -196,9 +236,10 @@ def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
     Raises:
         ValueError: If region cannot be determined
     """
-    if region:
-        logger.debug('Region determined through explicit parameter')
-        return region
+    session_region = create_aws_session(profile).region_name
+    if session_region:
+        logger.debug('Region determined through AWS configuration chain')
+        return session_region
 
     # Parse AWS region from endpoint URL
     _, endpoint_region = get_service_name_and_region_from_endpoint(endpoint)
@@ -206,14 +247,9 @@ def determine_aws_region(endpoint: str, region: Optional[str]) -> str:
         logger.debug('Region determined through endpoint URL')
         return endpoint_region
 
-    environment_region = os.getenv('AWS_REGION')
-    if environment_region:
-        logger.debug('Region determined through environment variable')
-        return environment_region
-
     raise ValueError(
-        f"Could not determine AWS region from endpoint '{endpoint}' or from environment variable AWS_REGION. "
-        'Please provide the region explicitly using --region argument.'
+        f"Could not determine AWS region from endpoint '{endpoint}', AWS configuration, "
+        'or environment. Please configure a region via AWS_REGION or your AWS profile.'
     )
 
 
