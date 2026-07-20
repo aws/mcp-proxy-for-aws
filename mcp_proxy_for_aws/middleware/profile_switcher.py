@@ -188,14 +188,34 @@ class ProfileOverrideMiddleware(Middleware):
                 self._profile_clients[profile] = client
             return self._profile_clients[profile]
 
+    async def _invalidate_profile_client(self, profile: str, failed_client: Client) -> None:
+        """Remove and disconnect a failed client if it is still cached."""
+        stale_client: Client | None = None
+        async with self._lock:
+            if self._profile_clients.get(profile) is failed_client:
+                stale_client = self._profile_clients.pop(profile)
+
+        if stale_client is not None:
+            try:
+                await stale_client.__aexit__(None, None, None)
+            except Exception:
+                logger.warning(
+                    'Failed to disconnect invalidated profile client %s',
+                    profile,
+                    exc_info=True,
+                )
+
     async def disconnect_profile_clients(self) -> None:
         """Disconnect all per-profile clients. Call during server shutdown."""
-        for profile, client in self._profile_clients.items():
+        async with self._lock:
+            profile_clients = list(self._profile_clients.items())
+            self._profile_clients.clear()
+
+        for profile, client in profile_clients:
             try:
                 await client.__aexit__(None, None, None)
             except Exception:
                 logger.exception('Failed to disconnect profile client %s', profile)
-        self._profile_clients.clear()
 
     async def _call_with_profile(
         self,
@@ -252,6 +272,7 @@ class ProfileOverrideMiddleware(Middleware):
             raise
         except Exception as e:
             logger.exception('Error calling tool via profile %s', profile)
+            await self._invalidate_profile_client(profile, client)
             raise ToolError(
                 f'Tool call failed using profile {profile!r}. '
                 'The request could not be completed with the specified profile.'

@@ -271,6 +271,155 @@ class TestPerCallProfileOverride:
         assert 'backend error' not in str(exc_info.value)
 
 
+class TestProfileClientInvalidation:
+    """Tests for invalidating failed per-profile clients."""
+
+    @pytest.mark.asyncio
+    async def test_session_exception_invalidates_without_retry(self, middleware, mock_context):
+        """A failed session is removed and closed without replaying the tool call."""
+        client = AsyncMock()
+        original_error = ConnectionError('session closed')
+        client.call_tool.side_effect = original_error
+        middleware._profile_clients['dev-profile'] = client
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with pytest.raises(ToolError, match='Tool call failed') as exc_info:
+            await middleware.on_call_tool(mock_context, call_next)
+
+        assert exc_info.value.__cause__ is original_error
+        assert 'dev-profile' not in middleware._profile_clients
+        client.call_tool.assert_awaited_once_with(
+            'aws___call_aws', {'arg': 'value'}, raise_on_error=False
+        )
+        client.__aexit__.assert_awaited_once_with(None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_next_call_creates_fresh_client_after_invalidation(
+        self, middleware, mock_context
+    ):
+        """The call after invalidation connects and caches a fresh client."""
+        stale_client = AsyncMock()
+        stale_client.call_tool.side_effect = ConnectionError('session closed')
+        middleware._profile_clients['dev-profile'] = stale_client
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with pytest.raises(ToolError):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        fresh_client = AsyncMock()
+        fresh_result = MagicMock()
+        fresh_result.content = []
+        fresh_result.structured_content = {'status': 'ok'}
+        fresh_result.meta = None
+        fresh_result.is_error = False
+        fresh_client.call_tool.return_value = fresh_result
+
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=Mock(),
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='us-east-1',
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=fresh_client,
+            ),
+        ):
+            result = await middleware.on_call_tool(mock_context, call_next)
+
+        assert result.structured_content == {'status': 'ok'}
+        assert middleware._profile_clients['dev-profile'] is fresh_client
+        stale_client.call_tool.assert_awaited_once()
+        fresh_client.__aenter__.assert_awaited_once_with()
+        fresh_client.call_tool.assert_awaited_once_with(
+            'aws___call_aws', {'arg': 'value'}, raise_on_error=False
+        )
+
+    @pytest.mark.asyncio
+    async def test_cleanup_failure_does_not_mask_call_error(self, middleware, mock_context):
+        """Cleanup errors are swallowed and the original call error remains the cause."""
+        client = AsyncMock()
+        original_error = ConnectionError('session closed')
+        client.call_tool.side_effect = original_error
+        client.__aexit__.side_effect = RuntimeError('cleanup failed')
+        middleware._profile_clients['dev-profile'] = client
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with pytest.raises(ToolError, match='Tool call failed') as exc_info:
+            await middleware.on_call_tool(mock_context, call_next)
+
+        assert exc_info.value.__cause__ is original_error
+        assert 'dev-profile' not in middleware._profile_clients
+        client.__aexit__.assert_awaited_once_with(None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_is_error_result_does_not_invalidate_client(self, middleware, mock_context):
+        """A completed tool-level error leaves the profile session cached."""
+        client = AsyncMock()
+        call_result = MagicMock()
+        content_block = MagicMock()
+        content_block.text = 'backend error'
+        call_result.content = [content_block]
+        call_result.is_error = True
+        client.call_tool.return_value = call_result
+        middleware._profile_clients['dev-profile'] = client
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with pytest.raises(ToolError, match='backend error'):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        assert middleware._profile_clients['dev-profile'] is client
+        client.__aexit__.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_old_client_failure_does_not_invalidate_replacement(
+        self, middleware, mock_context
+    ):
+        """A late failure from client A does not remove replacement client B."""
+        client_a = AsyncMock()
+        client_b = AsyncMock()
+        middleware._profile_clients['dev-profile'] = client_a
+
+        async def fail_after_replacement(*args, **kwargs):
+            async with middleware._lock:
+                middleware._profile_clients['dev-profile'] = client_b
+            raise ConnectionError('old session closed')
+
+        client_a.call_tool.side_effect = fail_after_replacement
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'aws___call_aws'
+        mock_context.message.arguments = {'arg': 'value', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        with pytest.raises(ToolError, match='Tool call failed'):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        assert middleware._profile_clients['dev-profile'] is client_b
+        client_a.call_tool.assert_awaited_once()
+        client_a.__aexit__.assert_not_awaited()
+        client_b.__aexit__.assert_not_awaited()
+
+
 class TestGetProfileClient:
     """Tests for the _get_profile_client method."""
 
