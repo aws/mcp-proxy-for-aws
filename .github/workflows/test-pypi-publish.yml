@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write    # Required for SLSA provenance signing via Sigstore
+      attestations: write # Required to write attestations to the GitHub repo
     steps:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -42,6 +44,16 @@ jobs:
 
       - name: Build distribution packages
         run: uv build
+
+      - name: Generate SLSA provenance attestations
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/**
+
+      - name: Generate PEP 740 attestations for PyPI
+        # Produces .publish.attestation sidecar files in dist/ which uv publish
+        # automatically discovers and uploads to PyPI alongside the distributions.
+        run: uv tool run --exclude-newer "$(date -d '7 days ago' --utc +%Y-%m-%dT%H:%M:%SZ)" pypi-attestations sign dist/*
 
       - name: Upload distribution packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
