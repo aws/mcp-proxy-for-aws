@@ -3212,7 +3212,7 @@ requires-dist = [
 
 [[package]]
 name = "mcp-proxy-for-aws"
-version = "1.6.3"
+version = "1.6.4"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
