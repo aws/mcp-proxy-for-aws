@@ -135,7 +135,7 @@ export AWS_MCP_PROXY_PROFILES="prod-readonly dev staging"
 
 > **Note:** `AWS_MCP_PROXY_PROFILES` takes precedence over `--profile` / `AWS_PROFILE` when set.
 
-> **Note:** When getting a `NoRegionError` (surfaced by MCP clients as `-32602: Invalid request parameters`) and using `aws login` profiles, please set `AWS_REGION`.
+> **Note:** When getting a `NoRegionError` (surfaced by MCP clients as `-32602: Invalid request parameters`) and using `aws login` profiles, please configure the region for the given profile using `aws configure set region <region>` or set `AWS_REGION`.
 
 ### Multi-account access
 
