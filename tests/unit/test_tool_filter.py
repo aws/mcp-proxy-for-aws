@@ -15,6 +15,7 @@
 """Tests for the tool filtering middleware."""
 
 import pytest
+from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from unittest.mock import AsyncMock, Mock
@@ -268,3 +269,133 @@ class TestOnListTools:
         else:
             # All tools should pass
             assert result == tools
+
+
+class TestOnCallTool:
+    """Tests for the on_call_tool method."""
+
+    @pytest.fixture
+    def mock_read_only_tool(self):
+        """Tool with readOnlyHint=True."""
+        tool = Mock()
+        tool.name = 'read_only_tool'
+        tool.annotations = Mock()
+        tool.annotations.readOnlyHint = True
+        return tool
+
+    @pytest.fixture
+    def mock_write_tool(self):
+        """Tool with readOnlyHint=False."""
+        tool = Mock()
+        tool.name = 'write_tool'
+        tool.annotations = Mock()
+        tool.annotations.readOnlyHint = False
+        return tool
+
+    def _make_context(self, tool_name, get_tool_return):
+        """Create a mock MiddlewareContext for on_call_tool."""
+        context = Mock(spec=MiddlewareContext)
+        context.message = Mock()
+        context.message.name = tool_name
+        context.fastmcp_context = Mock()
+        context.fastmcp_context.fastmcp = Mock()
+        context.fastmcp_context.fastmcp.get_tool = AsyncMock(return_value=get_tool_return)
+        return context
+
+    @pytest.mark.asyncio
+    async def test_read_only_false_allows_all_calls(self, mock_write_tool):
+        """Test that read_only=False passes through all tool calls."""
+        # Arrange
+        context = self._make_context('write_tool', mock_write_tool)
+        call_next = AsyncMock(return_value=['result'])
+        middleware = ToolFilteringMiddleware(read_only=False)
+
+        # Act
+        result = await middleware.on_call_tool(context, call_next)
+
+        # Assert
+        assert result == ['result']
+        call_next.assert_called_once_with(context)
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_allows_read_only_tool(self, mock_read_only_tool):
+        """Test that read_only=True allows tools with readOnlyHint=True."""
+        # Arrange
+        context = self._make_context('read_only_tool', mock_read_only_tool)
+        call_next = AsyncMock(return_value=['result'])
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act
+        result = await middleware.on_call_tool(context, call_next)
+
+        # Assert
+        assert result == ['result']
+        call_next.assert_called_once_with(context)
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_rejects_write_tool(self, mock_write_tool):
+        """Test that read_only=True rejects tools with readOnlyHint=False."""
+        # Arrange
+        context = self._make_context('write_tool', mock_write_tool)
+        call_next = AsyncMock()
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act & Assert
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        assert 'write_tool' in str(exc_info.value)
+        assert 'not available in read-only mode' in str(exc_info.value)
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_rejects_unknown_tool(self):
+        """Test that read_only=True rejects tools that don't exist."""
+        # Arrange
+        context = self._make_context('unknown_tool', None)
+        call_next = AsyncMock()
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act & Assert
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        assert 'unknown_tool' in str(exc_info.value)
+        assert 'not available in read-only mode' in str(exc_info.value)
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_rejects_tool_without_annotations(self):
+        """Test that read_only=True rejects tools with no annotations."""
+        # Arrange
+        tool = Mock()
+        tool.name = 'no_annotations_tool'
+        tool.annotations = None
+        context = self._make_context('no_annotations_tool', tool)
+        call_next = AsyncMock()
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act & Assert
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        assert 'no_annotations_tool' in str(exc_info.value)
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_no_fastmcp_context_passes_through(self):
+        """Test that when fastmcp_context is None, call passes through."""
+        # Arrange
+        context = Mock(spec=MiddlewareContext)
+        context.message = Mock()
+        context.message.name = 'some_tool'
+        context.fastmcp_context = None
+        call_next = AsyncMock(return_value=['result'])
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act
+        result = await middleware.on_call_tool(context, call_next)
+
+        # Assert
+        assert result == ['result']
+        call_next.assert_called_once_with(context)

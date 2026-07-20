@@ -20,6 +20,7 @@ from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
     determine_service_name,
+    determine_signing_region,
     validate_endpoint_url,
 )
 from unittest.mock import MagicMock, patch
@@ -298,8 +299,8 @@ class TestValidateRequiredArgs:
         assert endpoint in str(exc_info.value)
 
 
-class TestDetermineRegion:
-    """Test cases for determine_aws_region function."""
+class TestDetermineSigningRegion:
+    """Test cases for determine_signing_region function."""
 
     @patch('os.getenv')
     def test_determine_region_with_region(self, mock_getenv):
@@ -307,7 +308,7 @@ class TestDetermineRegion:
         endpoint = 'https://mcp.us-east-1.api.aws/mcp'
         region = 'custom-region'
 
-        result = determine_aws_region(endpoint, region)
+        result = determine_signing_region(endpoint, region)
 
         assert result == region
         # Environment variable should not be checked when region is provided
@@ -320,7 +321,7 @@ class TestDetermineRegion:
         expected_region = 'us-east-1'
         mock_getenv.return_value = None
 
-        result = determine_aws_region(endpoint, None)
+        result = determine_signing_region(endpoint, None)
 
         assert result == expected_region
         # Environment variable should not be checked when region can be parsed from endpoint
@@ -332,7 +333,7 @@ class TestDetermineRegion:
         expected_region = 'us-west-2'
         mock_getenv.return_value = None
 
-        result = determine_aws_region(endpoint, None)
+        result = determine_signing_region(endpoint, None)
 
         assert result == expected_region
         # Environment variable should not be checked when region can be parsed from endpoint
@@ -344,7 +345,7 @@ class TestDetermineRegion:
         mock_getenv.return_value = None
 
         with pytest.raises(ValueError) as exc_info:
-            determine_aws_region(endpoint, None)
+            determine_signing_region(endpoint, None)
 
         assert 'Could not determine AWS region' in str(exc_info.value)
         assert endpoint in str(exc_info.value)
@@ -359,8 +360,43 @@ class TestDetermineRegion:
         mock_getenv.return_value = 'us-west-1'
 
         # Act
-        result = determine_aws_region(endpoint, None)
+        result = determine_signing_region(endpoint, None)
 
         # Assert
         assert result == 'us-west-1'
         mock_getenv.assert_called_once_with('AWS_REGION')
+
+
+class TestDetermineRegion:
+    """Test cases for determine_aws_region function."""
+
+    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    def test_profile_region_wins_over_endpoint(self, mock_create_session):
+        """The AWS configuration chain takes precedence over the endpoint region."""
+        mock_create_session.return_value.region_name = 'sa-east-1'
+
+        result = determine_aws_region('https://mcp.eu-central-1.api.aws/mcp', 'my-profile')
+
+        assert result == 'sa-east-1'
+        mock_create_session.assert_called_once_with('my-profile')
+
+    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    def test_falls_back_to_endpoint_region(self, mock_create_session):
+        """Endpoint region is used when no region is configured."""
+        mock_create_session.return_value.region_name = None
+
+        result = determine_aws_region('https://mcp.eu-central-1.api.aws/mcp')
+
+        assert result == 'eu-central-1'
+        mock_create_session.assert_called_once_with(None)
+
+    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    def test_failure_when_region_undeterminable(self, mock_create_session):
+        """Raises when neither configuration nor endpoint yields a region."""
+        mock_create_session.return_value.region_name = None
+        endpoint = 'https://service.example.com'
+
+        with pytest.raises(ValueError) as exc_info:
+            determine_aws_region(endpoint)
+
+        assert 'Could not determine AWS region' in str(exc_info.value)

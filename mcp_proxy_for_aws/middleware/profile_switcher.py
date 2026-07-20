@@ -34,7 +34,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import Tool, ToolResult
-from mcp_proxy_for_aws.utils import create_transport_with_sigv4
+from mcp_proxy_for_aws.utils import create_transport_with_sigv4, determine_aws_region
 from typing import Any, cast
 from typing_extensions import override
 
@@ -67,7 +67,13 @@ class ProfileOverrideMiddleware(Middleware):
         disable_telemetry: bool = False,
         skip_auth: bool = False,
     ) -> None:
-        """Initialize the middleware with connection and profile configuration."""
+        """Initialize the middleware with connection and profile configuration.
+
+        ``metadata`` must be the user-supplied metadata only (without the computed
+        ``AWS_REGION`` default): each profile client injects its own ``AWS_REGION``
+        resolved from that profile's configuration, with user metadata taking
+        precedence.
+        """
         super().__init__()
         self._allowed_profiles = set(allowed_profiles)
         self._default_profile = default_profile
@@ -163,11 +169,15 @@ class ProfileOverrideMiddleware(Middleware):
         async with self._lock:
             if profile not in self._profile_clients:
                 logger.info('Creating dedicated connection for profile %s', profile)
+                metadata = {
+                    'AWS_REGION': determine_aws_region(self._endpoint, profile),
+                    **self._metadata,
+                }
                 transport = create_transport_with_sigv4(
                     self._endpoint,
                     self._service,
                     self._region,
-                    self._metadata,
+                    metadata,
                     self._timeout,
                     profile,
                     self._disable_telemetry,

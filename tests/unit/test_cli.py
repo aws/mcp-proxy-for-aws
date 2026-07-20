@@ -83,11 +83,63 @@ class TestParseArgs:
         assert args.read_timeout == 90.0
         assert args.write_timeout == 120.0
 
-    @patch('sys.argv', ['mcp-proxy-for-aws'])
-    def test_parse_args_missing_endpoint(self):
+    @pytest.mark.parametrize(
+        'argv',
+        [
+            ['mcp-proxy-for-aws'],
+            ['mcp-proxy-for-aws', '--profile', 'prod', 'dev'],
+        ],
+    )
+    def test_parse_args_missing_endpoint(self, argv, capsys):
         """Test parsing fails when endpoint is missing."""
-        with pytest.raises(SystemExit):
+        with patch('sys.argv', argv), pytest.raises(SystemExit) as exc_info:
             parse_args()
+
+        assert exc_info.value.code == 2
+        assert (
+            'mcp-proxy-for-aws: error: the following arguments are required: endpoint'
+            in capsys.readouterr().err
+        )
+
+    @pytest.mark.parametrize(
+        ('argv', 'expected_profiles'),
+        [
+            (
+                ['mcp-proxy-for-aws', '--profile', 'prod', 'https://test.example.com'],
+                ['prod'],
+            ),
+            (
+                [
+                    'mcp-proxy-for-aws',
+                    '--profile',
+                    'prod',
+                    'dev',
+                    'https://test.example.com',
+                    '--region',
+                    'eu-west-1',
+                ],
+                ['prod', 'dev'],
+            ),
+        ],
+    )
+    def test_parse_args_profile_before_endpoint(self, argv, expected_profiles):
+        """Test parsing profiles specified before the endpoint."""
+        with patch('sys.argv', argv):
+            args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.profiles == expected_profiles
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--profile', 'prod', 'dev'],
+    )
+    def test_parse_args_endpoint_before_profiles(self):
+        """Test that endpoint-first multi-profile parsing remains unchanged."""
+        args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.profiles == ['prod', 'dev']
 
     @patch.dict('os.environ', {'AWS_PROFILE': 'env-profile'})
     @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
