@@ -203,7 +203,7 @@ def create_sigv4_client(
     """
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
-        'follow_redirects': True,
+        'follow_redirects': False,
         'timeout': timeout,
         'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
         **kwargs,
