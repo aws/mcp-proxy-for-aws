@@ -200,6 +200,34 @@ class TestPerCallProfileOverride:
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_eks_tool_routes_through_profile_client(self, middleware, mock_context):
+        """An eks-mcp tool with a non-default aws_profile routes through a dedicated client."""
+        mock_client = AsyncMock()
+        mock_call_result = MagicMock()
+        mock_call_result.content = 'result'
+        mock_call_result.structured_content = None
+        mock_call_result.meta = None
+        mock_call_result.is_error = False
+        mock_client.call_tool.return_value = mock_call_result
+
+        mock_context.message = Mock()
+        mock_context.message.name = 'manage_k8s_resource'
+        mock_context.message.arguments = {
+            'cluster_name': 'my-cluster',
+            'aws_profile': 'dev-profile',
+        }
+        call_next = AsyncMock()
+
+        with patch.object(middleware, '_get_profile_client', return_value=mock_client):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        # aws_profile is stripped and the eks tool is forwarded via the dedicated client
+        mock_client.call_tool.assert_called_once_with(
+            'manage_k8s_resource', {'cluster_name': 'my-cluster'}, raise_on_error=False
+        )
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_default_profile_routes_through_call_next(self, middleware, mock_context):
         """When aws_profile matches the default, route through normal path."""
         mock_context.message = Mock()
@@ -526,6 +554,41 @@ class TestFix1OnlyAuthToolsGetInjection:
             )
 
     @pytest.mark.asyncio
+    async def test_all_eks_auth_tools_get_injection(self, middleware, mock_context):
+        """All eks-mcp tools that call AWS/EKS/Kubernetes get aws_profile."""
+        tools = []
+        for name in [
+            'add_inline_policy',
+            'apply_yaml',
+            'describe_eks_resource',
+            'get_cloudwatch_logs',
+            'get_cloudwatch_metrics',
+            'get_eks_insights',
+            'get_eks_vpc_config',
+            'get_k8s_events',
+            'get_pod_logs',
+            'get_policies_for_role',
+            'list_api_versions',
+            'list_eks_resources',
+            'list_k8s_resources',
+            'manage_eks_stacks',
+            'manage_k8s_resource',
+            'read_k8s_resource',
+        ]:
+            tool = Mock()
+            tool.name = name
+            tool.parameters = {'type': 'object', 'properties': {}}
+            tools.append(tool)
+        call_next = AsyncMock(return_value=tools)
+
+        result = await middleware.on_list_tools(mock_context, call_next)
+
+        for tool in result:
+            assert 'aws_profile' in tool.parameters['properties'], (
+                f'{tool.name} should have aws_profile'
+            )
+
+    @pytest.mark.asyncio
     async def test_non_auth_tools_never_get_injection(self, middleware, mock_context):
         """Non-auth tools like search_documentation, list_regions, etc. are untouched."""
         tools = []
@@ -536,6 +599,11 @@ class TestFix1OnlyAuthToolsGetInjection:
             'recommend',
             'retrieve_skill',
             'get_regional_availability',
+            # eks-mcp doc/guidance/manifest-generation tools make no AWS call
+            'search_eks_documentation',
+            'search_eks_troubleshooting_guide',
+            'get_eks_metrics_guidance',
+            'generate_app_manifest',
         ]:
             tool = Mock()
             tool.name = name
