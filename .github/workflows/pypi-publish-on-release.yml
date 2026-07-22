@@ -79,7 +79,7 @@ jobs:
       - name: Generate PEP 740 attestations for PyPI
         # Produces .publish.attestation sidecar files in dist/ which uv publish
         # automatically discovers and uploads to PyPI alongside the distributions.
-        run: uv tool run --exclude-newer "$(date -d '7 days ago' --utc +%Y-%m-%dT%H:%M:%SZ)" pypi-attestations sign dist/*
+        run: uv tool run --exclude-newer P7D pypi-attestations sign dist/*
 
       - name: Upload distribution packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
