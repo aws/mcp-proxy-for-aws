@@ -1,4 +1,5 @@
 [tool.uv]
+exclude-newer = "P3D"
 prerelease = "allow"
 
 [tool.uv.workspace]
