@@ -171,7 +171,7 @@ uv run pre-commit run --all-files
 
 - **Line Length**: 99 characters (configured in `pyproject.toml`)
 - **Quote Style**: Single quotes preferred
-- **Import Organization**: Handled by `ruff` (isort profile)
+- **Import Organization**: Handled by `ruff`
 - **Docstrings**: Google style convention
 - **Type Hints**: Required for all public functions
 
