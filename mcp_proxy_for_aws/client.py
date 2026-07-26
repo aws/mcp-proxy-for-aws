@@ -25,7 +25,6 @@ from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
 from mcp_proxy_for_aws.utils import validate_endpoint_url
-from typing import Optional
 
 
 logger = logging.getLogger(__name__)
@@ -34,11 +33,11 @@ logger = logging.getLogger(__name__)
 def aws_iam_streamablehttp_client(
     endpoint: str,
     aws_service: str,
-    aws_region: Optional[str] = None,
-    aws_profile: Optional[str] = None,
-    credentials: Optional[Credentials] = None,
-    headers: Optional[dict[str, str]] = None,
-    metadata: Optional[dict[str, str]] = None,
+    aws_region: str | None = None,
+    aws_profile: str | None = None,
+    credentials: Credentials | None = None,
+    headers: dict[str, str] | None = None,
+    metadata: dict[str, str] | None = None,
     timeout: float | timedelta = 30,
     sse_read_timeout: float | timedelta = 60 * 5,
     terminate_on_close: bool = True,

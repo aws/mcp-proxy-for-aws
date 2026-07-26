@@ -17,14 +17,13 @@ import fastmcp
 import logging
 from fastmcp.client import StdioTransport
 from fastmcp.client.elicitation import ElicitResult
-from typing import Dict, Optional
 
 
 logger = logging.getLogger(__name__)
 
 
 def build_mcp_client(
-    endpoint: str, region_name: str, metadata: Optional[Dict[str, str]] = None
+    endpoint: str, region_name: str, metadata: dict[str, str] | None = None
 ) -> fastmcp.Client:
     """Create a MCP Client with custom metadata.
 
@@ -62,7 +61,7 @@ async def _basic_elicitation_handler(message: str, response_type: type, params, 
     raise RuntimeError(f'Unknown Response-type, rather failing - {response_type}')
 
 
-def _build_mcp_config(endpoint: str, region_name: str, metadata: Optional[Dict[str, str]] = None):
+def _build_mcp_config(endpoint: str, region_name: str, metadata: dict[str, str] | None = None):
     credentials = boto3.Session().get_credentials()
 
     environment_variables = {
@@ -81,7 +80,7 @@ def _build_mcp_config(endpoint: str, region_name: str, metadata: Optional[Dict[s
     }
 
 
-def _build_args(endpoint: str, region_name: str, metadata: Optional[Dict[str, str]] = None):
+def _build_args(endpoint: str, region_name: str, metadata: dict[str, str] | None = None):
     """Build command line arguments for mcp-proxy-for-aws."""
     args = [
         endpoint,

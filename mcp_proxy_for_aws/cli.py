@@ -16,9 +16,10 @@
 
 import argparse
 import os
+from collections.abc import Sequence
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.utils import within_range
-from typing import Any, Dict, Optional, Sequence
+from typing import Any
 
 
 class KeyValueAction(argparse.Action):
@@ -29,7 +30,7 @@ class KeyValueAction(argparse.Action):
         parser: argparse.ArgumentParser,
         namespace: argparse.Namespace,
         values: str | Sequence[Any] | None,
-        option_string: Optional[str] = None,
+        option_string: str | None = None,
     ) -> None:
         """Parse key=value pairs into a dictionary.
 
@@ -39,7 +40,7 @@ class KeyValueAction(argparse.Action):
             values: The values to parse (list of key=value strings)
             option_string: The option string that triggered this action
         """
-        metadata: Dict[str, str] = {}
+        metadata: dict[str, str] = {}
         # Ensure values is a sequence
         if values is None:
             # No values provided, set empty dict
