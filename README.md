@@ -1,5 +1,7 @@
 # MCP Proxy for AWS
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.aws%2Fmcp-proxy-for-aws.svg)](https://mcptoplist.com/server/io.github.aws%2Fmcp-proxy-for-aws)
+
 ## Overview
 
 The **MCP Proxy for AWS** package provides two ways to connect AI applications to MCP servers on AWS:
