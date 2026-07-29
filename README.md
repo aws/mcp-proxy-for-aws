@@ -272,7 +272,7 @@ By default, the library resolves AWS credentials automatically from the standard
 from botocore.credentials import Credentials
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 
-creds = Credentials(access_key="...", secret_key="...", token="...")
+creds = Credentials(access_key='...', secret_key='...', token='...')
 
 mcp_client = aws_iam_streamablehttp_client(
     endpoint=mcp_url,
@@ -294,8 +294,8 @@ mcp_client = aws_iam_streamablehttp_client(
     aws_region=region,
     aws_service=service,
     metadata={
-        "custom/session-context": "my-value",
-        "custom/tracking-id": "abc-123",
+        'custom/session-context': 'my-value',
+        'custom/tracking-id': 'abc-123',
     },
 )
 ```

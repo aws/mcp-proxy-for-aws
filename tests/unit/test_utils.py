@@ -380,6 +380,17 @@ class TestDetermineRegion:
         assert result == 'sa-east-1'
         mock_create_session.assert_called_once_with('my-profile')
 
+    @patch.dict('os.environ', {'AWS_REGION': 'ap-south-1'})
+    @patch('mcp_proxy_for_aws.utils.create_aws_session')
+    def test_environment_region_wins_over_endpoint(self, mock_create_session):
+        """AWS_REGION takes precedence over the endpoint region."""
+        mock_create_session.return_value.region_name = None
+
+        result = determine_aws_region('https://mcp.eu-central-1.api.aws/mcp')
+
+        assert result == 'ap-south-1'
+
+    @patch.dict('os.environ', {}, clear=True)
     @patch('mcp_proxy_for_aws.utils.create_aws_session')
     def test_falls_back_to_endpoint_region(self, mock_create_session):
         """Endpoint region is used when no region is configured."""
@@ -390,6 +401,7 @@ class TestDetermineRegion:
         assert result == 'eu-central-1'
         mock_create_session.assert_called_once_with(None)
 
+    @patch.dict('os.environ', {}, clear=True)
     @patch('mcp_proxy_for_aws.utils.create_aws_session')
     def test_failure_when_region_undeterminable(self, mock_create_session):
         """Raises when neither configuration nor endpoint yields a region."""

@@ -241,6 +241,11 @@ def determine_aws_region(endpoint: str, profile: str | None = None) -> str:
         logger.debug('Region determined through AWS configuration chain')
         return session_region
 
+    environment_region = os.getenv('AWS_REGION')
+    if environment_region:
+        logger.debug('Region determined through environment variable `AWS_REGION`')
+        return environment_region
+
     # Parse AWS region from endpoint URL
     _, endpoint_region = get_service_name_and_region_from_endpoint(endpoint)
     if endpoint_region:
