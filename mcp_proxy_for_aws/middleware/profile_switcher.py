@@ -231,7 +231,7 @@ class ProfileOverrideMiddleware(Middleware):
             )
 
         # Strip aws_profile before forwarding to the backend
-        arguments: dict[str, Any] = dict(cast(dict[str, Any], context.message.arguments))
+        arguments: dict[str, Any] = dict(cast('dict[str, Any]', context.message.arguments))
         arguments.pop('aws_profile', None)
 
         # If it's the default profile, route through the normal middleware chain.

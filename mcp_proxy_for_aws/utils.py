@@ -20,7 +20,7 @@ import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 
@@ -70,9 +70,9 @@ def create_transport_with_sigv4(
     url: str,
     service: str,
     region: str,
-    metadata: Dict[str, Any],
+    metadata: dict[str, Any],
     custom_timeout: httpx.Timeout,
-    profile: Optional[str] = None,
+    profile: str | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
 ) -> StreamableHttpTransport:
@@ -93,9 +93,9 @@ def create_transport_with_sigv4(
     """
 
     def client_factory(
-        headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[httpx.Timeout] = None,
-        auth: Optional[httpx.Auth] = None,
+        headers: dict[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
+        auth: httpx.Auth | None = None,
         **kw,
     ) -> httpx.AsyncClient:
         return create_sigv4_client(
@@ -117,7 +117,7 @@ def create_transport_with_sigv4(
     )
 
 
-def get_service_name_and_region_from_endpoint(endpoint: str) -> Tuple[str, str]:
+def get_service_name_and_region_from_endpoint(endpoint: str) -> tuple[str, str]:
     """Extract service name and region from an endpoint URL.
 
     Args:
@@ -154,7 +154,7 @@ def get_service_name_and_region_from_endpoint(endpoint: str) -> Tuple[str, str]:
             return '', ''
 
 
-def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
+def determine_service_name(endpoint: str, service: str | None = None) -> str:
     """Validate and determine the service name and possibly region from an endpoint.
 
     Args:
@@ -183,7 +183,7 @@ def determine_service_name(endpoint: str, service: Optional[str] = None) -> str:
     return determined_service
 
 
-def determine_signing_region(endpoint: str, region: Optional[str]) -> str:
+def determine_signing_region(endpoint: str, region: str | None) -> str:
     """Determine the AWS region to use for SigV4 signing.
 
     The signature's credential scope must match the endpoint's region, so the
@@ -220,7 +220,7 @@ def determine_signing_region(endpoint: str, region: Optional[str]) -> str:
     )
 
 
-def determine_aws_region(endpoint: str, profile: Optional[str] = None) -> str:
+def determine_aws_region(endpoint: str, profile: str | None = None) -> str:
     """Determine the AWS region the backend should operate in (injected as AWS_REGION metadata).
 
     Resolution order matches the AWS CLI and boto3: the profile/environment
@@ -258,7 +258,7 @@ def determine_aws_region(endpoint: str, profile: Optional[str] = None) -> str:
     )
 
 
-def within_range(min_value: float, max_value: Optional[float] = None):
+def within_range(min_value: float, max_value: float | None = None):
     """Factory function to create range validators.
 
     Args:

@@ -14,11 +14,10 @@
 
 import logging
 import mcp.types as mt
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import Tool, ToolResult
-from typing import Sequence
 
 
 class ToolFilteringMiddleware(Middleware):

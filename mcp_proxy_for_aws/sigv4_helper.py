@@ -23,11 +23,12 @@ import time
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials, ProcessProvider
+from collections.abc import Generator
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.context import get_client_info
-from typing import Any, Dict, Generator, Optional
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ _patch_default_role_session_name()
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})
 
 
-def _sanitize_headers(headers: Dict[str, str]) -> Dict[str, str]:
+def _sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
     """Redact sensitive header values for safe logging.
 
     Args:
@@ -154,7 +155,7 @@ class SigV4HTTPXAuth(httpx.Auth):
         yield request
 
 
-def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
+def create_aws_session(profile: str | None = None) -> boto3.Session:
     """Create an AWS session with optional profile.
 
     Args:
@@ -177,10 +178,10 @@ def create_aws_session(profile: Optional[str] = None) -> boto3.Session:
 def create_sigv4_client(
     service: str,
     region: str,
-    profile: Optional[str] = None,
-    timeout: Optional[httpx.Timeout] = None,
-    headers: Optional[Dict[str, str]] = None,
-    metadata: Optional[Dict[str, Any]] = None,
+    profile: str | None = None,
+    timeout: httpx.Timeout | None = None,
+    headers: dict[str, str] | None = None,
+    metadata: dict[str, Any] | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
     **kwargs: Any,
@@ -294,7 +295,7 @@ async def _handle_error_response(response: httpx.Response) -> None:
 async def _sign_request_hook(
     region: str,
     service: str,
-    profile: Optional[str],
+    profile: str | None,
     skip_auth: bool,
     request: httpx.Request,
 ) -> None:
@@ -337,7 +338,7 @@ async def _sign_request_hook(
     logger.debug('Request headers after signing: %s', _sanitize_headers(dict(request.headers)))
 
 
-async def _inject_metadata_hook(metadata: Dict[str, Any], request: httpx.Request) -> None:
+async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request) -> None:
     """Request hook to inject metadata into MCP calls.
 
     Args:

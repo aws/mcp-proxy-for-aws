@@ -38,7 +38,7 @@ class AWSMCPProxyClient(StatefulProxyClient):
         """Enter as normal && initialize only once."""
         logger.debug('Connecting %s', self)
         try:
-            result = await super(AWSMCPProxyClient, self)._connect()
+            result = await super()._connect()
             logger.debug('Connected %s', self)
             return result
         except httpx.HTTPStatusError as http_error:
