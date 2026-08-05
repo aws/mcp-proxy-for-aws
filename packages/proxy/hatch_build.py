@@ -34,7 +34,7 @@ on an end user's machine.
 """
 
 import re
-import subprocess
+import subprocess  # nosec B404 - only used to run a fixed `uv export` argv (shell=False)
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 from hatchling.metadata.plugin.interface import MetadataHookInterface
 from pathlib import Path
@@ -107,7 +107,7 @@ def _export_runtime_closure(workspace_root: Path) -> list[str]:
         '--no-header',
     ]
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        completed = subprocess.run(  # noqa: S603  # nosec B603 fixed argv, no shell
             command,
             cwd=workspace_root,
             capture_output=True,
