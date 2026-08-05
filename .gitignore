@@ -68,6 +68,9 @@ build
 # PyPI
 .pypirc
 
+# Pins baked into the mcp-proxy-for-aws sdist at build time (derived from uv.lock)
+packages/proxy/_runtime_pins.txt
+
 # Documentation
 /doc/_apidoc/
 
