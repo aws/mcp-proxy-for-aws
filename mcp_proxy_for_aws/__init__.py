@@ -18,4 +18,8 @@ from importlib.metadata import version as _metadata_version
 
 
 __all__ = ['__version__']
-__version__ = _metadata_version('mcp-proxy-for-aws')
+
+# This module is distributed by `mcp-proxy-for-aws-lib`. The `mcp-proxy-for-aws`
+# distribution is a metadata-only wrapper that pins this one, so its version is
+# always identical; look up the distribution that actually installs this module.
+__version__ = _metadata_version('mcp-proxy-for-aws-lib')

@@ -1,14 +1,17 @@
-[tool.uv]
-exclude-newer = "P3D"
-prerelease = "allow"
-
 [tool.uv.workspace]
 members = [
     "examples/mcp-client/*"
 ]
+# The pinned wrapper (packages/proxy) is deliberately NOT a workspace member. Its
+# dependencies are dynamic and derived from this workspace's lock file at build time, so
+# including it would make `uv lock` build the wrapper's metadata from the very lock file
+# it is trying to write. See packages/proxy/hatch_build.py.
+exclude = [
+    "packages/proxy"
+]
 
 [project]
-name = "mcp-proxy-for-aws"
+name = "mcp-proxy-for-aws-lib"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
 version = "1.6.4"
@@ -50,6 +53,11 @@ changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/CHANGELOG.md"
 [dependency-groups]
 dev = [
     "commitizen>=4.2.2",
+    # Build backend, needed in the dev environment to unit-test packages/proxy's
+    # build hooks (which import hatchling's plugin interfaces).
+    "hatchling>=1.27.0",
+    # tomllib backport, for tests that read pyproject.toml on Python 3.10.
+    "tomli>=2.0.0; python_full_version < '3.11'",
     "pre-commit>=4.1.0",
     "ruff>=0.9.7",
     "pyright>=1.1.398",
@@ -130,7 +138,7 @@ log_cli_level = "INFO"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-testpaths = [ "tests"]
+testpaths = [ "tests", "packages/proxy/tests"]
 asyncio_mode = "auto"
 markers = [
     "live: marks tests that make live API calls (deselect with '-m \"not live\"')",
