@@ -216,7 +216,12 @@ class TestSdistPinsBuildHook:
     def test_writes_and_force_includes_pins_for_sdist(self, tmp_path: Path) -> None:
         """Building an sdist generates the pins file and ships it at the root."""
         hook = SdistPinsBuildHook(
-            str(PROJECT_ROOT), {}, {}, None, str(tmp_path), 'sdist'  # type: ignore[arg-type]
+            str(PROJECT_ROOT),
+            {},
+            {},
+            None,
+            str(tmp_path),
+            'sdist',  # type: ignore[arg-type]
         )
         build_data: dict = {}
         try:
@@ -233,7 +238,12 @@ class TestSdistPinsBuildHook:
     def test_does_nothing_for_wheel_target(self, tmp_path: Path) -> None:
         """Wheels get their pins through the metadata hook, so nothing is bundled."""
         hook = SdistPinsBuildHook(
-            str(tmp_path), {}, {}, None, str(tmp_path), 'wheel'  # type: ignore[arg-type]
+            str(tmp_path),
+            {},
+            {},
+            None,
+            str(tmp_path),
+            'wheel',  # type: ignore[arg-type]
         )
         build_data: dict = {}
         hook.initialize('standard', build_data)
