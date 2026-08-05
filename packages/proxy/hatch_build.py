@@ -35,10 +35,10 @@ on an end user's machine.
 
 import re
 import subprocess
-from pathlib import Path
-from typing import Any, ClassVar
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 from hatchling.metadata.plugin.interface import MetadataHookInterface
+from pathlib import Path
+from typing import Any, ClassVar
 
 
 #: Name of the distribution that actually contains the code.
@@ -63,6 +63,7 @@ def _reject_prereleases(pins: list[str]) -> list[str]:
             'Re-lock without pre-releases (`uv lock`) and rebuild.'
         )
     return pins
+
 
 #: Pin list baked into the sdist so that from-sdist builds need neither uv nor the
 #: workspace. Relative to the wrapper's project root.
