@@ -29,6 +29,9 @@ The pins are never hand-maintained. They are a deterministic projection of the w
 * Building from the wrapper's sdist reads `_runtime_pins.txt`, which the sdist build hook
   bakes in. This keeps sdist builds working without `uv` and without the workspace.
 
+The lock takes precedence whenever it is reachable; the baked file is strictly a fallback
+for the context that has no workspace.
+
 Published *wheels* carry fully static `Requires-Dist` metadata, so these hooks never run
 on an end user's machine.
 """
@@ -53,7 +56,13 @@ _PRERELEASE_RE = re.compile(
 
 
 def _reject_prereleases(pins: list[str]) -> list[str]:
-    """Fail the build if any pin is a pre-release; otherwise return the pins unchanged."""
+    """Fail the build if any pin is a pre-release; otherwise return the pins unchanged.
+
+    This is a release-blocking guard by design: an uninstallable published wrapper is worse
+    than a failed build. If a dependency's constraints ever force a pre-release into the
+    lock, the fix is to hold that bump (or wait for the stable release), not to relax the
+    guard -- see the `[tool.uv]` note in the root `pyproject.toml`.
+    """
     offenders = [p for p in pins if _PRERELEASE_RE.search(p.split(';', 1)[0])]
     if offenders:
         raise RuntimeError(
@@ -73,6 +82,28 @@ _PINS_HEADER = (
     '# Generated at build time from the workspace uv.lock. Do not edit.\n'
     f'# Exact runtime closure of {LIB_NAME}, used to pin mcp-proxy-for-aws.\n'
 )
+
+
+def _expected_workspace_root(project_root: Path) -> Path:
+    """Return where the workspace root should be for a given wrapper project root.
+
+    Positional by design -- in the repository the wrapper lives at
+    `<workspace>/packages/proxy` -- and the caller verifies the lock is actually there.
+    Verification matters because neither failure mode is self-announcing: a non-existent
+    directory surfaces from `subprocess` as a `FileNotFoundError` indistinguishable from
+    "uv is not installed", and a directory that merely sits in the wrong place can still
+    succeed, since uv discovers workspaces by walking *up* from its working directory and
+    would quietly resolve against whichever lock it finds first.
+
+    Args:
+        project_root: The wrapper's project root (the directory holding its pyproject).
+
+    Returns:
+        The directory expected to contain the workspace `uv.lock`.
+    """
+    resolved = project_root.resolve()
+    parents = resolved.parents
+    return parents[1] if len(parents) > 1 else resolved
 
 
 def _export_runtime_closure(workspace_root: Path) -> list[str]:
@@ -115,6 +146,8 @@ def _export_runtime_closure(workspace_root: Path) -> list[str]:
             check=True,
         )
     except FileNotFoundError as exc:
+        # The caller has already proved `cwd` holds a lock, so the only file left to be
+        # missing is the `uv` executable itself.
         raise RuntimeError(
             'Cannot pin mcp-proxy-for-aws: `uv` was not found on PATH and no '
             f'{BAKED_PINS_FILENAME} was bundled. Install uv to build from the repository.'
@@ -149,17 +182,34 @@ def _read_baked_pins(path: Path) -> list[str]:
 def resolve_runtime_pins(project_root: Path) -> list[str]:
     """Resolve the library's runtime pins for whichever build context we are in.
 
+    Precedence is deliberate: the workspace lock wins whenever it is reachable, and
+    `_runtime_pins.txt` is only a fallback for the context that has no workspace (a build
+    from the wrapper's sdist). The other way round, a leftover pins file -- an ordinary,
+    gitignored by-product of any earlier sdist build -- would silently outrank the lock and
+    freeze a release against stale pins with no error at all.
+
     Args:
         project_root: The wrapper's project root (the directory holding its pyproject).
 
     Returns:
         The exact runtime closure of the library, with environment markers preserved.
+
+    Raises:
+        RuntimeError: If neither the workspace lock nor bundled pins are available.
     """
+    workspace_root = _expected_workspace_root(project_root)
+    if (workspace_root / 'uv.lock').is_file():
+        return _reject_prereleases(_export_runtime_closure(workspace_root))
+
     baked = project_root / BAKED_PINS_FILENAME
     if baked.is_file():
         return _reject_prereleases(_read_baked_pins(baked))
-    # In the repo the wrapper lives at <workspace>/packages/proxy.
-    return _reject_prereleases(_export_runtime_closure(project_root.resolve().parents[1]))
+
+    raise RuntimeError(
+        'Cannot pin mcp-proxy-for-aws: found neither the workspace lock at '
+        f'{workspace_root / "uv.lock"} nor bundled pins at {baked}. Build the wrapper from '
+        'a full repository checkout, or from its sdist.'
+    )
 
 
 class PinnedDependenciesMetadataHook(MetadataHookInterface):
@@ -195,10 +245,11 @@ class SdistPinsBuildHook(BuildHookInterface):
         """
         if self.target_name != 'sdist':
             return
+        # Always regenerate: reusing an existing file would let a by-product of an earlier
+        # build decide what a later one ships.
         pins_path = Path(self.root) / BAKED_PINS_FILENAME
-        if not pins_path.is_file():
-            pins_path.write_text(
-                _PINS_HEADER + '\n'.join(resolve_runtime_pins(Path(self.root))) + '\n',
-                encoding='utf-8',
-            )
+        pins_path.write_text(
+            _PINS_HEADER + '\n'.join(resolve_runtime_pins(Path(self.root))) + '\n',
+            encoding='utf-8',
+        )
         build_data.setdefault('force_include', {})[str(pins_path)] = BAKED_PINS_FILENAME

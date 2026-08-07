@@ -28,6 +28,13 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "Etc/UTC"
+    # Supply-chain cooldown: don't adopt a release until it has been public for a few days,
+    # so a compromised upload has time to be yanked before it reaches our lock (and, via
+    # the build-time pin hook, the published mcp-proxy-for-aws wrapper). This is the right
+    # home for the cooldown; `[tool.uv] exclude-newer` only accepts a fixed date, not a
+    # rolling window, so it cannot express this.
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: "chore(deps): update uv"
     groups:
@@ -60,6 +67,9 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "Etc/UTC"
+    # See the cooldown note on the `uv` ecosystem above.
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: "chore(deps): update pip"
     groups:

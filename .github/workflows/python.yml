@@ -80,6 +80,14 @@ jobs:
       - name: Build package
         run: uv build
 
+      # The wrapper is outside the uv workspace, so the step above does not build it. Build
+      # it here so a release cannot be the first thing to run the pin hook: this is what
+      # catches a stale uv.lock, an empty export, or a pre-release in the runtime closure.
+      # `-o dist` so the wrapper joins the library in the uploaded distribution artifact
+      # (`uv build <path>` would otherwise default to packages/proxy/dist).
+      - name: Build the pinned wrapper package
+        run: uv build packages/proxy -o dist
+
       - name: Upload distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
