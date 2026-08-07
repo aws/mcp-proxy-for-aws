@@ -58,6 +58,17 @@ def _names(pins: list[str]) -> set[str]:
     return {pin.split('==')[0].strip().lower() for pin in pins}
 
 
+def _wrapper_root_in_fake_workspace(tmp_path: Path) -> Path:
+    """Return a wrapper project root laid out inside a throwaway workspace with a lock.
+
+    The lock only has to exist: these tests stub out the `uv export` that would read it.
+    """
+    (tmp_path / 'uv.lock').write_text('', encoding='utf-8')
+    project = tmp_path / 'packages' / 'proxy'
+    project.mkdir(parents=True)
+    return project
+
+
 @pytest.fixture(scope='module')
 def repo_pins() -> list[str]:
     """The runtime pins derived from the repository's committed uv.lock."""
@@ -127,29 +138,66 @@ class TestResolveRuntimePins:
         assert resolve_runtime_pins(PROJECT_ROOT) == resolve_runtime_pins(PROJECT_ROOT)
 
     @pytest.mark.unit
-    def test_prefers_baked_pins_when_present(self, tmp_path: Path) -> None:
+    def test_prefers_baked_pins_when_there_is_no_workspace(self, tmp_path: Path) -> None:
         """A bundled pins file is used verbatim, without invoking uv.
 
-        This is the from-sdist path, where there is no workspace to export from.
+        This is the from-sdist path: the project has no workspace lock above it.
         """
-        (tmp_path / BAKED_PINS_FILENAME).write_text(
+        project = tmp_path / 'packages' / 'proxy'
+        project.mkdir(parents=True)
+        (project / BAKED_PINS_FILENAME).write_text(
             '# generated\nboto3==1.2.3\ncolorama==0.4.6 ; sys_platform == "win32"\n',
             encoding='utf-8',
         )
         with patch('hatch_build.subprocess.run') as mock_run:
-            pins = resolve_runtime_pins(tmp_path)
+            pins = resolve_runtime_pins(project)
         mock_run.assert_not_called()
         assert pins == ['boto3==1.2.3', 'colorama==0.4.6 ; sys_platform == "win32"']
+
+    @pytest.mark.unit
+    def test_workspace_lock_outranks_a_leftover_pins_file(self, tmp_path: Path) -> None:
+        """The lock wins whenever it is reachable, even if a pins file is lying around.
+
+        `_runtime_pins.txt` is a gitignored by-product of any earlier sdist build, so it is
+        routinely present in a working tree. If it outranked the lock, a build would ship
+        those stale pins -- silently, and with no way to tell from the artifact.
+        """
+        (tmp_path / 'uv.lock').write_text('', encoding='utf-8')
+        project = tmp_path / 'packages' / 'proxy'
+        project.mkdir(parents=True)
+        (project / BAKED_PINS_FILENAME).write_text('boto3==0.0.1\n', encoding='utf-8')
+        completed = subprocess.CompletedProcess(['uv'], 0, stdout='boto3==1.2.3\n', stderr='')
+
+        with patch('hatch_build.subprocess.run', return_value=completed) as mock_run:
+            pins = resolve_runtime_pins(project)
+
+        mock_run.assert_called_once()
+        assert pins == ['boto3==1.2.3']
 
 
 class TestResolveRuntimePinsFailures:
     """A build must fail loudly rather than emit an unpinned wrapper."""
 
     @pytest.mark.unit
-    def test_raises_when_uv_export_fails(self, tmp_path: Path) -> None:
-        """A failing `uv export` (for example a stale lock) surfaces uv's message."""
+    def test_raises_when_neither_lock_nor_baked_pins_exist(self, tmp_path: Path) -> None:
+        """A partial checkout names both missing inputs instead of blaming a missing uv.
+
+        Without the check they are indistinguishable: `subprocess` reports a non-existent
+        `cwd` as `FileNotFoundError`, exactly as it reports an absent executable.
+        """
         project = tmp_path / 'packages' / 'proxy'
         project.mkdir(parents=True)
+        with (
+            patch('hatch_build.subprocess.run') as mock_run,
+            pytest.raises(RuntimeError, match='found neither the workspace lock'),
+        ):
+            resolve_runtime_pins(project)
+        mock_run.assert_not_called()
+
+    @pytest.mark.unit
+    def test_raises_when_uv_export_fails(self, tmp_path: Path) -> None:
+        """A failing `uv export` (for example a stale lock) surfaces uv's message."""
+        project = _wrapper_root_in_fake_workspace(tmp_path)
         error = subprocess.CalledProcessError(2, ['uv'], stderr='the lockfile is outdated')
         with (
             patch('hatch_build.subprocess.run', side_effect=error),
@@ -160,8 +208,7 @@ class TestResolveRuntimePinsFailures:
     @pytest.mark.unit
     def test_raises_when_uv_is_unavailable(self, tmp_path: Path) -> None:
         """No uv and no bundled pins is an error, not an empty dependency list."""
-        project = tmp_path / 'packages' / 'proxy'
-        project.mkdir(parents=True)
+        project = _wrapper_root_in_fake_workspace(tmp_path)
         with (
             patch('hatch_build.subprocess.run', side_effect=FileNotFoundError),
             pytest.raises(RuntimeError, match='uv'),
@@ -175,8 +222,7 @@ class TestResolveRuntimePinsFailures:
         Observed for real: `uv export --frozen` can succeed while returning nothing useful,
         which would otherwise ship a wrapper that pins only the library.
         """
-        project = tmp_path / 'packages' / 'proxy'
-        project.mkdir(parents=True)
+        project = _wrapper_root_in_fake_workspace(tmp_path)
         completed = subprocess.CompletedProcess(['uv'], 0, stdout='# comment only\n', stderr='')
         with (
             patch('hatch_build.subprocess.run', return_value=completed),
@@ -214,25 +260,29 @@ class TestSdistPinsBuildHook:
 
     @pytest.mark.unit
     def test_writes_and_force_includes_pins_for_sdist(self, tmp_path: Path) -> None:
-        """Building an sdist generates the pins file and ships it at the root."""
+        """Building an sdist generates the pins file and ships it at the root.
+
+        The hook writes into its *root*, so the root is a throwaway directory here. Using
+        the real project root would drop `_runtime_pins.txt` into the working tree, and an
+        interrupted run would leave it there -- where `resolve_runtime_pins` prefers it over
+        the lock and would silently freeze every later build against stale pins.
+        """
         hook = SdistPinsBuildHook(
-            str(PROJECT_ROOT),
+            str(tmp_path),  # root: where the pins file is written
             {},
             {},
             None,
-            str(tmp_path),
+            str(tmp_path / 'dist'),  # directory: build output, unused by this hook
             'sdist',  # type: ignore[arg-type]
         )
         build_data: dict = {}
-        try:
+        with patch('hatch_build.resolve_runtime_pins', return_value=['boto3==1.2.3']):
             hook.initialize('standard', build_data)
-            pins_path = PROJECT_ROOT / BAKED_PINS_FILENAME
 
-            assert pins_path.is_file()
-            assert build_data['force_include'][str(pins_path)] == BAKED_PINS_FILENAME
-            assert 'boto3==' in pins_path.read_text(encoding='utf-8')
-        finally:
-            (PROJECT_ROOT / BAKED_PINS_FILENAME).unlink(missing_ok=True)
+        pins_path = tmp_path / BAKED_PINS_FILENAME
+        assert pins_path.is_file()
+        assert build_data['force_include'][str(pins_path)] == BAKED_PINS_FILENAME
+        assert 'boto3==1.2.3' in pins_path.read_text(encoding='utf-8')
 
     @pytest.mark.unit
     def test_does_nothing_for_wheel_target(self, tmp_path: Path) -> None:

@@ -42,8 +42,16 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      - name: Build distribution packages
+      # Mirrors the real release workflow: the pinned wrapper sits outside the uv
+      # workspace, so `uv build` alone would silently produce only the library. See the
+      # comment in pypi-publish-on-release.yml.
+      - name: Build the library distribution
         run: uv build
+
+      # `-o dist` is required: `uv build <path>` defaults to <path>/dist, which the later
+      # attestation/upload/publish steps (all globbing ./dist) would skip.
+      - name: Build the pinned wrapper distribution
+        run: uv build packages/proxy -o dist
 
       - name: Generate SLSA provenance attestations
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -79,5 +87,14 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      - name: Publish to TestPyPI
-        run: uv publish --publish-url https://test.pypi.org/legacy/
+      # Library first: the wrapper pins `mcp-proxy-for-aws-lib==<version>`, so the reverse
+      # order leaves the wrapper briefly unresolvable. See pypi-publish-on-release.yml.
+      - name: Publish the library to TestPyPI
+        run: |
+          uv publish --publish-url https://test.pypi.org/legacy/ \
+            dist/mcp_proxy_for_aws_lib-*.tar.gz dist/mcp_proxy_for_aws_lib-*.whl
+
+      - name: Publish the pinned wrapper to TestPyPI
+        run: |
+          uv publish --publish-url https://test.pypi.org/legacy/ \
+            dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
