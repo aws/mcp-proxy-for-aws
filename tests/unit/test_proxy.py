@@ -237,3 +237,23 @@ async def test_proxy_client_max_connect_retry_default():
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
     assert client._max_connect_retry == 3
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_connect_credential_error():
+    """Test connection converts RuntimeError wrapping credential ValueError to McpError."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport)
+
+    credential_error = ValueError(
+        'No AWS credentials available. Configure credentials or use --skip-auth to send unsigned requests.'
+    )
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = credential_error
+
+    with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
+        with pytest.raises(McpError) as exc_info:
+            await client._connect()
+        assert exc_info.value.error.code == -32603
+        assert 'credentials' in exc_info.value.error.message.lower()
+        assert '--skip-auth' in exc_info.value.error.message

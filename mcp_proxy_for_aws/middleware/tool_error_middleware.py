@@ -84,5 +84,7 @@ class ToolErrorMiddleware(Middleware):
                 403,
             ):
                 return True
+            if isinstance(current, ValueError) and 'credentials' in str(current).lower():
+                return True
             current = current.__cause__ or current.__context__
         return False

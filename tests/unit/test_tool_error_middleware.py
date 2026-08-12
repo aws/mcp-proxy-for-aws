@@ -156,3 +156,17 @@ class TestToolErrorMiddleware:
         with pytest.raises(ToolError) as exc_info:
             await middleware.on_call_tool(context, call_next)
         assert '--profile' not in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_credential_error_from_missing_credentials_valueerror(self):
+        """ValueError about missing credentials is recognised as a credential error."""
+        middleware = _make_middleware()
+        call_next = AsyncMock(
+            side_effect=ValueError(
+                'No AWS credentials available. Configure credentials or use --skip-auth.'
+            )
+        )
+        context = _make_context()
+
+        with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
+            await middleware.on_call_tool(context, call_next)
