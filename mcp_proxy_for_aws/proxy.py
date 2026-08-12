@@ -61,6 +61,13 @@ class AWSMCPProxyClient(StatefulProxyClient):
             if isinstance(e.__cause__, McpError):
                 raise e.__cause__
 
+            if isinstance(e.__cause__, ValueError) and 'credentials' in str(e.__cause__).lower():
+                from mcp.types import INTERNAL_ERROR, ErrorData
+
+                raise McpError(
+                    error=ErrorData(code=INTERNAL_ERROR, message=str(e.__cause__)),
+                ) from e
+
             if retry > self._max_connect_retry:
                 raise e
 
