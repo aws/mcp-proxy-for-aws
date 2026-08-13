@@ -6,9 +6,9 @@ dependencies = [
     "langchain",
     "langchain-aws",
     "langchain-mcp-adapters",
-    "mcp-proxy-for-aws",
+    "mcp-proxy-for-aws-lib",
     "python-dotenv",
 ]
 
 [tool.uv.sources]
-mcp-proxy-for-aws = { workspace = true }
+mcp-proxy-for-aws-lib = { workspace = true }
