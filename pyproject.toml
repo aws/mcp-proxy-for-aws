@@ -1,10 +1,29 @@
-[tool.uv]
-exclude-newer = "P3D"
-prerelease = "allow"
+# NOTE: there is deliberately no `[tool.uv]` table here.
+#
+# It previously held `exclude-newer = "P3D"` and `prerelease = "allow"`, and both were
+# inert: `exclude-newer` only accepts a fixed date, so `"P3D"` failed to parse and uv
+# discarded the *whole* table along with it -- including the `prerelease` setting.
+#
+# Neither should come back:
+#   * The supply-chain cooldown now lives in `.github/dependabot.yml` (`cooldown`), which
+#     can express a rolling window.
+#   * Allowing pre-releases must stay off. `packages/proxy` pins this project's exact
+#     runtime closure, and a pinned pre-release makes that wrapper uninstallable without
+#     `--prerelease=allow`, which `uvx`/`pip` users cannot pass. The build hook enforces
+#     this, so re-enabling the setting turns a pre-release in the lock into a failed
+#     release. Dependencies that only publish pre-releases (the `agent-framework*` example
+#     tree) still resolve without it, because their own constraints demand them.
 
 [tool.uv.workspace]
 members = [
     "examples/mcp-client/*"
+]
+# The pinned wrapper (packages/proxy) is deliberately NOT a workspace member. Its
+# dependencies are dynamic and derived from this workspace's lock file at build time, so
+# including it would make `uv lock` build the wrapper's metadata from the very lock file
+# it is trying to write. See packages/proxy/hatch_build.py.
+exclude = [
+    "packages/proxy"
 ]
 
 [project]
@@ -40,9 +59,9 @@ classifiers = [
 ]
 
 [project.urls]
-documentation = "https://github.com/aws/aws-mcp-proxy/blob/main/README.md"
+documentation = "https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md"
 repository = "https://github.com/aws/mcp-proxy-for-aws.git"
-changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/CHANGELOG.md"
+changelog = "https://github.com/aws/mcp-proxy-for-aws/blob/main/CHANGELOG.md"
 
 [project.scripts]
 "mcp-proxy-for-aws" = "mcp_proxy_for_aws.server:main"
@@ -50,6 +69,11 @@ changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/CHANGELOG.md"
 [dependency-groups]
 dev = [
     "commitizen>=4.2.2",
+    # Build backend, needed in the dev environment to unit-test packages/proxy's
+    # build hooks (which import hatchling's plugin interfaces).
+    "hatchling>=1.27.0",
+    # tomllib backport, for tests that read pyproject.toml on Python 3.10.
+    "tomli>=2.0.0; python_full_version < '3.11'",
     "pre-commit>=4.1.0",
     "ruff>=0.9.7",
     "pyright>=1.1.398",
@@ -112,9 +136,15 @@ exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build
 name = "cz_conventional_commits"
 version_provider = "uv"
 tag_format = "v$version"
+# The pinned wrapper `mcp-proxy-for-aws-cli` must move in lockstep: its metadata pins
+# `mcp-proxy-for-aws` to its own version, so a wrapper left behind at the previous version
+# would pin a release that this bump has just superseded. A unit test asserts they match.
+#
+# `mcp_proxy_for_aws/__init__.py` is deliberately absent: `__version__` now reads the
+# installed distribution's metadata instead of carrying a literal to rewrite.
 version_files = [
     "pyproject.toml:version",
-    "mcp_proxy_for_aws/__init__.py:__version__"
+    "packages/proxy/pyproject.toml:version"
 ]
 update_changelog_on_bump = true
 
@@ -130,7 +160,7 @@ log_cli_level = "INFO"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-testpaths = [ "tests"]
+testpaths = [ "tests", "packages/proxy/tests"]
 asyncio_mode = "auto"
 markers = [
     "live: marks tests that make live API calls (deselect with '-m \"not live\"')",
