@@ -1,13 +1,13 @@
 # MCP Proxy for AWS (version-pinned distribution)
 
-`mcp-proxy-for-aws` is the distribution to install for **CLI and `uvx` use**. It contains no
+`mcp-proxy-for-aws-cli` is the distribution to install for **CLI and `uvx` use**. It contains no
 code of its own: it is a thin wrapper that depends on
-[`mcp-proxy-for-aws-lib`](https://pypi.org/project/mcp-proxy-for-aws-lib/) — which owns the
+[`mcp-proxy-for-aws`](https://pypi.org/project/mcp-proxy-for-aws/) — which owns the
 implementation — and pins that library **plus its entire runtime dependency tree** to exact
 versions.
 
 ```bash
-uvx mcp-proxy-for-aws@latest <SigV4 MCP endpoint URL>
+uvx mcp-proxy-for-aws-cli@latest <SigV4 MCP endpoint URL>
 ```
 
 Because every transitive dependency is pinned with `==`, a given release always installs the
@@ -21,10 +21,10 @@ same tree and cannot silently pick up a newer release of a transitive dependency
 
 | Use case | Install | Dependencies |
 |---|---|---|
-| CLI / `uvx` / MCP client config | `mcp-proxy-for-aws` | Exact `==` pins (frozen tree) |
-| Importing from your own application | `mcp-proxy-for-aws-lib` | Loose ranges, co-resolvable |
+| CLI / `uvx` / MCP client config | `mcp-proxy-for-aws-cli` | Exact `==` pins (frozen tree) |
+| Importing from your own application | `mcp-proxy-for-aws` | Loose ranges, co-resolvable |
 
-Install `mcp-proxy-for-aws-lib` if you import `mcp_proxy_for_aws` in your own project, so that
+Install `mcp-proxy-for-aws` if you import `mcp_proxy_for_aws` in your own project, so that
 its dependencies can resolve alongside yours. The import name is `mcp_proxy_for_aws` for both
 distributions.
 

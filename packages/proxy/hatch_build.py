@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Build hooks that pin `mcp-proxy-for-aws` to the exact runtime tree in `uv.lock`.
+"""Build hooks that pin `mcp-proxy-for-aws-cli` to the exact runtime tree in `uv.lock`.
 
-`mcp-proxy-for-aws` is a metadata-only wrapper around `mcp-proxy-for-aws-lib`. The
+`mcp-proxy-for-aws-cli` is a metadata-only wrapper around `mcp-proxy-for-aws`. The
 library declares loose ranges so that programmatic users can co-resolve it with their own
 dependencies; the wrapper declares the entire runtime closure as `==` pins so that
-`uvx mcp-proxy-for-aws@<version>` installs a frozen tree and cannot silently adopt a
+`uvx mcp-proxy-for-aws-cli@<version>` installs a frozen tree and cannot silently adopt a
 newer -- possibly compromised -- release of a transitive dependency.
 
 The pins are never hand-maintained. They are a deterministic projection of the workspace
@@ -45,11 +45,11 @@ from typing import Any, ClassVar
 
 
 #: Name of the distribution that actually contains the code.
-LIB_NAME = 'mcp-proxy-for-aws-lib'
+LIB_NAME = 'mcp-proxy-for-aws'
 
 #: Matches a PEP 440 pre-release/dev segment in a `name==version` pin (before any marker).
 #: A pinned pre-release makes the wrapper uninstallable without `--prerelease=allow`,
-#: which end users of `uvx mcp-proxy-for-aws` cannot pass.
+#: which end users of `uvx mcp-proxy-for-aws-cli` cannot pass.
 _PRERELEASE_RE = re.compile(
     r'==\s*[0-9][0-9.]*\s*(?:a|b|rc|alpha|beta|dev|pre)[0-9]*', re.IGNORECASE
 )
@@ -66,7 +66,7 @@ def _reject_prereleases(pins: list[str]) -> list[str]:
     offenders = [p for p in pins if _PRERELEASE_RE.search(p.split(';', 1)[0])]
     if offenders:
         raise RuntimeError(
-            'Refusing to build mcp-proxy-for-aws: the pinned runtime closure contains '
+            'Refusing to build mcp-proxy-for-aws-cli: the pinned runtime closure contains '
             'pre-release versions, which make the wrapper uninstallable without '
             f'`--prerelease=allow` (which uvx/pip users cannot pass): {offenders}. '
             'Re-lock without pre-releases (`uv lock`) and rebuild.'
@@ -80,7 +80,7 @@ BAKED_PINS_FILENAME = '_runtime_pins.txt'
 
 _PINS_HEADER = (
     '# Generated at build time from the workspace uv.lock. Do not edit.\n'
-    f'# Exact runtime closure of {LIB_NAME}, used to pin mcp-proxy-for-aws.\n'
+    f'# Exact runtime closure of {LIB_NAME}, used to pin mcp-proxy-for-aws-cli.\n'
 )
 
 
@@ -149,14 +149,14 @@ def _export_runtime_closure(workspace_root: Path) -> list[str]:
         # The caller has already proved `cwd` holds a lock, so the only file left to be
         # missing is the `uv` executable itself.
         raise RuntimeError(
-            'Cannot pin mcp-proxy-for-aws: `uv` was not found on PATH and no '
+            'Cannot pin mcp-proxy-for-aws-cli: `uv` was not found on PATH and no '
             f'{BAKED_PINS_FILENAME} was bundled. Install uv to build from the repository.'
         ) from exc
     except subprocess.CalledProcessError as exc:
         # Most often a stale lock: `uv export --frozen` refuses to run when uv.lock does
         # not match the manifests. Surface uv's own message rather than a bare exit code.
         raise RuntimeError(
-            'Cannot pin mcp-proxy-for-aws: `uv export` failed in '
+            'Cannot pin mcp-proxy-for-aws-cli: `uv export` failed in '
             f'{workspace_root}. Run `uv lock` and rebuild.\n{exc.stderr.strip()}'
         ) from exc
 
@@ -165,7 +165,7 @@ def _export_runtime_closure(workspace_root: Path) -> list[str]:
         # Never publish a wrapper with an empty or partial pin set: that would silently
         # ship an unpinned package, which is precisely what this package exists to avoid.
         raise RuntimeError(
-            f'Cannot pin mcp-proxy-for-aws: `uv export` returned no pins for {LIB_NAME}.'
+            f'Cannot pin mcp-proxy-for-aws-cli: `uv export` returned no pins for {LIB_NAME}.'
         )
     return pins
 
@@ -206,7 +206,7 @@ def resolve_runtime_pins(project_root: Path) -> list[str]:
         return _reject_prereleases(_read_baked_pins(baked))
 
     raise RuntimeError(
-        'Cannot pin mcp-proxy-for-aws: found neither the workspace lock at '
+        'Cannot pin mcp-proxy-for-aws-cli: found neither the workspace lock at '
         f'{workspace_root / "uv.lock"} nor bundled pins at {baked}. Build the wrapper from '
         'a full repository checkout, or from its sdist.'
     )

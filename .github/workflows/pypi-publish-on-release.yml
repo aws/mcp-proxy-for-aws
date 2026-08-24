@@ -117,19 +117,19 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      # Order matters. The wrapper's metadata contains `mcp-proxy-for-aws-lib==<version>`,
-      # so publishing the wrapper first opens a window in which `uvx mcp-proxy-for-aws`
-      # resolves the wrapper and then fails to find the library it pins.
+      # Order matters. The wrapper's metadata contains `mcp-proxy-for-aws==<version>`,
+      # so publishing the wrapper first opens a window in which `uvx mcp-proxy-for-aws-cli`
+      # resolves the wrapper and then fails to find the code package it pins.
       #
       # The globs list only distributions: `pypi-attestations` wrote `.publish.attestation`
       # sidecars into dist/, and uv discovers those itself rather than taking them as
-      # inputs. `mcp_proxy_for_aws-*` does not match `mcp_proxy_for_aws_lib-*` (the
+      # inputs. `mcp_proxy_for_aws-*` does not match `mcp_proxy_for_aws_cli-*` (the
       # separator after `aws` differs), so the two steps stay disjoint.
-      - name: Publish the library to PyPI
-        run: uv publish dist/mcp_proxy_for_aws_lib-*.tar.gz dist/mcp_proxy_for_aws_lib-*.whl
+      - name: Publish the code package to PyPI
+        run: uv publish dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
 
       - name: Publish the pinned wrapper to PyPI
-        run: uv publish dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
+        run: uv publish dist/mcp_proxy_for_aws_cli-*.tar.gz dist/mcp_proxy_for_aws_cli-*.whl
 
   trigger-ecr-publish:
     needs: [build, deploy]

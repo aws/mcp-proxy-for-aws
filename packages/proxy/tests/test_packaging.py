@@ -72,11 +72,11 @@ def _single(directory: Path, pattern: str) -> Path:
 
 
 class TestLibraryDistribution:
-    """`mcp-proxy-for-aws-lib` owns the code."""
+    """`mcp-proxy-for-aws` owns the code."""
 
     def test_wheel_contains_the_importable_module(self, built_distributions: Path) -> None:
         """Guards uv#7227: a name/package mismatch can silently ship an empty wheel."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws_lib-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
         with zipfile.ZipFile(wheel) as archive:
             modules = [n for n in archive.namelist() if n.startswith('mcp_proxy_for_aws/')]
 
@@ -85,7 +85,7 @@ class TestLibraryDistribution:
 
     def test_dependencies_stay_loose(self, built_distributions: Path) -> None:
         """Library users must be able to co-resolve it with their own dependencies."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws_lib-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
         requirements = _requires_dist(wheel)
 
         assert requirements
@@ -93,20 +93,20 @@ class TestLibraryDistribution:
 
 
 class TestWrapperDistribution:
-    """`mcp-proxy-for-aws` is a metadata-only pinned wrapper."""
+    """`mcp-proxy-for-aws-cli` is a metadata-only pinned wrapper."""
 
     def test_wheel_ships_no_modules(self, built_distributions: Path) -> None:
         """All code comes from the library; the wrapper is metadata plus an entry point."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.whl')
         with zipfile.ZipFile(wheel) as archive:
             names = archive.namelist()
 
-        assert not [n for n in names if not n.startswith('mcp_proxy_for_aws-')]
+        assert not [n for n in names if not n.startswith('mcp_proxy_for_aws_cli-')]
         assert any(n.endswith('entry_points.txt') for n in names)
 
     def test_wheel_pins_the_entire_runtime_tree(self, built_distributions: Path) -> None:
         """Every dependency is an exact pin, so a release installs a frozen tree."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.whl')
         requirements = _requires_dist(wheel)
 
         # The library's runtime closure is ~83 packages plus the library itself.
@@ -118,20 +118,20 @@ class TestWrapperDistribution:
         self, built_distributions: Path
     ) -> None:
         """The wrapper and library are released in lockstep."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.whl')
         version = wheel.name.split('-')[1]
 
-        assert f'mcp-proxy-for-aws-lib=={version}' in _requires_dist(wheel)
+        assert f'mcp-proxy-for-aws=={version}' in _requires_dist(wheel)
 
     def test_wheel_preserves_environment_markers(self, built_distributions: Path) -> None:
         """Platform-specific pins keep their markers rather than applying everywhere."""
-        wheel = _single(built_distributions, 'mcp_proxy_for_aws-*.whl')
+        wheel = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.whl')
 
         assert [r for r in _requires_dist(wheel) if ';' in r]
 
     def test_sdist_bundles_the_derived_pins(self, built_distributions: Path) -> None:
         """The sdist carries its pins so it does not need uv or the workspace."""
-        sdist = _single(built_distributions, 'mcp_proxy_for_aws-*.tar.gz')
+        sdist = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.tar.gz')
         with tarfile.open(sdist) as archive:
             names = archive.getnames()
 
@@ -149,13 +149,13 @@ class TestBuildFromSdist:
         This exercises the baked-pins path: no workspace above the project and no uv to
         export from, which is how a from-sdist install would build the wrapper.
         """
-        sdist = _single(built_distributions, 'mcp_proxy_for_aws-*.tar.gz')
-        expected = _requires_dist(_single(built_distributions, 'mcp_proxy_for_aws-*.whl'))
+        sdist = _single(built_distributions, 'mcp_proxy_for_aws_cli-*.tar.gz')
+        expected = _requires_dist(_single(built_distributions, 'mcp_proxy_for_aws_cli-*.whl'))
 
         extracted = tmp_path / 'src'
         with tarfile.open(sdist) as archive:
             archive.extractall(extracted)  # noqa: S202 - our own freshly built artifact
-        project = _single(extracted, 'mcp_proxy_for_aws-*')
+        project = _single(extracted, 'mcp_proxy_for_aws_cli-*')
 
         uv = shutil.which('uv')
         assert uv, 'uv is required to run this test'

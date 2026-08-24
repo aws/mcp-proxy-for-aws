@@ -1,19 +1,19 @@
-# `mcp-proxy-for-aws` is a metadata-only wrapper: it ships no code of its own and exists
-# to pin `mcp-proxy-for-aws-lib` (which owns the code) together with the library's entire
+# `mcp-proxy-for-aws-cli` is a metadata-only wrapper: it ships no code of its own and exists
+# to pin `mcp-proxy-for-aws` (which owns the code) together with the library's entire
 # runtime closure at exact `==` versions. The pins are derived from the workspace uv.lock
 # at build time by hatch_build.py, so there is no pin list to maintain by hand.
 #
 # CLI / uvx users install this package and get a frozen tree.
-# Library users install `mcp-proxy-for-aws-lib` and get loose, co-resolvable ranges.
+# Library users install `mcp-proxy-for-aws` and get loose, co-resolvable ranges.
 #
 # NOTE: this package is intentionally excluded from the uv workspace (see the root
 # pyproject) because its dependencies are dynamic and derived from uv.lock.
 
 [project]
-name = "mcp-proxy-for-aws"
+name = "mcp-proxy-for-aws-cli"
 
-# Kept in lockstep with mcp-proxy-for-aws-lib by commitizen; the derived metadata pins
-# `mcp-proxy-for-aws-lib` to exactly this version.
+# Kept in lockstep with mcp-proxy-for-aws by commitizen; the derived metadata pins
+# `mcp-proxy-for-aws` to exactly this version.
 version = "1.6.4"
 
 description = "MCP Proxy for AWS (version-pinned CLI distribution)"
@@ -46,9 +46,9 @@ documentation = "https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md"
 repository = "https://github.com/aws/mcp-proxy-for-aws.git"
 changelog = "https://github.com/aws/mcp-proxy-for-aws/blob/main/CHANGELOG.md"
 
-# Resolves via the module shipped by mcp-proxy-for-aws-lib.
+# Resolves via the module shipped by mcp-proxy-for-aws.
 [project.scripts]
-"mcp-proxy-for-aws" = "mcp_proxy_for_aws.server:main"
+"mcp-proxy-for-aws-cli" = "mcp_proxy_for_aws.server:main"
 
 [build-system]
 requires = ["hatchling"]

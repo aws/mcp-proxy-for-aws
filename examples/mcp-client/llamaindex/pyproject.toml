@@ -6,9 +6,9 @@ dependencies = [
     "llama-index",
     "llama-index-llms-openai",
     "llama-index-tools-mcp",
-    "mcp-proxy-for-aws-lib",
+    "mcp-proxy-for-aws",
     "python-dotenv",
 ]
 
 [tool.uv.sources]
-mcp-proxy-for-aws-lib = { workspace = true }
+mcp-proxy-for-aws = { workspace = true }

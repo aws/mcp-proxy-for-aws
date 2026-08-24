@@ -87,14 +87,14 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      # Library first: the wrapper pins `mcp-proxy-for-aws-lib==<version>`, so the reverse
+      # Code package first: the wrapper pins `mcp-proxy-for-aws==<version>`, so the reverse
       # order leaves the wrapper briefly unresolvable. See pypi-publish-on-release.yml.
-      - name: Publish the library to TestPyPI
+      - name: Publish the code package to TestPyPI
         run: |
           uv publish --publish-url https://test.pypi.org/legacy/ \
-            dist/mcp_proxy_for_aws_lib-*.tar.gz dist/mcp_proxy_for_aws_lib-*.whl
+            dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
 
       - name: Publish the pinned wrapper to TestPyPI
         run: |
           uv publish --publish-url https://test.pypi.org/legacy/ \
-            dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
+            dist/mcp_proxy_for_aws_cli-*.tar.gz dist/mcp_proxy_for_aws_cli-*.whl

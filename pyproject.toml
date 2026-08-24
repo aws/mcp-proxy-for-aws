@@ -27,7 +27,7 @@ exclude = [
 ]
 
 [project]
-name = "mcp-proxy-for-aws-lib"
+name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
 version = "1.6.4"
@@ -59,9 +59,9 @@ classifiers = [
 ]
 
 [project.urls]
-documentation = "https://github.com/aws/aws-mcp-proxy/blob/main/README.md"
+documentation = "https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md"
 repository = "https://github.com/aws/mcp-proxy-for-aws.git"
-changelog = "https://github.com/aws/aws-mcp-proxy/blob/main/CHANGELOG.md"
+changelog = "https://github.com/aws/mcp-proxy-for-aws/blob/main/CHANGELOG.md"
 
 [project.scripts]
 "mcp-proxy-for-aws" = "mcp_proxy_for_aws.server:main"
@@ -136,9 +136,9 @@ exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build
 name = "cz_conventional_commits"
 version_provider = "uv"
 tag_format = "v$version"
-# The wrapper must move in lockstep: its metadata pins `mcp-proxy-for-aws-lib` to its own
-# version, so a wrapper left behind at the previous version would pin a library release
-# that this bump has just superseded. A unit test asserts the two versions match.
+# The pinned wrapper `mcp-proxy-for-aws-cli` must move in lockstep: its metadata pins
+# `mcp-proxy-for-aws` to its own version, so a wrapper left behind at the previous version
+# would pin a release that this bump has just superseded. A unit test asserts they match.
 #
 # `mcp_proxy_for_aws/__init__.py` is deliberately absent: `__version__` now reads the
 # installed distribution's metadata instead of carrying a literal to rewrite.
