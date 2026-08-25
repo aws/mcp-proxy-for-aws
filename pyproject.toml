@@ -1,12 +1,13 @@
 # NOTE: there is deliberately no `[tool.uv]` table here.
 #
-# It previously held `exclude-newer = "P3D"` and `prerelease = "allow"`, and both were
-# inert: `exclude-newer` only accepts a fixed date, so `"P3D"` failed to parse and uv
-# discarded the *whole* table along with it -- including the `prerelease` setting.
-#
-# Neither should come back:
-#   * The supply-chain cooldown now lives in `.github/dependabot.yml` (`cooldown`), which
-#     can express a rolling window.
+# It previously held `exclude-newer = "P3D"` and `prerelease = "allow"`. Neither should
+# come back:
+#   * The supply-chain cooldown is configured in `.github/dependabot.yml` (`cooldown`).
+#     Recent uv can also express a rolling window here, via `exclude-newer` with a
+#     duration (e.g. "P3D" / "3 days"). We keep it in Dependabot instead because older uv
+#     only accepts a fixed RFC 3339 date and, on seeing a duration, silently drops this
+#     whole table (a warning, then it keeps going) -- and the repo pins no uv version --
+#     so a contributor on an older uv would quietly lose these settings.
 #   * Allowing pre-releases must stay off. `packages/proxy` pins this project's exact
 #     runtime closure, and a pinned pre-release makes that wrapper uninstallable without
 #     `--prerelease=allow`, which `uvx`/`pip` users cannot pass. The build hook enforces

@@ -30,9 +30,10 @@ updates:
       timezone: "Etc/UTC"
     # Supply-chain cooldown: don't adopt a release until it has been public for a few days,
     # so a compromised upload has time to be yanked before it reaches our lock (and, via
-    # the build-time pin hook, the published mcp-proxy-for-aws wrapper). This is the right
-    # home for the cooldown; `[tool.uv] exclude-newer` only accepts a fixed date, not a
-    # rolling window, so it cannot express this.
+    # the build-time pin hook, the published mcp-proxy-for-aws wrapper). We keep the
+    # cooldown here rather than in uv's `exclude-newer` so it is independent of the uv
+    # version resolving the lock: recent uv can express a rolling window via an
+    # `exclude-newer` duration, but older uv rejects durations and silently drops the setting.
     cooldown:
       default-days: 3
     commit-message:
