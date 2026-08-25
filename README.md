@@ -61,10 +61,10 @@ For CLI and `uvx` use, install **`mcp-proxy-for-aws-cli`**. It is a thin, versio
 
 ```bash
 # Run the server (pinned CLI distribution)
-uvx mcp-proxy-for-aws-cli@1.7.0 <SigV4 MCP endpoint URL>
+uvx mcp-proxy-for-aws-cli@latest <SigV4 MCP endpoint URL>
 ```
 
-**Note:** It is recommended to pin to a specific version (e.g., `@1.7.0`) to ensure reproducible behavior. Using `@latest` may pull in breaking changes. Check [PyPI](https://pypi.org/project/mcp-proxy-for-aws-cli/) for the latest stable version.
+**Note:** Because `mcp-proxy-for-aws-cli` pins its entire dependency tree inside the package, even `@latest` installs a tested, frozen set. Check [PyPI](https://pypi.org/project/mcp-proxy-for-aws-cli/) for available versions.
 
 **Note:** The first run may take tens of seconds as `uvx` downloads and caches dependencies. Subsequent runs will start in seconds. Actual startup time depends on your network and hardware.
 
@@ -174,7 +174,7 @@ AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws-cli https:/
   "mcpServers": {
     "aws": {
       "command": "uvx",
-      "args": ["mcp-proxy-for-aws-cli@1.7.0", "https://aws-mcp.us-east-1.api.aws/mcp"],
+      "args": ["mcp-proxy-for-aws-cli@latest", "https://aws-mcp.us-east-1.api.aws/mcp"],
       "env": {
         "AWS_MCP_PROXY_PROFILES": "prod-readonly dev staging"
       }
@@ -439,7 +439,7 @@ If your MCP client hangs waiting for a tool call response (e.g., due to an unres
 By default, the proxy signs all outgoing requests with [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) using your local AWS credentials. If you need to connect to an MCP endpoint that does not require SigV4 credentials (e.g., a local development server or a publicly accessible endpoint), use the `--skip-auth` flag:
 
 ```bash
-uvx mcp-proxy-for-aws-cli@1.7.0 https://my-endpoint.example.com/mcp --skip-auth
+uvx mcp-proxy-for-aws-cli@latest https://my-endpoint.example.com/mcp --skip-auth
 ```
 
 When `--skip-auth` is set, the proxy sends requests without signing them if AWS credentials are unavailable. If credentials _are_ available, requests are still signed as usual — the flag only changes behavior when credentials cannot be resolved.

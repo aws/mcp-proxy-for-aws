@@ -151,6 +151,15 @@ update_changelog_on_bump = true
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_proxy_for_aws"]
 
+# The code package's sdist otherwise bundles the whole working tree. Keep the
+# sibling wrapper project (packages/proxy) and local planning notes (.agents)
+# out of it.
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "packages",
+    ".agents",
+]
+
 [tool.bandit]
 exclude_dirs = ["venv", ".venv", "tests"]
 
