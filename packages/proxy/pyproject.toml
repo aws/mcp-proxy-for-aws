@@ -1,0 +1,75 @@
+# `mcp-proxy-for-aws-cli` is a metadata-only wrapper: it ships no code of its own and exists
+# to pin `mcp-proxy-for-aws` (which owns the code) together with the library's entire
+# runtime closure at exact `==` versions. The pins are derived from the workspace uv.lock
+# at build time by hatch_build.py, so there is no pin list to maintain by hand.
+#
+# CLI / uvx users install this package and get a frozen tree.
+# Library users install `mcp-proxy-for-aws` and get loose, co-resolvable ranges.
+#
+# NOTE: this package is intentionally excluded from the uv workspace (see the root
+# pyproject) because its dependencies are dynamic and derived from uv.lock.
+
+[project]
+name = "mcp-proxy-for-aws-cli"
+
+# Kept in lockstep with mcp-proxy-for-aws by commitizen; the derived metadata pins
+# `mcp-proxy-for-aws` to exactly this version.
+version = "1.6.4"
+
+description = "MCP Proxy for AWS (version-pinned CLI distribution)"
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+
+# Filled in at build time from uv.lock by hatch_build.py.
+dynamic = ["dependencies"]
+
+license = {text = "Apache-2.0"}
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    {name = "Amazon Web Services"},
+    {name = "MCP Proxy for AWS"},
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+documentation = "https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md"
+repository = "https://github.com/aws/mcp-proxy-for-aws.git"
+changelog = "https://github.com/aws/mcp-proxy-for-aws/blob/main/CHANGELOG.md"
+
+# Resolves via the module shipped by mcp-proxy-for-aws.
+[project.scripts]
+"mcp-proxy-for-aws-cli" = "mcp_proxy_for_aws.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+# This package deliberately contains no Python module of its own, which Hatchling cannot
+# infer; bypass its file-selection heuristics to build a metadata-only wheel.
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "hatch_build.py",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+]
