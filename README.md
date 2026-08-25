@@ -31,14 +31,10 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 - Add MCP servers on AWS to your AI assistant's configuration
 - Use a command-line tool that runs as a bridge between your MCP client and AWS
 
-→ Install **`mcp-proxy-for-aws-cli`**, the version-pinned CLI distribution: it freezes the entire dependency tree to tested versions. See [MCP Proxy](#mcp-proxy).
-
 **Use as a library if you want to:**
 - Build AI agents programmatically using popular frameworks like LangChain, Strands Agents, or LlamaIndex
 - Integrate AWS IAM-secured MCP servers directly into your Python applications
 - Have fine-grained control over the MCP session lifecycle in your code
-
-→ Install **`mcp-proxy-for-aws`**, the library distribution: it keeps loose, co-resolvable dependency ranges so it resolves alongside your own dependencies. See [Programmatic Access](#programmatic-access).
 
 ## Prerequisites
 
@@ -57,14 +53,12 @@ The MCP Proxy serves as a lightweight, client-side bridge between MCP clients (A
 
 #### Using PyPi
 
-For CLI and `uvx` use, install **`mcp-proxy-for-aws-cli`**. It is a thin, version-pinned distribution: it freezes the proxy's entire transitive dependency tree to tested versions, so a fresh install cannot silently pull in a newer — possibly compromised — release of a dependency. (The unsuffixed `mcp-proxy-for-aws` is the library distribution with loose, co-resolvable ranges, for importing `mcp_proxy_for_aws` in your own code — see [Programmatic Access](#programmatic-access).)
-
 ```bash
-# Run the server (pinned CLI distribution)
-uvx mcp-proxy-for-aws-cli@latest <SigV4 MCP endpoint URL>
+# Run the server
+uvx mcp-proxy-for-aws@1.6.0 <SigV4 MCP endpoint URL>
 ```
 
-**Note:** Because `mcp-proxy-for-aws-cli` pins its entire dependency tree inside the package, even `@latest` installs a tested, frozen set. Check [PyPI](https://pypi.org/project/mcp-proxy-for-aws-cli/) for available versions.
+**Note:** It is recommended to pin to a specific version (e.g., `@1.6.0`) to ensure reproducible behavior. Using `@latest` may pull in breaking changes. Check [PyPI](https://pypi.org/project/mcp-proxy-for-aws/) for the latest stable version.
 
 **Note:** The first run may take tens of seconds as `uvx` downloads and caches dependencies. Subsequent runs will start in seconds. Actual startup time depends on your network and hardware.
 
@@ -153,10 +147,10 @@ The proxy supports per-call AWS profile switching, allowing agents to work acros
 
 ```bash
 # Via CLI flag (first profile is default, rest are switchable)
-mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp --profile prod-readonly dev staging
+mcp-proxy-for-aws https://aws-mcp.us-east-1.api.aws/mcp --profile prod-readonly dev staging
 
 # Via environment variable (same behavior, for plugin integration)
-AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp
+AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws https://aws-mcp.us-east-1.api.aws/mcp
 ```
 
 **How it works:**
@@ -174,7 +168,7 @@ AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws-cli https:/
   "mcpServers": {
     "aws": {
       "command": "uvx",
-      "args": ["mcp-proxy-for-aws-cli@latest", "https://aws-mcp.us-east-1.api.aws/mcp"],
+      "args": ["mcp-proxy-for-aws@1.6.0", "https://aws-mcp.us-east-1.api.aws/mcp"],
       "env": {
         "AWS_MCP_PROXY_PROFILES": "prod-readonly dev staging"
       }
@@ -400,8 +394,6 @@ uv run main.py
 
 ### Installation
 
-For programmatic/library use, install **`mcp-proxy-for-aws`** — the distribution with loose, co-resolvable dependency ranges. (For CLI/`uvx` use, install `mcp-proxy-for-aws-cli` instead, which pins the whole dependency tree — see [MCP Proxy](#mcp-proxy).)
-
 The client library is included when you install the package:
 
 ```bash
@@ -439,7 +431,7 @@ If your MCP client hangs waiting for a tool call response (e.g., due to an unres
 By default, the proxy signs all outgoing requests with [SigV4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html) using your local AWS credentials. If you need to connect to an MCP endpoint that does not require SigV4 credentials (e.g., a local development server or a publicly accessible endpoint), use the `--skip-auth` flag:
 
 ```bash
-uvx mcp-proxy-for-aws-cli@latest https://my-endpoint.example.com/mcp --skip-auth
+uvx mcp-proxy-for-aws@1.6.0 https://my-endpoint.example.com/mcp --skip-auth
 ```
 
 When `--skip-auth` is set, the proxy sends requests without signing them if AWS credentials are unavailable. If credentials _are_ available, requests are still signed as usual — the flag only changes behavior when credentials cannot be resolved.

@@ -33,8 +33,8 @@ RUN yum update -y && \
     groupadd -r app && \
     useradd -r -g app -d /app app
 
-# Install mcp-proxy-for-aws-cli (pinned, frozen tree) from PyPI
-RUN python3.13 -m pip install mcp-proxy-for-aws-cli
+# Install mcp-proxy-for-aws from PyPI
+RUN python3.13 -m pip install mcp-proxy-for-aws
 
 # Get healthcheck script
 COPY ./docker-healthcheck.sh /usr/local/bin/docker-healthcheck.sh
@@ -46,4 +46,4 @@ USER app
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 CMD ["docker-healthcheck.sh"]
 
 # Application entrypoint
-ENTRYPOINT ["mcp-proxy-for-aws-cli"]
+ENTRYPOINT ["mcp-proxy-for-aws"]
