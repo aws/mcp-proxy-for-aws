@@ -68,8 +68,19 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      - name: Build distribution packages
+      # Two distributions are released from this one commit: the library (which holds the
+      # code) and the metadata-only `mcp-proxy-for-aws` wrapper that pins the library's
+      # exact runtime closure. The wrapper is deliberately outside the uv workspace -- its
+      # dependencies are derived from uv.lock at build time -- so neither `uv build` nor
+      # `uv build --all-packages` can see it. It needs its own invocation.
+      - name: Build the library distribution
         run: uv build
+
+      # `-o dist` is required, not cosmetic: `uv build <path>` defaults to <path>/dist, so
+      # without it the wrapper lands in packages/proxy/dist and every later step here
+      # (attestations, upload, publish) silently skips it -- they all glob ./dist.
+      - name: Build the pinned wrapper distribution
+        run: uv build packages/proxy -o dist
 
       - name: Generate SLSA provenance attestations
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -106,8 +117,19 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
 
-      - name: Publish to PyPI
-        run: uv publish
+      # Order matters. The wrapper's metadata contains `mcp-proxy-for-aws==<version>`,
+      # so publishing the wrapper first opens a window in which `uvx mcp-proxy-for-aws-cli`
+      # resolves the wrapper and then fails to find the code package it pins.
+      #
+      # The globs list only distributions: `pypi-attestations` wrote `.publish.attestation`
+      # sidecars into dist/, and uv discovers those itself rather than taking them as
+      # inputs. `mcp_proxy_for_aws-*` does not match `mcp_proxy_for_aws_cli-*` (the
+      # separator after `aws` differs), so the two steps stay disjoint.
+      - name: Publish the code package to PyPI
+        run: uv publish dist/mcp_proxy_for_aws-*.tar.gz dist/mcp_proxy_for_aws-*.whl
+
+      - name: Publish the pinned wrapper to PyPI
+        run: uv publish dist/mcp_proxy_for_aws_cli-*.tar.gz dist/mcp_proxy_for_aws_cli-*.whl
 
   trigger-ecr-publish:
     needs: [build, deploy]
