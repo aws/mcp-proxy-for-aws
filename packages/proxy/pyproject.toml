@@ -14,7 +14,7 @@ name = "mcp-proxy-for-aws-cli"
 
 # Kept in lockstep with mcp-proxy-for-aws by commitizen; the derived metadata pins
 # `mcp-proxy-for-aws` to exactly this version.
-version = "1.6.4"
+version = "1.6.5"
 
 description = "MCP Proxy for AWS (version-pinned CLI distribution)"
 readme = "README.md"

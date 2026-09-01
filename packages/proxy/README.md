@@ -1,21 +1,40 @@
 # MCP Proxy for AWS (version-pinned distribution)
 
-This is a thin, metadata-only wrapper that pins
-[`mcp-proxy-for-aws`](https://pypi.org/project/mcp-proxy-for-aws/) and its entire runtime
-dependency tree to exact versions, intended for CLI and `uvx` use. It contains no code of its
-own; the implementation lives in `mcp-proxy-for-aws`.
+`mcp-proxy-for-aws-cli` is the distribution to install for **CLI and `uvx` use**. It contains no
+code of its own: it is a thin wrapper that depends on
+[`mcp-proxy-for-aws`](https://pypi.org/project/mcp-proxy-for-aws/) — which owns the
+implementation — and pins that library **plus its entire runtime dependency tree** to exact
+versions.
 
-> **Not currently published.** This pinned distribution is not available on PyPI yet. For CLI
-> and `uvx` use today, install [`mcp-proxy-for-aws`](https://pypi.org/project/mcp-proxy-for-aws/)
-> and see the [project README](https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md) for
-> configuration, authentication, and usage.
+```bash
+uvx mcp-proxy-for-aws-cli@latest <SigV4 MCP endpoint URL>
+```
 
-The import name is `mcp_proxy_for_aws`. The pins are derived at build time from the `uv.lock`
-committed at the release tag, so they are reproducible from the repository.
+Because every transitive dependency is pinned with `==`, a given release always installs the
+same tree and cannot silently pick up a newer release of a transitive dependency.
 
 > **Scope of the guarantee:** this is *version pinning, not hash verification*. It prevents
 > automatic adoption of a newer (possibly compromised) release; it does not cryptographically
 > verify the installed artifacts.
+
+## Which package should I install?
+
+| Use case | Install | Dependencies |
+|---|---|---|
+| CLI / `uvx` / MCP client config | `mcp-proxy-for-aws-cli` | Exact `==` pins (frozen tree) |
+| Importing from your own application | `mcp-proxy-for-aws` | Loose ranges, co-resolvable |
+
+Install `mcp-proxy-for-aws` if you import `mcp_proxy_for_aws` in your own project, so that
+its dependencies can resolve alongside yours. The import name is `mcp_proxy_for_aws` for both
+distributions.
+
+The pins shipped here are derived at build time from the `uv.lock` committed at the release
+tag, so they are reproducible from the repository.
+
+## Documentation
+
+See the [project README](https://github.com/aws/mcp-proxy-for-aws/blob/main/README.md) for
+configuration, authentication, and usage.
 
 ## License
 

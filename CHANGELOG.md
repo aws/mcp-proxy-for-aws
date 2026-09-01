@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.6.5 (2026-09-01)
+
+### Added
+
+- ship a version-pinned CLI distribution (mcp-proxy-for-aws-cli) (#392)
+- **ci**: Add SLSA provenance attestations to PyPI release workflow (#365)
+
+### Fixed
+
+- surface credential error message during initialization (#385)
+- allow AWS_REGION override for credentials (#376)
+- add exclude-newer to pyproject.toml (#369)
+
 ## v1.6.4 (2026-07-20)
 
 ### Fixed
