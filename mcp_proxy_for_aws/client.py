@@ -23,6 +23,7 @@ from functools import partial
 from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
+from mcp_proxy_for_aws.mcp1_compat import _translate_http_error_hook
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
 from mcp_proxy_for_aws.utils import validate_endpoint_url
 
@@ -128,6 +129,9 @@ def aws_iam_streamablehttp_client(
         timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
     )
     http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)
+
+    # Temporary mcp 1.x plumbing, see mcp_proxy_for_aws.mcp1_compat. Remove with that module.
+    http_client.event_hooks.setdefault('response', []).append(_translate_http_error_hook)
 
     # Append metadata injection hook if metadata is provided
     if metadata:
