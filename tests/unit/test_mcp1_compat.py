@@ -100,17 +100,6 @@ async def test_response_body_is_quoted_in_the_error_message():
     assert 'upstream blew up' in parse_body(response).error.message
 
 
-async def test_long_response_body_is_truncated():
-    """A large error body cannot be pasted wholesale into the error message."""
-    response = build_response(500, b'x' * 5000)
-
-    await _translate_http_error_hook(response)
-
-    message = parse_body(response).error.message
-    assert '... (truncated)' in message
-    assert len(message) < 1000
-
-
 async def test_unreadable_body_still_produces_an_error():
     """A body that cannot be read must not stop the caller from being told the status."""
     response = build_response(502, b'')

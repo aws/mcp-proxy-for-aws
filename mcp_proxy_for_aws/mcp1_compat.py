@@ -40,8 +40,6 @@ from mcp.types import ErrorData, JSONRPCError, JSONRPCMessage
 
 logger = logging.getLogger(__name__)
 
-_MAX_BODY_CHARS = 500
-
 
 async def _translate_http_error_hook(response: httpx.Response) -> None:
     """Answer a failed POST with a JSON-RPC error keyed to the id the caller waits on.
@@ -96,17 +94,14 @@ def _outgoing_jsonrpc_message(request: httpx.Request) -> dict | None:
 
 
 async def _read_failure_detail(response: httpx.Response) -> str:
-    """Read what the endpoint said about the failure, capped at a length safe to pass on."""
+    """Read what the endpoint said about the failure."""
     try:
         body = await response.aread()
     except Exception as e:
         logger.debug('Could not read body of HTTP %d response: %s', response.status_code, e)
         return ''
 
-    detail = body.decode('utf-8', errors='replace').strip()
-    if len(detail) > _MAX_BODY_CHARS:
-        return f'{detail[:_MAX_BODY_CHARS]}... (truncated)'
-    return detail
+    return body.decode('utf-8', errors='replace').strip()
 
 
 def _answer_pending_request(response: httpx.Response, request_id: int | str, detail: str) -> None:
