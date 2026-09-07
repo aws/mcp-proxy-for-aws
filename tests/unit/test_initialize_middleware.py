@@ -23,9 +23,9 @@ def create_initialize_request(client_name: str) -> mt.InitializeRequest:
     return mt.InitializeRequest(
         method='initialize',
         params=mt.InitializeRequestParams(
-            protocolVersion='2024-11-05',
+            protocol_version='2024-11-05',
             capabilities=mt.ClientCapabilities(),
-            clientInfo=mt.Implementation(name=client_name, version='1.0'),
+            client_info=mt.Implementation(name=client_name, version='1.0'),
         ),
     )
 
@@ -36,9 +36,9 @@ async def test_on_initialize_connects_client():
     mock_client = Mock()
     mock_client._connect = AsyncMock()
     mock_client.initialize_result = mt.InitializeResult(
-        protocolVersion='2024-11-05',
+        protocol_version='2024-11-05',
         capabilities=mt.ServerCapabilities(),
-        serverInfo=mt.Implementation(name='backend-server', version='2.0'),
+        server_info=mt.Implementation(name='backend-server', version='2.0'),
     )
 
     mock_factory = Mock()
@@ -135,9 +135,9 @@ async def test_on_initialize_overwrites_init_options_with_backend_info():
         logging=mt.LoggingCapability(),
     )
     backend_result = mt.InitializeResult(
-        protocolVersion='2024-11-05',
+        protocol_version='2024-11-05',
         capabilities=backend_capabilities,
-        serverInfo=mt.Implementation(name='backend-mcp', version='3.1'),
+        server_info=mt.Implementation(name='backend-mcp', version='3.1'),
     )
 
     mock_client = Mock()
@@ -179,9 +179,9 @@ async def test_on_initialize_disables_prompts_and_resources():
         resources=mt.ResourcesCapability(),
     )
     backend_result = mt.InitializeResult(
-        protocolVersion='2024-11-05',
+        protocol_version='2024-11-05',
         capabilities=backend_capabilities,
-        serverInfo=mt.Implementation(name='backend', version='1.0'),
+        server_info=mt.Implementation(name='backend', version='1.0'),
     )
 
     mock_client = Mock()
@@ -219,9 +219,9 @@ async def test_on_initialize_skips_overwrite_when_no_session():
     mock_client = Mock()
     mock_client._connect = AsyncMock()
     mock_client.initialize_result = mt.InitializeResult(
-        protocolVersion='2024-11-05',
+        protocol_version='2024-11-05',
         capabilities=mt.ServerCapabilities(),
-        serverInfo=mt.Implementation(name='backend', version='1.0'),
+        server_info=mt.Implementation(name='backend', version='1.0'),
     )
 
     mock_factory = Mock()

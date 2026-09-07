@@ -45,6 +45,6 @@ def configure_logging(level: str | None = None) -> None:
     root_logger.addHandler(console_handler)
 
     # Set httpx logging to WARNING by default to reduce noise
-    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('httpx2').setLevel(logging.WARNING)
     logging.getLogger('httpcore').setLevel(logging.WARNING)
     logging.getLogger('botocore').setLevel(logging.WARNING)

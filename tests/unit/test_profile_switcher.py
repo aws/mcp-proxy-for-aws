@@ -15,7 +15,7 @@
 """Tests for the ProfileOverrideMiddleware."""
 
 import asyncio
-import httpx
+import httpx2
 import pytest
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
@@ -39,7 +39,7 @@ def middleware():
         service='lambda',
         region='us-east-1',
         metadata={'proxy': 'test'},
-        timeout=httpx.Timeout(30),
+        timeout=httpx2.Timeout(30),
         endpoint='https://test.us-east-1.api.aws/mcp',
         disable_telemetry=False,
         skip_auth=False,
@@ -935,7 +935,7 @@ class TestProfileClientTransportParams:
             service='bedrock-agentcore',
             region='eu-west-1',
             metadata={'custom': 'val'},
-            timeout=httpx.Timeout(60),
+            timeout=httpx2.Timeout(60),
             endpoint='https://bedrock-agentcore.eu-west-1.api.aws/mcp',
             disable_telemetry=True,
             skip_auth=True,
@@ -970,7 +970,7 @@ class TestProfileClientTransportParams:
             'bedrock-agentcore',
             'eu-west-1',
             {'AWS_REGION': 'sa-east-1', 'custom': 'val'},
-            httpx.Timeout(60),
+            httpx2.Timeout(60),
             'dev-profile',
             True,
             True,
@@ -985,7 +985,7 @@ class TestProfileClientTransportParams:
             service='lambda',
             region='eu-west-1',
             metadata={'AWS_REGION': 'us-west-2'},
-            timeout=httpx.Timeout(60),
+            timeout=httpx2.Timeout(60),
             endpoint='https://lambda.eu-west-1.api.aws/mcp',
             disable_telemetry=False,
             skip_auth=False,

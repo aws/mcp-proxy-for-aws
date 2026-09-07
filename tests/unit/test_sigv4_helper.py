@@ -14,10 +14,10 @@
 
 """Unit tests for sigv4_helper module."""
 
-import httpx
+import httpx2
 import pytest
 from botocore.credentials import BaseAssumeRoleCredentialFetcher
-from httpx import __version__ as httpx_version
+from httpx2 import __version__ as httpx_version
 from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.sigv4_helper import (
@@ -45,7 +45,9 @@ class TestSigV4HTTPXAuth:
         mock_credentials.token = 'test_token'
 
         # Create a test request
-        request = httpx.Request('GET', 'https://example.com/test', headers={'Host': 'example.com'})
+        request = httpx2.Request(
+            'GET', 'https://example.com/test', headers={'Host': 'example.com'}
+        )
 
         # Create auth instance
         auth = SigV4HTTPXAuth(mock_credentials, 'test-service', 'us-west-2')
@@ -113,7 +115,7 @@ class TestCreateSigv4Client:
     """Test cases for the create_sigv4_client function."""
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_default(self, mock_client_class, mock_get_client_info):
         """Test creating SigV4 client with default parameters."""
         mock_client = Mock()
@@ -131,12 +133,12 @@ class TestCreateSigv4Client:
         # user-agent + metadata + sign hooks
         assert len(call_args[1]['event_hooks']['request']) == 3
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
-        expected_user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+        expected_user_agent = f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}'
         assert call_args[1]['headers']['User-Agent'] == expected_user_agent
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_with_custom_headers(
         self, mock_client_class, mock_get_client_info
     ):
@@ -155,13 +157,13 @@ class TestCreateSigv4Client:
         call_args = mock_client_class.call_args
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
-            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
+            'User-Agent': f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'Custom-Header': 'custom-value',
         }
         assert call_args[1]['headers'] == expected_headers
         assert result == mock_client
 
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_with_custom_service_and_region(self, mock_client_class):
         """Test creating SigV4 client with custom service and region."""
         mock_client = Mock()
@@ -173,7 +175,7 @@ class TestCreateSigv4Client:
 
         assert result == mock_client
 
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_with_kwargs(self, mock_client_class):
         """Test creating SigV4 client with additional kwargs."""
         mock_client = Mock()
@@ -193,7 +195,7 @@ class TestCreateSigv4Client:
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_with_prompt_context(
         self, mock_client_class, mock_get_client_info
     ):
@@ -218,7 +220,7 @@ class TestCreateSigv4Client:
         # Verify headers include both default and prompt-context headers
         expected_headers = {
             'Accept': 'application/json, text/event-stream',
-            'User-Agent': f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}',
+            'User-Agent': f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}',
             'X-MCP-Prompt-Context': 'enabled',
             'Content-Type': 'application/json',
         }
@@ -232,7 +234,7 @@ class TestCreateSigv4Client:
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_user_agent_excludes_client_info_when_telemetry_disabled(
         self, mock_client_class, mock_get_client_info
     ):
@@ -249,13 +251,13 @@ class TestCreateSigv4Client:
 
         call_args = mock_client_class.call_args
         user_agent = call_args[1]['headers']['User-Agent']
-        assert 'python-httpx' in user_agent
+        assert 'python-httpx2' in user_agent
         assert 'mcp-proxy-for-aws' in user_agent
         assert 'my-client' not in user_agent
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_user_agent_includes_client_info_when_telemetry_enabled(
         self, mock_client_class, mock_get_client_info
     ):
@@ -272,13 +274,13 @@ class TestCreateSigv4Client:
 
         call_args = mock_client_class.call_args
         user_agent = call_args[1]['headers']['User-Agent']
-        assert 'python-httpx' in user_agent
+        assert 'python-httpx2' in user_agent
         assert 'mcp-proxy-for-aws' in user_agent
         assert 'my-client/2.0' in user_agent
         assert result == mock_client
 
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     def test_create_sigv4_client_registers_user_agent_request_hook(
         self, mock_client_class, mock_get_client_info
     ):
@@ -300,16 +302,16 @@ class TestSetUserAgentHook:
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info', return_value=None)
     async def test_set_user_agent_hook_without_client_info(self, mock_get_client_info):
         """Hook sets the base User-Agent when no client info is available."""
-        request = httpx.Request('POST', 'https://example.com/mcp')
+        request = httpx2.Request('POST', 'https://example.com/mcp')
 
         await _set_user_agent_hook(False, request)
 
-        expected = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+        expected = f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}'
         assert request.headers['User-Agent'] == expected
 
     @pytest.mark.asyncio
     @patch('mcp_proxy_for_aws.sigv4_helper.get_client_info')
-    @patch('httpx.AsyncClient')
+    @patch('httpx2.AsyncClient')
     async def test_request_hook_reflects_client_info_set_after_construction(
         self, mock_client_class, mock_get_client_info
     ):
@@ -334,7 +336,7 @@ class TestSetUserAgentHook:
 
         # Client info becomes available later (after initialize handshake).
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
-        request = httpx.Request('POST', 'https://example.com/mcp')
+        request = httpx2.Request('POST', 'https://example.com/mcp')
         await user_agent_hook(request)
 
         assert request.headers['User-Agent'].endswith('my-client/2.0')
@@ -344,7 +346,7 @@ class TestSetUserAgentHook:
     async def test_set_user_agent_hook_respects_disable_telemetry(self, mock_get_client_info):
         """Hook omits client info when telemetry is disabled."""
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
-        request = httpx.Request('POST', 'https://example.com/mcp')
+        request = httpx2.Request('POST', 'https://example.com/mcp')
 
         await _set_user_agent_hook(True, request)
 
@@ -355,7 +357,7 @@ class TestSetUserAgentHook:
     async def test_set_user_agent_hook_overwrites_stale_value(self, mock_get_client_info):
         """Hook overwrites a User-Agent already present on the request."""
         mock_get_client_info.return_value = Implementation(name='My Client', version='2.0')
-        request = httpx.Request(
+        request = httpx2.Request(
             'POST',
             'https://example.com/mcp',
             headers={'User-Agent': 'stale/0.0'},

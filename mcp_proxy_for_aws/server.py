@@ -23,7 +23,7 @@ This server provides a unified interface to backend servers by:
 """
 
 import asyncio
-import httpx
+import httpx2
 import logging
 import os
 from fastmcp.server.middleware.error_handling import RetryMiddleware
@@ -95,7 +95,7 @@ async def run_proxy(args) -> None:
         all_profiles[1:],
     )
 
-    timeout = httpx.Timeout(
+    timeout = httpx2.Timeout(
         args.timeout,
         connect=args.connect_timeout,
         read=args.read_timeout,
@@ -175,7 +175,7 @@ def add_profile_override_middleware(
     service: str,
     region: str,
     metadata: dict,
-    timeout: httpx.Timeout,
+    timeout: httpx2.Timeout,
     endpoint: str,
     disable_telemetry: bool = False,
     skip_auth: bool = False,

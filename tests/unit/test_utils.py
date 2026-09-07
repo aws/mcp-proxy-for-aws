@@ -119,7 +119,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
@@ -162,7 +162,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -194,7 +194,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_kwargs_passthrough(self, mock_create_sigv4_client):
         """Test that kwargs are passed through to create_sigv4_client."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'

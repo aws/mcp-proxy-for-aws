@@ -15,7 +15,7 @@
 """Utility functions for the MCP Proxy for AWS."""
 
 import argparse
-import httpx
+import httpx2
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
@@ -71,7 +71,7 @@ def create_transport_with_sigv4(
     service: str,
     region: str,
     metadata: dict[str, Any],
-    custom_timeout: httpx.Timeout,
+    custom_timeout: httpx2.Timeout,
     profile: str | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
@@ -94,10 +94,10 @@ def create_transport_with_sigv4(
 
     def client_factory(
         headers: dict[str, str] | None = None,
-        timeout: httpx.Timeout | None = None,
-        auth: httpx.Auth | None = None,
+        timeout: httpx2.Timeout | None = None,
+        auth: httpx2.Auth | None = None,
         **kw,
-    ) -> httpx.AsyncClient:
+    ) -> httpx2.AsyncClient:
         return create_sigv4_client(
             service=service,
             region=region,

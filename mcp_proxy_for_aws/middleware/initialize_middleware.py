@@ -57,7 +57,7 @@ class InitializeMiddleware(Middleware):
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
-            client_info = context.message.params.clientInfo
+            client_info = context.message.params.client_info
             set_client_info(client_info)
             logger.info(
                 'Captured client_info: name=%s, version=%s', client_info.name, client_info.version

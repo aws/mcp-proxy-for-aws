@@ -17,13 +17,13 @@ import pytest
 from fastmcp import FastMCP
 from fastmcp.client import Client
 from fastmcp.server.middleware import Middleware, MiddlewareContext
-from mcp import McpError
+from mcp import MCPError
 from mcp.types import ErrorData
 
 
 @pytest.mark.asyncio
 async def test_fastmcp_handles_initialize_error_from_middleware():
-    """Test that fastmcp properly handles McpError raised during initialization middleware.
+    """Test that fastmcp properly handles MCPError raised during initialization middleware.
 
     This validates that the fix from https://github.com/jlowin/fastmcp/pull/2531 works,
     ensuring that initialization errors are sent back to the client instead of crashing.
@@ -37,7 +37,9 @@ async def test_fastmcp_handles_initialize_error_from_middleware():
             context: MiddlewareContext[mt.InitializeRequest],
             call_next,
         ):
-            raise McpError(ErrorData(code=-1, message='Initialization failed from middleware'))
+            raise MCPError.from_error_data(
+                ErrorData(code=-1, message='Initialization failed from middleware')
+            )
 
     server = FastMCP('test-server')
     server.add_middleware(InitializeErrorMiddleware())
@@ -47,10 +49,12 @@ async def test_fastmcp_handles_initialize_error_from_middleware():
         """A test tool."""
         return 'success'
 
-    client = Client(server)
+    # mode='legacy' forces the initialize handshake; fastmcp 4 clients default to
+    # 'auto', which negotiates via server/discover and never sends initialize.
+    client = Client(server, mode='legacy')
 
     # The client should receive the error during initialization
-    with pytest.raises(McpError) as exc_info:
+    with pytest.raises(MCPError) as exc_info:
         async with client:
             pass
 
@@ -61,7 +65,7 @@ async def test_fastmcp_handles_initialize_error_from_middleware():
 
 @pytest.mark.asyncio
 async def test_fastmcp_handles_error_after_initialization_completes():
-    """Test that fastmcp handles McpError raised AFTER initialization completes.
+    """Test that fastmcp handles MCPError raised AFTER initialization completes.
 
     This validates that when an error is raised after call_next (when responder is already
     completed), fastmcp logs a warning but doesn't crash. The client receives the successful
@@ -82,7 +86,9 @@ async def test_fastmcp_handles_error_after_initialization_completes():
         ):
             await call_next(context)
             # Raising error after call_next - responder is already completed
-            raise McpError(ErrorData(code=-1, message='Error after initialization'))
+            raise MCPError.from_error_data(
+                ErrorData(code=-1, message='Error after initialization')
+            )
 
     server.add_middleware(PostInitializeErrorMiddleware())
 
@@ -91,7 +97,7 @@ async def test_fastmcp_handles_error_after_initialization_completes():
         """A test tool."""
         return 'success'
 
-    client = Client(server)
+    client = Client(server, mode='legacy')
 
     # Client should still initialize successfully because the error happens after response is sent
     async with client:

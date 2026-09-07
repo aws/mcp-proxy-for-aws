@@ -13,16 +13,15 @@
 # limitations under the License.
 
 import boto3
-import httpx
+import httpx2
 import logging
-from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
 from functools import partial
-from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
+from mcp.client._transport import TransportStreams
+from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
-from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
 from mcp_proxy_for_aws.utils import validate_endpoint_url
 
@@ -43,11 +42,7 @@ def aws_iam_streamablehttp_client(
     terminate_on_close: bool = True,
     httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
 ) -> _AsyncGeneratorContextManager[
-    tuple[
-        MemoryObjectReceiveStream[SessionMessage | Exception],
-        MemoryObjectSendStream[SessionMessage],
-        GetSessionIdCallback,
-    ],
+    TransportStreams,
     None,
 ]:
     """Create an AWS IAM-authenticated MCP streamable HTTP client.
@@ -124,7 +119,7 @@ def aws_iam_streamablehttp_client(
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
     # Create the HTTP client with authentication and configuration
-    httpx_timeout = httpx.Timeout(
+    httpx_timeout = httpx2.Timeout(
         timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
     )
     http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)

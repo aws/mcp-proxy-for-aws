@@ -15,13 +15,13 @@
 """Unit tests for ToolErrorMiddleware."""
 
 import anyio
-import httpx
+import httpx2
 import mcp.types as mt
 import pytest
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools import ToolResult
-from mcp import McpError
+from mcp import MCPError
 from mcp.types import ErrorData
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from unittest.mock import AsyncMock, Mock
@@ -64,7 +64,7 @@ class TestToolErrorMiddleware:
         """Exceptions are caught and raised as ToolError."""
         middleware = _make_middleware()
         call_next = AsyncMock(
-            side_effect=McpError(ErrorData(code=-1, message='Connection closed'))
+            side_effect=MCPError.from_error_data(ErrorData(code=-1, message='Connection closed'))
         )
         context = _make_context()
 
@@ -89,10 +89,10 @@ class TestToolErrorMiddleware:
     async def test_credential_error_suggests_profile(self):
         """Credential errors suggest using long-lived credentials."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
         call_next = AsyncMock(
-            side_effect=httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+            side_effect=httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         )
         context = _make_context()
 
@@ -104,10 +104,10 @@ class TestToolErrorMiddleware:
     async def test_credential_error_on_403(self):
         """403 Forbidden is recognised as a credential error."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 403
         call_next = AsyncMock(
-            side_effect=httpx.HTTPStatusError('Forbidden', request=Mock(), response=response)
+            side_effect=httpx2.HTTPStatusError('Forbidden', request=Mock(), response=response)
         )
         context = _make_context()
 
@@ -118,9 +118,9 @@ class TestToolErrorMiddleware:
     async def test_credential_error_wrapped_in_cause(self):
         """401 wrapped via __cause__ is still detected."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
-        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        inner = httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         outer = RuntimeError('request failed')
         outer.__cause__ = inner
 
@@ -134,9 +134,9 @@ class TestToolErrorMiddleware:
     async def test_credential_error_wrapped_in_context(self):
         """401 wrapped via __context__ (implicit chaining) is still detected."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
-        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        inner = httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         outer = RuntimeError('wrapped')
         outer.__context__ = inner
 

@@ -54,5 +54,5 @@ def test_httpx_logging_level():
     configure_logging()
 
     # Check httpx logger level
-    assert logging.getLogger('httpx').level == logging.WARNING
+    assert logging.getLogger('httpx2').level == logging.WARNING
     assert logging.getLogger('httpcore').level == logging.WARNING
