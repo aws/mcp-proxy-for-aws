@@ -3308,6 +3308,7 @@ dependencies = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
     { name = "fastmcp" },
+    { name = "httpx" },
 ]
 
 [package.dev-dependencies]
@@ -3329,6 +3330,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.41.0" },
     { name = "botocore", extras = ["crt"], specifier = ">=1.41.0" },
     { name = "fastmcp", specifier = ">=3.2,<3.5" },
+    { name = "httpx", specifier = ">=0.27.1,<1.0" },
 ]
 
 [package.metadata.requires-dev]
