@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.7.0 (2026-09-08)
+
+### Feat
+
+- ship a version-pinned CLI distribution (mcp-proxy-for-aws-cli) (#392)
+
+### Fix
+
+- report non-2xx upstream responses to library mode callers (#405)
+- replace call_aws tests with run_script (#404)
+- surface credential error message during initialization (#385)
+
 ## v1.6.5 (2026-09-01)
 
 ### Added
