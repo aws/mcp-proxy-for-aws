@@ -18,6 +18,7 @@ import argparse
 import os
 from collections.abc import Sequence
 from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.sigv4_helper import RESERVED_HEADERS
 from mcp_proxy_for_aws.utils import within_range
 from typing import Any
 
@@ -40,7 +41,7 @@ class KeyValueAction(argparse.Action):
             values: The values to parse (list of key=value strings)
             option_string: The option string that triggered this action
         """
-        metadata: dict[str, str] = {}
+        metadata: dict[str, str] = dict(getattr(namespace, self.dest, None) or {})
         # Ensure values is a sequence
         if values is None:
             # No values provided, set empty dict
@@ -52,7 +53,8 @@ class KeyValueAction(argparse.Action):
 
         for item in values:
             if '=' not in item:
-                parser.error(f'Metadata must be in key=value format, got: {item}')
+                flag = option_string or f'--{self.dest}'
+                parser.error(f'{flag} must be in key=value format, got: {item}')
             key, value = item.split('=', 1)
             metadata[key] = value
         setattr(namespace, self.dest, metadata)
@@ -114,6 +116,17 @@ Examples:
         action=KeyValueAction,
         default=None,
         help='Metadata to inject into MCP requests as key=value pairs (e.g., --metadata AWS_REGION=us-west-2 KEY=VALUE)',
+    )
+
+    parser.add_argument(
+        '--header',
+        nargs='*',
+        action=KeyValueAction,
+        dest='headers',
+        default=None,
+        help='Extra HTTP headers as key=value pairs (e.g., --header x-my-token=abc123). '
+        'Unlike --metadata, these are sent as real HTTP headers and are covered by the '
+        'SigV4 signature. Values are redacted from logs.',
     )
 
     parser.add_argument(
@@ -193,5 +206,12 @@ Examples:
             args.endpoint = args.profiles.pop()
         else:
             parser.error('the following arguments are required: endpoint')
+
+    for name in args.headers or {}:
+        if name.lower() in RESERVED_HEADERS:
+            parser.error(
+                f'--header {name} is not allowed: it is set by SigV4 signing. '
+                f'Reserved headers: {", ".join(sorted(RESERVED_HEADERS))}'
+            )
 
     return args

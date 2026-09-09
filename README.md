@@ -108,6 +108,7 @@ docker build -t mcp-proxy-for-aws .
 | `--profile`	         | AWS profile(s) to use. First profile is the default. Additional profiles enable per-call switching via `aws_profile` tool parameter (e.g., `--profile prod-readonly dev staging`)	| Falls back to `AWS_PROFILE` if `--profile` and `AWS_MCP_PROXY_PROFILES` are not set |No	|
 | `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set	                           |No	|
 | `--metadata`	        | Metadata to inject into MCP requests as key=value pairs (e.g., `--metadata KEY1=value1 KEY2=value2`)                                                                                                                                    | `AWS_REGION` is automatically injected based on `--region` if not provided    |No	|
+| `--header`	          | Extra HTTP headers to send on every request, as key=value pairs (e.g., `--header x-tenant=acme x-trace=abc123`). Sent as real HTTP headers and covered by the SigV4 signature; values are redacted from logs. Headers set by signing (`authorization`, `date`, `x-amz-date`, `x-amz-security-token`) are rejected.                                       | None                                                                        |No	|
 | `--read-only`	       | Disable tools which may require write permissions (tools which DO NOT require write permissions are annotated with [`readOnlyHint=true`](https://modelcontextprotocol.io/specification/2025-06-18/schema#toolannotations-readonlyhint)) | `False`	                                                                    |No	|
 | `--retries`          | Configures number of retries done when calling upstream services, setting this to 0 disables retries.                                                                                                                                   | 0                                                                           |No |
 | `--log-level`	       | Set the logging level (`DEBUG/INFO/WARNING/ERROR/CRITICAL`)	                                                                                                                                                                            | `INFO`	                                                                     |No	|
@@ -305,6 +306,41 @@ mcp_client = aws_iam_streamablehttp_client(
     },
 )
 ```
+
+#### Custom HTTP Headers
+
+Use `--header` (CLI) or `headers=` (library) to send additional HTTP headers on every
+request. Unlike `--metadata`, which travels in the MCP `_meta` field of the request
+body, these are real HTTP headers — use them when the receiving endpoint reads
+headers rather than the message body, such as an
+[Amazon Bedrock AgentCore Gateway](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html)
+configured to forward specific request headers to its target.
+
+```bash
+mcp-proxy-for-aws https://your-endpoint.example.com/mcp \
+  --service bedrock-agentcore --region us-east-1 \
+  --header x-tenant-id=acme
+```
+
+Headers are merged before the request is signed, so they are covered by the SigV4
+signature. Names that SigV4 signing rewrites (`authorization`, `date`, `x-amz-date`,
+`x-amz-security-token`) are rejected, since a value supplied for those would be
+discarded without warning. The values of any headers you supply are redacted from logs.
+
+```python
+from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+
+mcp_client = aws_iam_streamablehttp_client(
+    endpoint=mcp_url,
+    aws_region=region,
+    aws_service=service,
+    headers={'x-tenant-id': 'acme'},
+)
+```
+
+Headers the transport sets itself (`accept`, `content-type`, `mcp-session-id`) can be
+overridden, but doing so may break the connection — streamable HTTP requires specific
+`accept` and `content-type` values.
 
 ### Integration Patterns
 
