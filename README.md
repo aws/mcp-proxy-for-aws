@@ -382,6 +382,31 @@ async with mcp_client as (read, write, session_id_callback):
         agent = ReActAgent(tools=mcp_tools, ...)
 ```
 
+### Getting an MCP Server URL
+
+Every example needs an `MCP_SERVER_URL` pointing at a real MCP server. If you do not have one yet, an Amazon Bedrock AgentCore Gateway with the managed web search connector gives you an IAM-authenticated endpoint with a working tool on it. Using the [AgentCore CLI](https://github.com/aws/agentcore-cli):
+
+```bash
+npm install -g @aws/agentcore
+
+# Creates a project with no agent in it; cd into the path that create prints
+agentcore create --name WebSearchDemo --no-agent --defaults
+
+agentcore add gateway --name WsGw --protocol-type MCP
+agentcore add gateway-target --type connector --connector web-search --gateway WsGw --name ws1
+agentcore deploy --yes
+```
+
+`deploy` prints the endpoint as `GatewayWsGwUrlOutput`. To read it back later, or from a script:
+
+```bash
+jq -r '.targets[].resources.mcp.gateways.WsGw.gatewayUrl' agentcore/.cli/deployed-state.json
+```
+
+Use that value as `MCP_SERVER_URL`, with `MCP_SERVER_AWS_SERVICE=bedrock-agentcore` and `MCP_SERVER_REGION` set to the region you deployed into. A gateway prefixes tool names with the target name, so the search tool arrives as `ws1___WebSearch`, alongside `x_amz_bedrock_agentcore_search`, which is the gateway's own tool for searching over its tools.
+
+The web search connector is offered in `us-east-1`, `eu-west-1` and `ap-northeast-1`, and it has to be enabled for your account. The gateway role needs `bedrock-agentcore:InvokeWebSearch` on `arn:aws:bedrock-agentcore:<region>:aws:tool/web-search.v1` in addition to `bedrock-agentcore:InvokeGateway` on the gateway. Results come back with source URLs, and the connector's acceptable use terms require you to keep and display those citations in anything an end user sees.
+
 ### Running Examples
 
 Explore complete working examples for different frameworks in the [`./examples/mcp-client`](./examples/mcp-client) directory:

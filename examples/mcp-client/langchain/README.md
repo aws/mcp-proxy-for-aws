@@ -23,6 +23,8 @@ MCP_SERVER_REGION=us-west-2
 
 All three environment variables are required.
 
+If you do not have an MCP server to point at, the root README has a short recipe for [creating one with AgentCore Gateway and its managed web search connector](../../../README.md#getting-an-mcp-server-url).
+
 ## Usage
 
 Run the example:
