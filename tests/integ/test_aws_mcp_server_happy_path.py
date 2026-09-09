@@ -87,11 +87,11 @@ def verify_json_response(response: CallToolResult):
     'tool_name,params',
     [
         ('aws___list_regions', {}),
-        ('aws___call_aws', {'cli_command': 'aws lambda list-functions', 'max_results': 10}),
+        ('aws___run_script', {'code': 'result = {"ok": True}\nresult'}),
     ],
     ids=[
         'list_regions',
-        'list_lambda_functions',
+        'run_script',
     ],
 )
 @pytest.mark.asyncio(loop_scope='module')
