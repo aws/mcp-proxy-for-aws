@@ -53,8 +53,7 @@ class KeyValueAction(argparse.Action):
 
         for item in values:
             if '=' not in item:
-                flag = option_string or f'--{self.dest}'
-                parser.error(f'{flag} must be in key=value format, got: {item}')
+                parser.error(f'{option_string} must be in key=value format, got: {item}')
             key, value = item.split('=', 1)
             metadata[key] = value
         setattr(namespace, self.dest, metadata)

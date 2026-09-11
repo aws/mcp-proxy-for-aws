@@ -89,14 +89,7 @@ RESERVED_HEADERS = frozenset({'authorization', 'date', 'x-amz-date', 'x-amz-secu
 
 
 def find_reserved_headers(names: Iterable[str]) -> list[str]:
-    """Return any names that SigV4 signing would overwrite.
-
-    Args:
-        names: Header names to check (case-insensitive)
-
-    Returns:
-        The offending names, in the order given
-    """
+    """Return any names that SigV4 signing would overwrite."""
     return [name for name in names if name.lower() in RESERVED_HEADERS]
 
 
@@ -108,11 +101,7 @@ _EXTRA_SENSITIVE_HEADERS: set[str] = set()
 
 
 def register_sensitive_headers(names: Iterable[str]) -> None:
-    """Mark additional header names as sensitive for logging purposes.
-
-    Args:
-        names: Header names to redact in logs (matched case-insensitively)
-    """
+    """Mark additional header names as sensitive for logging purposes."""
     _EXTRA_SENSITIVE_HEADERS.update(name.lower() for name in names)
 
 

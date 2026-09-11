@@ -307,41 +307,6 @@ mcp_client = aws_iam_streamablehttp_client(
 )
 ```
 
-#### Custom HTTP Headers
-
-Use `--header` (CLI) or `headers=` (library) to send additional HTTP headers on every
-request. Unlike `--metadata`, which travels in the MCP `_meta` field of the request
-body, these are real HTTP headers — use them when the receiving endpoint reads
-headers rather than the message body, such as an
-[Amazon Bedrock AgentCore Gateway](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html)
-configured to forward specific request headers to its target.
-
-```bash
-mcp-proxy-for-aws https://your-endpoint.example.com/mcp \
-  --service bedrock-agentcore --region us-east-1 \
-  --header x-tenant-id=acme
-```
-
-Headers are merged before the request is signed, so they are covered by the SigV4
-signature. Names that SigV4 signing rewrites (`authorization`, `date`, `x-amz-date`,
-`x-amz-security-token`) are rejected, since a value supplied for those would be
-discarded without warning. The values of any headers you supply are redacted from logs.
-
-```python
-from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
-
-mcp_client = aws_iam_streamablehttp_client(
-    endpoint=mcp_url,
-    aws_region=region,
-    aws_service=service,
-    headers={'x-tenant-id': 'acme'},
-)
-```
-
-Headers the transport sets itself (`accept`, `content-type`, `mcp-session-id`) can be
-overridden, but doing so may break the connection — streamable HTTP requires specific
-`accept` and `content-type` values.
-
 ### Integration Patterns
 
 The library supports two integration patterns depending on your framework:
