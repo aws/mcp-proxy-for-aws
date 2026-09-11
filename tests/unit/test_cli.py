@@ -283,6 +283,7 @@ class TestCustomHeaders:
             'https://test.example.com',
             '--header',
             'x-tenant=acme',
+            '--header',
             'x-trace=abc123',
         ],
     )
@@ -291,6 +292,55 @@ class TestCustomHeaders:
         args = parse_args()
 
         assert args.headers == {'x-tenant': 'acme', 'x-trace': 'abc123'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            '--header',
+            'x-tenant=acme',
+            'https://test.example.com',
+        ],
+    )
+    def test_header_before_endpoint_does_not_swallow_it(self):
+        """Test --header takes one value, so a following endpoint stays positional."""
+        args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.headers == {'x-tenant': 'acme'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            '--header',
+            'x-tenant=acme',
+            '--header',
+            'x-trace=abc123',
+            'https://test.example.com',
+        ],
+    )
+    def test_repeated_headers_before_endpoint(self):
+        """Test repeated --header flags still leave the trailing endpoint alone."""
+        args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.headers == {'x-tenant': 'acme', 'x-trace': 'abc123'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--header',
+            'x-tenant=acme',
+            'x-trace=abc123',
+        ],
+    )
+    def test_space_separated_headers_are_rejected(self):
+        """Test a second value on one --header is not silently accepted."""
+        with pytest.raises(SystemExit):
+            parse_args()
 
     @patch(
         'sys.argv',

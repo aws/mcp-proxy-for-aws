@@ -119,13 +119,14 @@ Examples:
 
     parser.add_argument(
         '--header',
-        nargs='*',
         action=KeyValueAction,
         dest='headers',
         default=None,
-        help='Extra HTTP headers as key=value pairs (e.g., --header x-my-token=abc123). '
-        'Unlike --metadata, these are sent as real HTTP headers and are covered by the '
-        'SigV4 signature. Values are redacted from logs.',
+        metavar='KEY=VALUE',
+        help='Extra HTTP header as a key=value pair, repeatable '
+        '(e.g., --header x-my-token=abc123 --header x-tenant=acme). Unlike --metadata, '
+        'these are sent as real HTTP headers and are covered by the SigV4 signature. '
+        'Values are redacted from logs.',
     )
 
     parser.add_argument(

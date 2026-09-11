@@ -80,7 +80,7 @@ def create_transport_with_sigv4(
     profile: str | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
-    headers: dict[str, str] | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -93,7 +93,7 @@ def create_transport_with_sigv4(
         profile: AWS profile to use (optional)
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
-        headers: Additional HTTP headers to send on every request
+        extra_headers: Additional HTTP headers to send on every request
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
@@ -101,16 +101,14 @@ def create_transport_with_sigv4(
     Raises:
         ValueError: If a header name would be overwritten by SigV4 signing
     """
-    caller_headers = headers
-
-    if caller_headers:
-        reserved = find_reserved_headers(caller_headers)
+    if extra_headers:
+        reserved = find_reserved_headers(extra_headers)
         if reserved:
             raise ValueError(
                 f'These headers are set by SigV4 signing and cannot be overridden: '
                 f'{", ".join(reserved)}'
             )
-        register_sensitive_headers(caller_headers.keys())
+        register_sensitive_headers(extra_headers.keys())
 
     def client_factory(
         headers: dict[str, str] | None = None,
@@ -118,7 +116,7 @@ def create_transport_with_sigv4(
         auth: httpx.Auth | None = None,
         **kw,
     ) -> httpx.AsyncClient:
-        merged = {**(headers or {}), **(caller_headers or {})} or None
+        merged = {**(headers or {}), **(extra_headers or {})} or None
         return create_sigv4_client(
             service=service,
             region=region,

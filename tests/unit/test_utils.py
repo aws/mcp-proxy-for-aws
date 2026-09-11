@@ -430,7 +430,7 @@ class TestCreateTransportWithCustomHeaders:
             'us-east-1',
             {},
             Timeout(30.0),
-            headers={'x-tenant': 'acme'},
+            extra_headers={'x-tenant': 'acme'},
         )
 
         assert result.httpx_client_factory is not None
@@ -454,7 +454,7 @@ class TestCreateTransportWithCustomHeaders:
             'us-east-1',
             {},
             Timeout(30.0),
-            headers={'x-tenant': 'override'},
+            extra_headers={'x-tenant': 'override'},
         )
 
         assert result.httpx_client_factory is not None
@@ -478,7 +478,7 @@ class TestCreateTransportWithCustomHeaders:
             'us-east-1',
             {},
             Timeout(30.0),
-            headers={'x-identity-assertion': 'a.jwt.value'},
+            extra_headers={'x-identity-assertion': 'a.jwt.value'},
         )
 
         assert _sanitize_headers({'x-identity-assertion': 'a.jwt.value'}) == {
@@ -528,7 +528,7 @@ class TestCreateTransportReservedHeaders:
                 'us-east-1',
                 {},
                 Timeout(30),
-                headers={name: 'value'},
+                extra_headers={name: 'value'},
             )
 
     def test_non_reserved_header_allowed(self):
@@ -541,7 +541,7 @@ class TestCreateTransportReservedHeaders:
             'us-east-1',
             {},
             Timeout(30),
-            headers={'x-tenant-id': 'acme'},
+            extra_headers={'x-tenant-id': 'acme'},
         )
 
         assert result is not None
