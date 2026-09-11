@@ -126,7 +126,15 @@ async def run_proxy(args) -> None:
                 'This proxy handles authentication and request routing to the appropriate backend services.'
             ),
         )
-        proxy.add_middleware(InitializeMiddleware(client_factory))
+        # Return backend instructions instead of the proxy defaults, opt-in via
+        # --proxy-instructions or AWS_MCP_PROXY_INSTRUCTIONS
+        env_instructions = os.environ.get('AWS_MCP_PROXY_INSTRUCTIONS', '')
+        forward_instructions = args.proxy_instructions or env_instructions.strip().lower() in (
+            '1',
+            'true',
+            'yes',
+        )
+        proxy.add_middleware(InitializeMiddleware(client_factory, forward_instructions))
         add_tool_error_middleware(proxy, args.tool_timeout)
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)

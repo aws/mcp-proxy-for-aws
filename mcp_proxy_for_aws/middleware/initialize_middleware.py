@@ -26,10 +26,15 @@ logger = logging.getLogger(__name__)
 class InitializeMiddleware(Middleware):
     """Intercept MCP initialize request and initialize the proxy client."""
 
-    def __init__(self, client_factory: AWSMCPProxyClientFactory) -> None:
+    def __init__(
+        self,
+        client_factory: AWSMCPProxyClientFactory,
+        forward_instructions: bool = False,
+    ) -> None:
         """Create a middleware with client factory."""
         super().__init__()
         self._client_factory = client_factory
+        self._forward_instructions = forward_instructions
 
     def _overwrite_init_options(
         self, context: MiddlewareContext, init_result: mt.InitializeResult
@@ -47,6 +52,10 @@ class InitializeMiddleware(Middleware):
             return
 
         fastmcp_ctx._session._init_options.capabilities = init_result.capabilities
+
+        # Skipped when the backend sends none, so the proxy defaults survive
+        if self._forward_instructions and init_result.instructions:
+            fastmcp_ctx._session._init_options.instructions = init_result.instructions
 
     @override
     async def on_initialize(

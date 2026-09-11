@@ -123,6 +123,16 @@ Examples:
     )
 
     parser.add_argument(
+        '--proxy-instructions',
+        action='store_true',
+        help=(
+            'Return the MCP instructions from the backend server instead of the proxy '
+            'defaults. Only applies when the backend sends instructions. '
+            'Can also be set with AWS_MCP_PROXY_INSTRUCTIONS=1.'
+        ),
+    )
+
+    parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='ERROR',

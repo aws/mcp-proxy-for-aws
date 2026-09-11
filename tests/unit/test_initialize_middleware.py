@@ -239,3 +239,73 @@ async def test_on_initialize_skips_overwrite_when_no_session():
     # Should not raise, just skip overwrite
     await middleware.on_initialize(mock_context, mock_call_next)
     mock_call_next.assert_called_once_with(mock_context)
+
+
+def build_middleware_context(instructions: str | None, proxy_instructions: str | None):
+    """Create a middleware context whose backend returns the given instructions."""
+    backend_result = mt.InitializeResult(
+        protocolVersion='2024-11-05',
+        capabilities=mt.ServerCapabilities(),
+        serverInfo=mt.Implementation(name='backend-mcp', version='3.1'),
+        instructions=instructions,
+    )
+
+    mock_client = Mock()
+    mock_client._connect = AsyncMock()
+    mock_client.initialize_result = backend_result
+
+    mock_factory = Mock()
+    mock_factory.set_init_params = Mock()
+    mock_factory.get_client = AsyncMock(return_value=mock_client)
+
+    mock_init_options = Mock()
+    mock_init_options.capabilities = mt.ServerCapabilities()
+    mock_init_options.instructions = proxy_instructions
+    mock_session = Mock()
+    mock_session._init_options = mock_init_options
+    mock_fastmcp_ctx = Mock()
+    mock_fastmcp_ctx._session = mock_session
+
+    mock_context = Mock()
+    mock_context.message = create_initialize_request('test-client')
+    mock_context.fastmcp_context = mock_fastmcp_ctx
+
+    return mock_factory, mock_context, mock_init_options
+
+
+@pytest.mark.asyncio
+async def test_on_initialize_keeps_proxy_instructions_by_default():
+    """Test that backend instructions are not forwarded unless asked for."""
+    factory, context, init_options = build_middleware_context('backend guidance', 'proxy default')
+
+    middleware = InitializeMiddleware(factory)
+    await middleware.on_initialize(context, AsyncMock())
+
+    assert init_options.instructions == 'proxy default'
+
+
+@pytest.mark.asyncio
+async def test_on_initialize_forwards_backend_instructions_when_enabled():
+    """Test that backend instructions replace the proxy defaults when enabled."""
+    factory, context, init_options = build_middleware_context('backend guidance', 'proxy default')
+
+    middleware = InitializeMiddleware(factory, forward_instructions=True)
+    await middleware.on_initialize(context, AsyncMock())
+
+    assert init_options.instructions == 'backend guidance'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('backend_instructions', [None, ''])
+async def test_on_initialize_keeps_proxy_instructions_when_backend_sends_none(
+    backend_instructions,
+):
+    """Test that the proxy defaults survive a backend that sends no instructions."""
+    factory, context, init_options = build_middleware_context(
+        backend_instructions, 'proxy default'
+    )
+
+    middleware = InitializeMiddleware(factory, forward_instructions=True)
+    await middleware.on_initialize(context, AsyncMock())
+
+    assert init_options.instructions == 'proxy default'
