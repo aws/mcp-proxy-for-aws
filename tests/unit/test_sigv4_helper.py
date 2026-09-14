@@ -15,6 +15,7 @@
 """Unit tests for sigv4_helper module."""
 
 import httpx
+import logging
 import pytest
 from botocore.credentials import BaseAssumeRoleCredentialFetcher
 from httpx import __version__ as httpx_version
@@ -28,6 +29,7 @@ from mcp_proxy_for_aws.sigv4_helper import (
     _set_user_agent_hook,
     create_aws_session,
     create_sigv4_client,
+    register_sensitive_headers,
 )
 from unittest.mock import Mock, patch
 
@@ -492,3 +494,51 @@ class TestSanitizeHeaders:
         assert 'authorization' in SENSITIVE_HEADERS
         assert 'x-amz-security-token' in SENSITIVE_HEADERS
         assert 'x-amz-date' in SENSITIVE_HEADERS
+
+
+class TestRegisterSensitiveHeaders:
+    """Tests for runtime registration of sensitive header names."""
+
+    def test_registered_header_is_redacted(self):
+        """Test a registered header's value is redacted."""
+        register_sensitive_headers(['x-secret-token'])
+        result = _sanitize_headers({'x-secret-token': 'super-secret', 'x-safe': 'visible'})
+
+        assert result['x-secret-token'] == '[REDACTED]'
+        assert result['x-safe'] == 'visible'
+
+    def test_registration_is_case_insensitive(self):
+        """Test registration and lookup both normalize case."""
+        register_sensitive_headers(['X-Mixed-Case'])
+        result = _sanitize_headers({'x-mixed-case': 'secret'})
+
+        assert result['x-mixed-case'] == '[REDACTED]'
+
+    def test_builtin_sensitive_headers_still_redacted(self):
+        """Test the static SENSITIVE_HEADERS set is unaffected."""
+        result = _sanitize_headers({'authorization': 'Bearer x', 'x-amz-date': '20260101'})
+
+        assert result['authorization'] == '[REDACTED]'
+        assert result['x-amz-date'] == '[REDACTED]'
+
+
+class TestClientCreationLogRedaction:
+    """The client-creation log must not print caller header values."""
+
+    @pytest.mark.asyncio
+    async def test_custom_header_value_not_logged(self, caplog):
+        """Test a sensitive header value is redacted from the creation log."""
+        register_sensitive_headers(['x-log-probe'])
+
+        with caplog.at_level(logging.INFO, logger='mcp_proxy_for_aws.sigv4_helper'):
+            client = create_sigv4_client(
+                service='lambda',
+                region='us-east-1',
+                headers={'x-log-probe': 'do-not-log-me'},
+            )
+
+        # create_sigv4_client returns a live client; closing it avoids a ResourceWarning.
+        await client.aclose()
+
+        assert 'do-not-log-me' not in caplog.text
+        assert '[REDACTED]' in caplog.text

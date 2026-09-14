@@ -974,6 +974,7 @@ class TestProfileClientTransportParams:
             'dev-profile',
             True,
             True,
+            None,
         )
 
     @pytest.mark.asyncio
@@ -1008,3 +1009,39 @@ class TestProfileClientTransportParams:
             await mw._get_profile_client('dev-profile')
 
         assert mock_create.call_args[0][3] == {'AWS_REGION': 'us-west-2'}
+
+
+class TestProfileClientCustomHeaders:
+    """Custom headers must survive a profile switch."""
+
+    @pytest.mark.asyncio
+    async def test_headers_forwarded_to_switched_transport(self):
+        """Test caller headers are passed to the transport built for a new profile."""
+        mw = ProfileOverrideMiddleware(
+            allowed_profiles=['default-profile', 'dev-profile'],
+            default_profile='default-profile',
+            service='bedrock-agentcore',
+            region='eu-west-1',
+            metadata={},
+            timeout=httpx.Timeout(60),
+            endpoint='https://bedrock-agentcore.eu-west-1.api.aws/mcp',
+            headers={'x-tenant': 'acme'},
+        )
+
+        with (
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.create_transport_with_sigv4',
+                return_value=Mock(),
+            ) as mock_create,
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.determine_aws_region',
+                return_value='eu-west-1',
+            ),
+            patch(
+                'mcp_proxy_for_aws.middleware.profile_switcher.Client',
+                return_value=AsyncMock(),
+            ),
+        ):
+            await mw._get_profile_client('dev-profile')
+
+        assert mock_create.call_args.args[-1] == {'x-tenant': 'acme'}
