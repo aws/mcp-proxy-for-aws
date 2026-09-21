@@ -19,7 +19,12 @@ import httpx
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
-from mcp_proxy_for_aws.sigv4_helper import create_aws_session, create_sigv4_client
+from mcp_proxy_for_aws.sigv4_helper import (
+    create_aws_session,
+    create_sigv4_client,
+    find_reserved_headers,
+    register_sensitive_headers,
+)
 from typing import Any
 from urllib.parse import urlparse
 
@@ -75,6 +80,7 @@ def create_transport_with_sigv4(
     profile: str | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
+    extra_headers: dict[str, str] | None = None,
 ) -> StreamableHttpTransport:
     """Create a StreamableHttpTransport with SigV4 authentication.
 
@@ -87,10 +93,22 @@ def create_transport_with_sigv4(
         profile: AWS profile to use (optional)
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
+        extra_headers: Additional HTTP headers to send on every request
 
     Returns:
         StreamableHttpTransport instance with SigV4 authentication
+
+    Raises:
+        ValueError: If a header name would be overwritten by SigV4 signing
     """
+    if extra_headers:
+        reserved = find_reserved_headers(extra_headers)
+        if reserved:
+            raise ValueError(
+                f'These headers are set by SigV4 signing and cannot be overridden: '
+                f'{", ".join(reserved)}'
+            )
+        register_sensitive_headers(extra_headers.keys())
 
     def client_factory(
         headers: dict[str, str] | None = None,
@@ -98,11 +116,12 @@ def create_transport_with_sigv4(
         auth: httpx.Auth | None = None,
         **kw,
     ) -> httpx.AsyncClient:
+        merged = {**(headers or {}), **(extra_headers or {})} or None
         return create_sigv4_client(
             service=service,
             region=region,
             profile=profile,
-            headers=headers,
+            headers=merged,
             timeout=custom_timeout,
             metadata=metadata,
             disable_telemetry=disable_telemetry,

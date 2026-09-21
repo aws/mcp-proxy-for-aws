@@ -66,6 +66,7 @@ class ProfileOverrideMiddleware(Middleware):
         endpoint: str,
         disable_telemetry: bool = False,
         skip_auth: bool = False,
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Initialize the middleware with connection and profile configuration.
 
@@ -84,6 +85,7 @@ class ProfileOverrideMiddleware(Middleware):
         self._timeout = timeout
         self._disable_telemetry = disable_telemetry
         self._skip_auth = skip_auth
+        self._headers = headers
         self._profile_clients: dict[str, Client] = {}
         self._lock = asyncio.Lock()
 
@@ -182,6 +184,7 @@ class ProfileOverrideMiddleware(Middleware):
                     profile,
                     self._disable_telemetry,
                     self._skip_auth,
+                    self._headers,
                 )
                 client = Client(transport=transport)
                 await client.__aenter__()
