@@ -69,7 +69,19 @@ class ToolFilteringMiddleware(Middleware):
 
         if context.fastmcp_context:
             tool = await context.fastmcp_context.fastmcp.get_tool(context.message.name)
-            if not tool or not getattr(tool.annotations, 'readOnlyHint', False):
+            if tool is None:
+                # The lookup did not resolve a tool. On a proxy this happens when the
+                # upstream request fails (for example throttling), so it must not be
+                # reported as a read-only denial: the caller should retry instead.
+                self.logger.warning(
+                    'Tool %s could not be resolved upstream; unable to verify read-only hint',
+                    context.message.name,
+                )
+                raise ToolError(
+                    f'Tool {context.message.name!r} could not be resolved from the upstream '
+                    'server, so its read-only hint could not be verified.'
+                )
+            if not getattr(tool.annotations, 'readOnlyHint', False):
                 raise ToolError(
                     f'Tool {context.message.name!r} is not available in read-only mode.'
                 )
