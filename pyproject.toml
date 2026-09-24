@@ -31,7 +31,7 @@ exclude = [
 name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
-version = "1.6.6"
+version = "1.7.0"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"

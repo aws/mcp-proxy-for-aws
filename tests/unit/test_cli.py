@@ -254,3 +254,182 @@ class TestParseArgs:
         args = parse_args()
 
         assert args.disable_telemetry is False
+
+
+class TestCustomHeaders:
+    """Tests for the --header flag."""
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_no_headers_by_default(self):
+        """Test headers is None when --header is omitted."""
+        args = parse_args()
+
+        assert args.headers is None
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--header', 'x-tenant=acme'],
+    )
+    def test_single_header(self):
+        """Test parsing a single key=value header."""
+        args = parse_args()
+
+        assert args.headers == {'x-tenant': 'acme'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--header',
+            'x-tenant=acme',
+            '--header',
+            'x-trace=abc123',
+        ],
+    )
+    def test_multiple_headers(self):
+        """Test parsing multiple key=value headers."""
+        args = parse_args()
+
+        assert args.headers == {'x-tenant': 'acme', 'x-trace': 'abc123'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            '--header',
+            'x-tenant=acme',
+            'https://test.example.com',
+        ],
+    )
+    def test_header_before_endpoint_does_not_swallow_it(self):
+        """Test --header takes one value, so a following endpoint stays positional."""
+        args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.headers == {'x-tenant': 'acme'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            '--header',
+            'x-tenant=acme',
+            '--header',
+            'x-trace=abc123',
+            'https://test.example.com',
+        ],
+    )
+    def test_repeated_headers_before_endpoint(self):
+        """Test repeated --header flags still leave the trailing endpoint alone."""
+        args = parse_args()
+
+        assert args.endpoint == 'https://test.example.com'
+        assert args.headers == {'x-tenant': 'acme', 'x-trace': 'abc123'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--header',
+            'x-tenant=acme',
+            'x-trace=abc123',
+        ],
+    )
+    def test_space_separated_headers_are_rejected(self):
+        """Test a second value on one --header is not silently accepted."""
+        with pytest.raises(SystemExit):
+            parse_args()
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--header', 'x-jwt=a.b=c'],
+    )
+    def test_value_containing_equals(self):
+        """Test only the first '=' is treated as the separator."""
+        args = parse_args()
+
+        assert args.headers == {'x-jwt': 'a.b=c'}
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', 'https://test.example.com', '--header', 'x-tenant'],
+    )
+    def test_missing_equals_is_rejected(self):
+        """Test a header without '=' exits with an error."""
+        with pytest.raises(SystemExit):
+            parse_args()
+
+    @pytest.mark.parametrize(
+        'header',
+        [
+            'Authorization=Bearer foo',
+            'authorization=Bearer foo',
+            'Date=Wed, 01 Jan 2026 00:00:00 GMT',
+            'X-Amz-Date=20260101T000000Z',
+            'x-amz-security-token=abc',
+        ],
+    )
+    def test_reserved_headers_are_rejected(self, header):
+        """Test headers rewritten by SigV4 signing are rejected, case-insensitively."""
+        with patch(
+            'sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com', '--header', header]
+        ):
+            with pytest.raises(SystemExit):
+                parse_args()
+
+
+class TestRepeatedKeyValueFlags:
+    """Repeating a key=value flag should accumulate rather than replace."""
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--header',
+            'x-one=1',
+            '--header',
+            'x-two=2',
+        ],
+    )
+    def test_repeated_header_flags_accumulate(self):
+        """Test a second --header does not discard the first."""
+        args = parse_args()
+
+        assert args.headers == {'x-one': '1', 'x-two': '2'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--metadata',
+            'a=1',
+            '--metadata',
+            'b=2',
+        ],
+    )
+    def test_repeated_metadata_flags_accumulate(self):
+        """Test the same accumulation applies to --metadata."""
+        args = parse_args()
+
+        assert args.metadata == {'a': '1', 'b': '2'}
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--header',
+            'x-dup=first',
+            '--header',
+            'x-dup=second',
+        ],
+    )
+    def test_repeated_same_key_last_wins(self):
+        """Test a repeated key takes the last value given."""
+        args = parse_args()
+
+        assert args.headers == {'x-dup': 'second'}

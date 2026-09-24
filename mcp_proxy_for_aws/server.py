@@ -112,6 +112,7 @@ async def run_proxy(args) -> None:
         default_profile,
         args.disable_telemetry,
         args.skip_auth,
+        args.headers,
     )
     client_factory = AWSMCPProxyClientFactory(transport)
 
@@ -143,6 +144,7 @@ async def run_proxy(args) -> None:
             args.endpoint,
             args.disable_telemetry,
             args.skip_auth,
+            args.headers,
         )
 
         if args.retries:
@@ -179,6 +181,7 @@ def add_profile_override_middleware(
     endpoint: str,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
+    headers: dict[str, str] | None = None,
 ) -> ProfileOverrideMiddleware | None:
     """Add profile override middleware to target MCP server.
 
@@ -193,6 +196,7 @@ def add_profile_override_middleware(
         endpoint: The MCP endpoint URL
         disable_telemetry: Whether to disable telemetry on profile transports
         skip_auth: Whether to skip signing when credentials are unavailable
+        headers: Additional HTTP headers to send on every request
 
     Returns:
         The ProfileOverrideMiddleware instance if added, None otherwise
@@ -212,6 +216,7 @@ def add_profile_override_middleware(
         endpoint=endpoint,
         disable_telemetry=disable_telemetry,
         skip_auth=skip_auth,
+        headers=headers,
     )
     mcp.add_middleware(middleware)
     return middleware

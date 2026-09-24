@@ -346,13 +346,19 @@ class TestOnCallTool:
 
         assert 'write_tool' in str(exc_info.value)
         assert 'not available in read-only mode' in str(exc_info.value)
+        assert 'could not be resolved' not in str(exc_info.value)
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_read_only_true_rejects_unknown_tool(self):
-        """Test that read_only=True rejects tools that don't exist."""
+    async def test_read_only_true_rejects_unresolved_tool_without_read_only_message(self):
+        """Test that a lookup returning None is not reported as a read-only denial.
+
+        On a proxy the lookup is resolved upstream, so a throttled or failed upstream
+        request yields None. The caller must be told the tool could not be resolved so
+        that it retries instead of concluding the tool was withdrawn in read-only mode.
+        """
         # Arrange
-        context = self._make_context('unknown_tool', None)
+        context = self._make_context('unresolved_tool', None)
         call_next = AsyncMock()
         middleware = ToolFilteringMiddleware(read_only=True)
 
@@ -360,8 +366,26 @@ class TestOnCallTool:
         with pytest.raises(ToolError) as exc_info:
             await middleware.on_call_tool(context, call_next)
 
-        assert 'unknown_tool' in str(exc_info.value)
-        assert 'not available in read-only mode' in str(exc_info.value)
+        assert 'unresolved_tool' in str(exc_info.value)
+        assert 'could not be resolved' in str(exc_info.value)
+        assert 'not available in read-only mode' not in str(exc_info.value)
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_only_true_propagates_lookup_error(self):
+        """Test that an exception raised by the tool lookup propagates unchanged."""
+        # Arrange
+        lookup_error = RuntimeError("Client error '429 ' for url 'https://example/mcp'")
+        context = self._make_context('read_only_tool', None)
+        context.fastmcp_context.fastmcp.get_tool = AsyncMock(side_effect=lookup_error)
+        call_next = AsyncMock()
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        # Act & Assert
+        with pytest.raises(RuntimeError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        assert exc_info.value is lookup_error
         call_next.assert_not_called()
 
     @pytest.mark.asyncio

@@ -48,6 +48,7 @@ async def test_on_initialize_connects_client():
     middleware = InitializeMiddleware(mock_factory)
 
     mock_init_options = Mock()
+    mock_init_options.instructions = 'proxy instructions'
     mock_session = Mock()
     mock_session._init_options = mock_init_options
     mock_fastmcp_ctx = Mock()
@@ -68,6 +69,8 @@ async def test_on_initialize_connects_client():
 
     # Verify init_options capabilities were overwritten with backend server info
     assert mock_init_options.capabilities == mt.ServerCapabilities()
+    # Backend sent no instructions, so the proxy's own instructions are kept
+    assert mock_init_options.instructions == 'proxy instructions'
 
 
 @pytest.mark.asyncio
@@ -138,6 +141,7 @@ async def test_on_initialize_overwrites_init_options_with_backend_info():
         protocolVersion='2024-11-05',
         capabilities=backend_capabilities,
         serverInfo=mt.Implementation(name='backend-mcp', version='3.1'),
+        instructions='backend instructions',
     )
 
     mock_client = Mock()
@@ -154,6 +158,7 @@ async def test_on_initialize_overwrites_init_options_with_backend_info():
     mock_init_options.server_name = 'proxy-name'
     mock_init_options.server_version = '1.0'
     mock_init_options.capabilities = mt.ServerCapabilities()
+    mock_init_options.instructions = 'proxy instructions'
     mock_session = Mock()
     mock_session._init_options = mock_init_options
     mock_fastmcp_ctx = Mock()
@@ -168,6 +173,7 @@ async def test_on_initialize_overwrites_init_options_with_backend_info():
     await middleware.on_initialize(mock_context, mock_call_next)
 
     assert mock_init_options.capabilities == backend_capabilities
+    assert mock_init_options.instructions == 'backend instructions'
 
 
 @pytest.mark.asyncio
