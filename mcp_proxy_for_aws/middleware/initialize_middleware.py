@@ -48,6 +48,9 @@ class InitializeMiddleware(Middleware):
 
         fastmcp_ctx._session._init_options.capabilities = init_result.capabilities
 
+        if init_result.instructions:
+            fastmcp_ctx._session._init_options.instructions = init_result.instructions
+
     @override
     async def on_initialize(
         self,

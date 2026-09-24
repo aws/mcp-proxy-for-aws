@@ -412,3 +412,136 @@ class TestDetermineRegion:
             determine_aws_region(endpoint)
 
         assert 'Could not determine AWS region' in str(exc_info.value)
+
+
+class TestCreateTransportWithCustomHeaders:
+    """Test cases for the headers parameter of create_transport_with_sigv4."""
+
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_caller_headers_merged_into_client(self, mock_create_sigv4_client):
+        """Test caller headers are merged with the transport's own headers."""
+        from httpx import Timeout
+
+        mock_create_sigv4_client.return_value = MagicMock()
+
+        result = create_transport_with_sigv4(
+            'https://test-service.us-west-2.api.aws/mcp',
+            'test-service',
+            'us-east-1',
+            {},
+            Timeout(30.0),
+            extra_headers={'x-tenant': 'acme'},
+        )
+
+        assert result.httpx_client_factory is not None
+        result.httpx_client_factory(
+            headers={'accept': 'application/json'}, timeout=Timeout(30.0), auth=None
+        )
+
+        passed = mock_create_sigv4_client.call_args.kwargs['headers']
+        assert passed == {'accept': 'application/json', 'x-tenant': 'acme'}
+
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_caller_headers_take_precedence(self, mock_create_sigv4_client):
+        """Test a caller header overrides the same transport header."""
+        from httpx import Timeout
+
+        mock_create_sigv4_client.return_value = MagicMock()
+
+        result = create_transport_with_sigv4(
+            'https://test-service.us-west-2.api.aws/mcp',
+            'test-service',
+            'us-east-1',
+            {},
+            Timeout(30.0),
+            extra_headers={'x-tenant': 'override'},
+        )
+
+        assert result.httpx_client_factory is not None
+        result.httpx_client_factory(
+            headers={'x-tenant': 'original'}, timeout=Timeout(30.0), auth=None
+        )
+
+        assert mock_create_sigv4_client.call_args.kwargs['headers']['x-tenant'] == 'override'
+
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_caller_headers_registered_as_sensitive(self, mock_create_sigv4_client):
+        """Test caller header names are redacted from logs."""
+        from httpx import Timeout
+        from mcp_proxy_for_aws.sigv4_helper import _sanitize_headers
+
+        mock_create_sigv4_client.return_value = MagicMock()
+
+        create_transport_with_sigv4(
+            'https://test-service.us-west-2.api.aws/mcp',
+            'test-service',
+            'us-east-1',
+            {},
+            Timeout(30.0),
+            extra_headers={'x-identity-assertion': 'a.jwt.value'},
+        )
+
+        assert _sanitize_headers({'x-identity-assertion': 'a.jwt.value'}) == {
+            'x-identity-assertion': '[REDACTED]'
+        }
+
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_no_caller_headers_leaves_transport_headers_untouched(self, mock_create_sigv4_client):
+        """Test omitting headers does not alter what the transport passes through."""
+        from httpx import Timeout
+
+        mock_create_sigv4_client.return_value = MagicMock()
+
+        result = create_transport_with_sigv4(
+            'https://test-service.us-west-2.api.aws/mcp',
+            'test-service',
+            'us-east-1',
+            {},
+            Timeout(30.0),
+        )
+
+        assert result.httpx_client_factory is not None
+        result.httpx_client_factory(
+            headers={'accept': 'application/json'}, timeout=Timeout(30.0), auth=None
+        )
+
+        assert mock_create_sigv4_client.call_args.kwargs['headers'] == {
+            'accept': 'application/json'
+        }
+
+
+class TestCreateTransportReservedHeaders:
+    """Library callers get the same reserved-header guarantee as the CLI."""
+
+    @pytest.mark.parametrize(
+        'name',
+        ['authorization', 'Authorization', 'date', 'x-amz-date', 'x-amz-security-token'],
+    )
+    def test_reserved_header_raises(self, name):
+        """Test a header SigV4 rewrites is rejected rather than silently discarded."""
+        from httpx import Timeout
+
+        with pytest.raises(ValueError, match='set by SigV4 signing'):
+            create_transport_with_sigv4(
+                'https://test.example.com/mcp',
+                'lambda',
+                'us-east-1',
+                {},
+                Timeout(30),
+                extra_headers={name: 'value'},
+            )
+
+    def test_non_reserved_header_allowed(self):
+        """Test an ordinary header is accepted."""
+        from httpx import Timeout
+
+        result = create_transport_with_sigv4(
+            'https://test.example.com/mcp',
+            'lambda',
+            'us-east-1',
+            {},
+            Timeout(30),
+            extra_headers={'x-tenant-id': 'acme'},
+        )
+
+        assert result is not None

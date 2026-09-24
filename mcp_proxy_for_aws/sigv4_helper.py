@@ -23,7 +23,7 @@ import time
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials, ProcessProvider
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
@@ -85,6 +85,25 @@ _patch_default_role_session_name()
 # Headers that should be redacted when logging to prevent credential exposure
 SENSITIVE_HEADERS = frozenset({'authorization', 'x-amz-security-token', 'x-amz-date'})
 
+RESERVED_HEADERS = frozenset({'authorization', 'date', 'x-amz-date', 'x-amz-security-token'})
+
+
+def find_reserved_headers(names: Iterable[str]) -> list[str]:
+    """Return any names that SigV4 signing would overwrite."""
+    return [name for name in names if name.lower() in RESERVED_HEADERS]
+
+
+# Header names registered at runtime as sensitive, in addition to SENSITIVE_HEADERS.
+# Values supplied via --header land here: they commonly carry bearer tokens or
+# identity assertions, so they get the same redaction the SigV4 headers already
+# receive rather than being logged in the clear at DEBUG.
+_EXTRA_SENSITIVE_HEADERS: set[str] = set()
+
+
+def register_sensitive_headers(names: Iterable[str]) -> None:
+    """Mark additional header names as sensitive for logging purposes."""
+    _EXTRA_SENSITIVE_HEADERS.update(name.lower() for name in names)
+
 
 def _sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
     """Redact sensitive header values for safe logging.
@@ -95,7 +114,12 @@ def _sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
     Returns:
         Dictionary with sensitive values replaced by '[REDACTED]'
     """
-    return {k: '[REDACTED]' if k.lower() in SENSITIVE_HEADERS else v for k, v in headers.items()}
+    return {
+        k: '[REDACTED]'
+        if k.lower() in SENSITIVE_HEADERS or k.lower() in _EXTRA_SENSITIVE_HEADERS
+        else v
+        for k, v in headers.items()
+    }
 
 
 def _build_user_agent(disable_telemetry: bool) -> str:
@@ -222,7 +246,8 @@ def create_sigv4_client(
     client_kwargs['headers'] = default_headers
 
     logger.info(
-        'Creating httpx.AsyncClient with custom headers: %s', client_kwargs.get('headers', {})
+        'Creating httpx.AsyncClient with custom headers: %s',
+        _sanitize_headers(client_kwargs.get('headers', {})),
     )
 
     logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
