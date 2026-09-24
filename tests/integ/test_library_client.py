@@ -24,7 +24,7 @@ import logging
 import os
 import pytest
 from botocore.credentials import Credentials
-from mcp import ClientSession, McpError
+from mcp import ClientSession, MCPError
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from mcp_proxy_for_aws.utils import get_service_name_and_region_from_endpoint
 from tests.integ.conftest import RemoteMCPServerConfiguration
@@ -55,7 +55,7 @@ async def test_library_client_completes_an_exchange(
     """The library path can reach a real endpoint and list its tools."""
 
     async def exchange():
-        async with open_session(remote_mcp_server_configuration) as (read_stream, write_stream, _):
+        async with open_session(remote_mcp_server_configuration) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 return await session.list_tools()
@@ -76,10 +76,13 @@ async def test_library_client_reports_http_failure_to_the_caller(
     """A real non-2xx reaches the caller as an error instead of leaving the request pending.
 
     Invalid credentials are used because a rejected signature is the one non-2xx a live
-    endpoint returns deterministically; `tests/unit/test_mcp1_compat.py` covers the reported
-    413 shape, which carries no body and no content type. Without the mcp 1.x workaround the
-    failure raises out of the transport's own task group rather than answering this request,
-    and a caller holding the session on a background event loop waits forever.
+    endpoint returns deterministically.
+
+    MCP SDK v2 answers the failing request id itself, which is what the deleted
+    `mcp_proxy_for_aws.mcp1_compat` module existed to backfill for SDK v1. This test is the
+    guard that the SDK really does it: without that behaviour the failure raises out of the
+    transport's own task group instead of answering this request, and a caller holding the
+    session on a background event loop waits forever.
     """
     unusable = Credentials(access_key='AKIAIOSFODNN7EXAMPLE', secret_key='x' * 40)
 
@@ -87,10 +90,9 @@ async def test_library_client_reports_http_failure_to_the_caller(
         async with open_session(remote_mcp_server_configuration, credentials=unusable) as (
             read_stream,
             write_stream,
-            _,
         ):
             async with ClientSession(read_stream, write_stream) as session:
-                with pytest.raises(McpError) as rejected:
+                with pytest.raises(MCPError) as rejected:
                     await session.initialize()
                 return str(rejected.value)
 

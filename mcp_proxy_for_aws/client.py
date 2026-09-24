@@ -13,17 +13,19 @@
 # limitations under the License.
 
 import boto3
-import httpx
+import httpx2
 import logging
-from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
 from functools import partial
-from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
+
+# `TransportStreams` lives in an underscored module but is listed in that module's `__all__`,
+# and it is where the SDK's own type checker points callers. There is no non-underscored
+# re-export to use instead.
+from mcp.client._transport import TransportStreams
+from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
-from mcp.shared.message import SessionMessage
-from mcp_proxy_for_aws.mcp1_compat import _translate_http_error_hook
 from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
 from mcp_proxy_for_aws.utils import validate_endpoint_url
 
@@ -40,17 +42,9 @@ def aws_iam_streamablehttp_client(
     headers: dict[str, str] | None = None,
     metadata: dict[str, str] | None = None,
     timeout: float | timedelta = 30,
-    sse_read_timeout: float | timedelta = 60 * 5,
     terminate_on_close: bool = True,
     httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
-) -> _AsyncGeneratorContextManager[
-    tuple[
-        MemoryObjectReceiveStream[SessionMessage | Exception],
-        MemoryObjectSendStream[SessionMessage],
-        GetSessionIdCallback,
-    ],
-    None,
-]:
+) -> _AsyncGeneratorContextManager[TransportStreams, None]:
     """Create an AWS IAM-authenticated MCP streamable HTTP client.
 
     This function creates a context manager for connecting to an MCP server using AWS IAM
@@ -68,24 +62,30 @@ def aws_iam_streamablehttp_client(
             Useful for passing additional context to the server that cannot be sent as
             HTTP headers due to size limits.
         timeout: Request timeout in seconds or timedelta object. Defaults to 30 seconds.
-        sse_read_timeout: Server-sent events read timeout in seconds or timedelta object.
         terminate_on_close: Whether to terminate the connection on close.
-        httpx_client_factory: Factory function for creating HTTPX clients.
+        httpx_client_factory: Factory function for creating httpx2 clients.
 
     Returns:
-        An async generator context manager that yields a tuple of transport components:
-            - read_stream: MemoryObjectReceiveStream for reading server responses
-            - write_stream: MemoryObjectSendStream for sending requests to server
-            - get_session_id: Callback function to retrieve the current session ID
+        An async generator context manager that yields the transport streams:
+            - read_stream: stream for reading server responses
+            - write_stream: stream for sending requests to server
 
     Example:
-        async with aws_iam_mcp_client(
+        async with aws_iam_streamablehttp_client(
             endpoint="https://example.com/mcp",
             aws_service="bedrock-agentcore",
             aws_region="us-west-2"
-        ) as (read_stream, write_stream, get_session_id):
+        ) as (read_stream, write_stream):
             # Use the streams here
             pass
+
+    Note:
+        The MCP Python SDK v2 (which fastmcp 4 requires) yields two streams rather than the
+        three that SDK v1 yielded: the ``get_session_id`` callback is gone, because the modern
+        protocol revision is sessionless and the session id is no longer transport state a
+        caller can read. The removed ``sse_read_timeout`` parameter has no SDK v2 equivalent;
+        it was already a no-op here, since it was never forwarded to the transport. Bound a
+        long-lived read with ``timeout`` or a custom ``httpx_client_factory`` instead.
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 
@@ -125,13 +125,10 @@ def aws_iam_streamablehttp_client(
     auth = SigV4HTTPXAuth(creds, aws_service, region)
 
     # Create the HTTP client with authentication and configuration
-    httpx_timeout = httpx.Timeout(
+    httpx_timeout = httpx2.Timeout(
         timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
     )
     http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)
-
-    # Temporary mcp 1.x plumbing, see mcp_proxy_for_aws.mcp1_compat. Remove with that module.
-    http_client.event_hooks.setdefault('response', []).append(_translate_http_error_hook)
 
     # Append metadata injection hook if metadata is provided
     if metadata:

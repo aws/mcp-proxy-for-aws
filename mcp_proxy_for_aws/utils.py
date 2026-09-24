@@ -15,7 +15,7 @@
 """Utility functions for the MCP Proxy for AWS."""
 
 import argparse
-import httpx
+import httpx2
 import logging
 import os
 from fastmcp.client.transports import StreamableHttpTransport
@@ -76,7 +76,7 @@ def create_transport_with_sigv4(
     service: str,
     region: str,
     metadata: dict[str, Any],
-    custom_timeout: httpx.Timeout,
+    custom_timeout: httpx2.Timeout,
     profile: str | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
@@ -89,7 +89,7 @@ def create_transport_with_sigv4(
         service: AWS service name for SigV4 signing
         region: AWS region to use
         metadata: Metadata dictionary to inject into MCP requests
-        custom_timeout: httpx.Timeout used to connect to the endpoint
+        custom_timeout: httpx2.Timeout used to connect to the endpoint
         profile: AWS profile to use (optional)
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
@@ -112,10 +112,10 @@ def create_transport_with_sigv4(
 
     def client_factory(
         headers: dict[str, str] | None = None,
-        timeout: httpx.Timeout | None = None,
-        auth: httpx.Auth | None = None,
+        timeout: httpx2.Timeout | None = None,
+        auth: httpx2.Auth | None = None,
         **kw,
-    ) -> httpx.AsyncClient:
+    ) -> httpx2.AsyncClient:
         merged = {**(headers or {}), **(extra_headers or {})} or None
         return create_sigv4_client(
             service=service,

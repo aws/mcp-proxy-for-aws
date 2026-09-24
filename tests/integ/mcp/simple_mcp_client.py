@@ -41,6 +41,14 @@ def build_mcp_client(
         ),
         elicitation_handler=_basic_elicitation_handler,
         timeout=30.0,  # seconds
+        # Pinned to the handshake era, which is what every MCP client shipping today negotiates.
+        # fastmcp 4 would otherwise default to the sessionless 2026-07-28 revision, where two
+        # features this suite covers do not exist at all: `ping` is not a method (the SDK raises
+        # "Method not found") and `ctx.elicit()` is era-gated because there is no live connection
+        # to call back into mid-request. Neither is a proxy behaviour -- the proxy relays both
+        # faithfully on the era that has them -- so the era is fixed here rather than dropping
+        # the coverage.
+        mode='legacy',
     )
 
 

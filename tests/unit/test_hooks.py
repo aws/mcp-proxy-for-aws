@@ -14,7 +14,7 @@
 
 """Unit tests for hooks module."""
 
-import httpx
+import httpx2
 import json
 import pytest
 from functools import partial
@@ -28,9 +28,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 def create_request_with_sigv4_headers(
     url: str, body: bytes, method: str = 'POST'
-) -> httpx.Request:
+) -> httpx2.Request:
     """Helper to create a request with required SigV4 headers for testing."""
-    request = httpx.Request(method, url, content=body)
+    request = httpx2.Request(method, url, content=body)
     # Add minimal SigV4 headers that the hook will try to delete and re-add
     request.headers['Content-Length'] = str(len(body))
     request.headers['x-amz-date'] = '20240101T000000Z'
@@ -58,8 +58,8 @@ class TestHandleErrorResponse:
     @pytest.mark.asyncio
     async def test_handle_error_response_logs_401(self):
         """401 response is handled without error."""
-        request = httpx.Request('POST', 'https://example.com/mcp')
-        response = httpx.Response(
+        request = httpx2.Request('POST', 'https://example.com/mcp')
+        response = httpx2.Response(
             status_code=401,
             headers={'content-type': 'text/plain'},
             content=b'Unauthorized',
@@ -71,8 +71,8 @@ class TestHandleErrorResponse:
     @pytest.mark.asyncio
     async def test_handle_error_response_logs_403(self):
         """403 response is handled without error."""
-        request = httpx.Request('POST', 'https://example.com/mcp')
-        response = httpx.Response(
+        request = httpx2.Request('POST', 'https://example.com/mcp')
+        response = httpx2.Response(
             status_code=403,
             headers={'content-type': 'text/plain'},
             content=b'Forbidden',
@@ -85,9 +85,9 @@ class TestHandleErrorResponse:
     async def test_handle_error_response_with_json_error(self):
         """Test error handling with JSON error response."""
         # Create a mock error response with JSON content
-        request = httpx.Request('GET', 'https://example.com/test')
+        request = httpx2.Request('GET', 'https://example.com/test')
         error_data = {'error': 'Not Found', 'message': 'The requested resource was not found'}
-        response = httpx.Response(
+        response = httpx2.Response(
             status_code=404,
             headers={'content-type': 'application/json'},
             content=json.dumps(error_data).encode(),
@@ -103,8 +103,8 @@ class TestHandleErrorResponse:
     async def test_handle_error_response_with_non_json_error(self):
         """Test error handling with non-JSON error response."""
         # Create a mock error response with plain text content
-        request = httpx.Request('GET', 'https://example.com/test')
-        response = httpx.Response(
+        request = httpx2.Request('GET', 'https://example.com/test')
+        response = httpx2.Response(
             status_code=500,
             headers={'content-type': 'text/plain'},
             content=b'Internal Server Error',
@@ -120,8 +120,8 @@ class TestHandleErrorResponse:
     async def test_handle_error_response_with_success_response(self):
         """Test that successful responses don't raise errors."""
         # Create a mock success response
-        request = httpx.Request('GET', 'https://example.com/test')
-        response = httpx.Response(
+        request = httpx2.Request('GET', 'https://example.com/test')
+        response = httpx2.Response(
             status_code=200,
             headers={'content-type': 'application/json'},
             content=b'{"success": true}',
@@ -137,8 +137,8 @@ class TestHandleErrorResponse:
     async def test_handle_error_response_with_read_failure(self):
         """Test error handling when response reading fails."""
         # Create a mock response that fails to read
-        request = httpx.Request('GET', 'https://example.com/test')
-        response = Mock(spec=httpx.Response)
+        request = httpx2.Request('GET', 'https://example.com/test')
+        response = Mock(spec=httpx2.Response)
         response.is_error = True
         response.aread = Mock(side_effect=Exception('Read failed'))
         response.json = Mock(side_effect=Exception('JSON parsing failed'))
@@ -146,7 +146,7 @@ class TestHandleErrorResponse:
         response.status_code = 500
         response.url = 'https://example.com/test'
         response.raise_for_status = Mock(
-            side_effect=httpx.HTTPStatusError(
+            side_effect=httpx2.HTTPStatusError(
                 message='HTTP Error', request=request, response=response
             )
         )
@@ -161,8 +161,8 @@ class TestHandleErrorResponse:
     async def test_handle_error_response_with_invalid_json(self):
         """Test error handling with invalid JSON response."""
         # Create a mock error response with invalid JSON
-        request = httpx.Request('GET', 'https://example.com/test')
-        response = httpx.Response(
+        request = httpx2.Request('GET', 'https://example.com/test')
+        response = httpx2.Response(
             status_code=400,
             headers={'content-type': 'application/json'},
             content=b'Invalid JSON content {',
@@ -239,7 +239,7 @@ class TestMetadataInjectionHook:
         request_body = json.dumps({'regular': 'request'}).encode('utf-8')
         original_body = request_body
 
-        request = httpx.Request('POST', 'https://example.com/api', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/api', content=request_body)
 
         await _inject_metadata_hook(metadata, request)
 
@@ -252,7 +252,7 @@ class TestMetadataInjectionHook:
         metadata = {'AWS_REGION': 'us-west-2'}
 
         request_body = b'not valid json'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         # Should not raise exception
         await _inject_metadata_hook(metadata, request)
@@ -265,7 +265,7 @@ class TestMetadataInjectionHook:
         """Test that hook handles requests with no body."""
         metadata = {'AWS_REGION': 'us-west-2'}
 
-        request = httpx.Request('GET', 'https://example.com/api')
+        request = httpx2.Request('GET', 'https://example.com/api')
 
         # Should not raise exception
         await _inject_metadata_hook(metadata, request)
@@ -279,7 +279,7 @@ class TestMetadataInjectionHook:
             {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'myTool'}}
         ).encode('utf-8')
 
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         # Should not inject anything but shouldn't crash
         await _inject_metadata_hook(metadata, request)
@@ -375,7 +375,7 @@ class TestSignRequestHook:
         """Signing hook calls create_aws_session to read fresh credentials."""
         mock_create_session.return_value = create_mock_session()
         request_body = b'{"test": "data"}'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'execute-api', 'my-profile', False, request)
 
@@ -387,7 +387,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = create_mock_session()
 
         request_body = json.dumps({'test': 'data'}).encode('utf-8')
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'bedrock-agentcore', None, False, request)
 
@@ -402,7 +402,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = create_mock_session()
 
         request_body = b'test content'
-        request = httpx.Request('POST', 'https://example.com/api', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/api', content=request_body)
 
         await _sign_request_hook('us-west-2', 'execute-api', 'test-profile', False, request)
 
@@ -416,7 +416,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = create_mock_session()
 
         request_body = b'test content with specific length'
-        request = httpx.Request('POST', 'https://example.com/api', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/api', content=request_body)
 
         await _sign_request_hook('eu-west-1', 'lambda', None, False, request)
 
@@ -430,7 +430,7 @@ class TestSignRequestHook:
         curried_hook = partial(_sign_request_hook, 'ap-southeast-1', 'execute-api', None, False)
 
         request_body = b'request data'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await curried_hook(request)
 
@@ -445,7 +445,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = mock_session
 
         request_body = b'{"test": "data"}'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'execute-api', None, True, request)
 
@@ -463,7 +463,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = mock_session
 
         request_body = b'{"test": "data"}'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         with pytest.raises(ValueError, match='No AWS credentials available'):
             await _sign_request_hook('us-east-1', 'execute-api', None, False, request)
@@ -478,7 +478,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = mock_session
 
         request_body = b'test'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         with pytest.raises(ValueError):
             await _sign_request_hook('us-east-1', 'execute-api', None, False, request)
@@ -496,7 +496,7 @@ class TestSignRequestHook:
         mock_create_session.return_value = mock_session
 
         request_body = b'test'
-        request = httpx.Request('POST', 'https://example.com/mcp', content=request_body)
+        request = httpx2.Request('POST', 'https://example.com/mcp', content=request_body)
 
         await _sign_request_hook('us-east-1', 'execute-api', None, True, request)
 

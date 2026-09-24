@@ -17,18 +17,22 @@
 import pytest
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
+from mcp.types import ToolAnnotations
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from unittest.mock import AsyncMock, Mock
 
 
-class MockAnnotationsWithoutReadOnlyHint:
-    """Mock annotations object that raises AttributeError for readOnlyHint."""
-
-    def __getattr__(self, name):
-        """Mocks get attribute behavior when accessing readOnlyHint by raising an Error."""
-        if name == 'readOnlyHint':
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute 'readOnlyHint'")
-        return Mock()
+# These fixtures annotate tools with the real `mcp.types.ToolAnnotations` model rather than a
+# bare `Mock`. A `Mock` auto-creates whatever attribute is read, so it reports every hint as
+# truthy no matter which name the middleware asks for -- which is how the SDK v2 rename from
+# `read_only_hint` to `read_only_hint` slipped past this suite entirely. Using the real model
+# pins the assertions to the field name the SDK actually ships.
+def _tool(name: str, annotations: ToolAnnotations | None) -> Mock:
+    """Build a tool stub carrying real ToolAnnotations (or none at all)."""
+    tool = Mock()
+    tool.name = name
+    tool.annotations = annotations
+    return tool
 
 
 class TestToolFilteringMiddleware:
@@ -63,37 +67,23 @@ class TestOnListTools:
 
     @pytest.fixture
     def read_only_tool(self):
-        """Tool with readOnlyHint=True."""
-        tool = Mock()
-        tool.name = 'read_only_tool'
-        tool.annotations = Mock()
-        tool.annotations.readOnlyHint = True
-        return tool
+        """Tool with read_only_hint=True."""
+        return _tool('read_only_tool', ToolAnnotations(read_only_hint=True))
 
     @pytest.fixture
     def write_tool(self):
-        """Tool with readOnlyHint=False."""
-        tool = Mock()
-        tool.name = 'write_tool'
-        tool.annotations = Mock()
-        tool.annotations.readOnlyHint = False
-        return tool
+        """Tool with read_only_hint=False."""
+        return _tool('write_tool', ToolAnnotations(read_only_hint=False))
 
     @pytest.fixture
     def no_hint_tool(self):
-        """Tool with annotations but no readOnlyHint."""
-        tool = Mock()
-        tool.name = 'no_hint_tool'
-        tool.annotations = MockAnnotationsWithoutReadOnlyHint()
-        return tool
+        """Tool with annotations but no read_only_hint."""
+        return _tool('no_hint_tool', ToolAnnotations())
 
     @pytest.fixture
     def no_annotations_tool(self):
         """Tool with no annotations."""
-        tool = Mock()
-        tool.name = 'no_annotations_tool'
-        tool.annotations = None
-        return tool
+        return _tool('no_annotations_tool', None)
 
     @pytest.mark.asyncio
     async def test_read_only_false_returns_all_tools(
@@ -153,7 +143,7 @@ class TestOnListTools:
     async def test_read_only_true_filters_no_hint_tools(
         self, mock_context, read_only_tool, no_hint_tool
     ):
-        """Test that read_only=True filters out tools without readOnlyHint."""
+        """Test that read_only=True filters out tools without read_only_hint."""
         # Arrange
         tools = [read_only_tool, no_hint_tool]
         call_next_mock = AsyncMock(return_value=tools)
@@ -186,10 +176,7 @@ class TestOnListTools:
     async def test_read_only_true_with_only_read_only_tools(self, mock_context, read_only_tool):
         """Test that read_only=True passes through read-only tools."""
         # Arrange
-        read_only_tool2 = Mock()
-        read_only_tool2.name = 'read_only_tool2'
-        read_only_tool2.annotations = Mock()
-        read_only_tool2.annotations.readOnlyHint = True
+        read_only_tool2 = _tool('read_only_tool2', ToolAnnotations(read_only_hint=True))
 
         tools = [read_only_tool, read_only_tool2]
         call_next_mock = AsyncMock(return_value=tools)
@@ -276,21 +263,13 @@ class TestOnCallTool:
 
     @pytest.fixture
     def mock_read_only_tool(self):
-        """Tool with readOnlyHint=True."""
-        tool = Mock()
-        tool.name = 'read_only_tool'
-        tool.annotations = Mock()
-        tool.annotations.readOnlyHint = True
-        return tool
+        """Tool with read_only_hint=True."""
+        return _tool('read_only_tool', ToolAnnotations(read_only_hint=True))
 
     @pytest.fixture
     def mock_write_tool(self):
-        """Tool with readOnlyHint=False."""
-        tool = Mock()
-        tool.name = 'write_tool'
-        tool.annotations = Mock()
-        tool.annotations.readOnlyHint = False
-        return tool
+        """Tool with read_only_hint=False."""
+        return _tool('write_tool', ToolAnnotations(read_only_hint=False))
 
     def _make_context(self, tool_name, get_tool_return):
         """Create a mock MiddlewareContext for on_call_tool."""
@@ -319,7 +298,7 @@ class TestOnCallTool:
 
     @pytest.mark.asyncio
     async def test_read_only_true_allows_read_only_tool(self, mock_read_only_tool):
-        """Test that read_only=True allows tools with readOnlyHint=True."""
+        """Test that read_only=True allows tools with read_only_hint=True."""
         # Arrange
         context = self._make_context('read_only_tool', mock_read_only_tool)
         call_next = AsyncMock(return_value=['result'])
@@ -334,7 +313,7 @@ class TestOnCallTool:
 
     @pytest.mark.asyncio
     async def test_read_only_true_rejects_write_tool(self, mock_write_tool):
-        """Test that read_only=True rejects tools with readOnlyHint=False."""
+        """Test that read_only=True rejects tools with read_only_hint=False."""
         # Arrange
         context = self._make_context('write_tool', mock_write_tool)
         call_next = AsyncMock()
