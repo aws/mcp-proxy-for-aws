@@ -47,12 +47,7 @@ class ToolFilteringMiddleware(Middleware):
             # Check the tool annotations and disable if needed
             annotations = tool.annotations
 
-            # Skip the tools with no read_only_hint=True annotation.
-            # MCP SDK v2 renamed the model field from `readOnlyHint` to `read_only_hint`.
-            # Reading the old spelling still works through fastmcp's compatibility bridge, but
-            # that bridge is opt-out (FASTMCP_MCP_CAMELCASE_COMPAT=false) and slated for
-            # removal -- and when it is off, the old name reads as absent, so every tool would
-            # look non-read-only and --read-only would filter the entire tool list away.
+            # Skip the tools with no read_only_hint=True annotation
             read_only_hint = getattr(annotations, 'read_only_hint', False)
             if not read_only_hint:
                 # Skip tools that don't have read_only_hint=True

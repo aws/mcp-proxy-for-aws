@@ -47,9 +47,6 @@ class AWSMCPProxyClient(StatefulProxyClient):
             response = http_error.response
             try:
                 body = await response.aread()
-                # SDK v2 turned JSONRPCMessage into a plain union alias, so it no longer
-                # carries pydantic's validators. The SDK exposes a TypeAdapter over the same
-                # union for exactly this.
                 jsonrpc_msg = jsonrpc_message_adapter.validate_json(body)
             except Exception as e:
                 logger.debug('HTTP error is not a valid MCP message.', exc_info=e)
