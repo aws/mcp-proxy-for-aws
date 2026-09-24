@@ -14,10 +14,10 @@
 
 """Tests for proxy module."""
 
-import httpx
+import httpx2
 import pytest
 from fastmcp.client.transports import ClientTransport
-from mcp import McpError
+from mcp import MCPError
 from mcp.types import ErrorData, InitializeRequest, JSONRPCError
 from mcp_proxy_for_aws.proxy import (
     AWSMCPProxyClient,
@@ -49,10 +49,10 @@ async def test_proxy_client_connect_http_error_with_mcp_error():
     mock_response = Mock()
     mock_response.aread = AsyncMock(return_value=jsonrpc_error.model_dump_json().encode())
 
-    http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
+    http_error = httpx2.HTTPStatusError('error', request=Mock(), response=mock_response)
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
         assert exc_info.value.error.message == 'Invalid Request'
@@ -67,10 +67,10 @@ async def test_proxy_client_connect_http_error_non_mcp():
     mock_response = Mock()
     mock_response.aread = AsyncMock(return_value=b'Not a JSON-RPC message')
 
-    http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
+    http_error = httpx2.HTTPStatusError('error', request=Mock(), response=mock_response)
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(httpx2.HTTPStatusError):
             await client._connect()
 
 
@@ -171,17 +171,16 @@ async def test_client_factory_disconnect_all_handles_exceptions():
 
 @pytest.mark.asyncio
 async def test_proxy_client_connect_runtime_error_with_mcp_error():
-    """Test connection handles RuntimeError wrapping McpError."""
+    """Test connection handles RuntimeError wrapping MCPError."""
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
-    error_data = ErrorData(code=-32600, message='Invalid Request')
-    mcp_error = McpError(error=error_data)
+    mcp_error = MCPError(code=-32600, message='Invalid Request')
     runtime_error = RuntimeError('Connection failed')
     runtime_error.__cause__ = mcp_error
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
 
@@ -225,7 +224,7 @@ async def test_proxy_client_connect_runtime_error_with_timeout():
             client,
             '_disconnect',
             new_callable=AsyncMock,
-            side_effect=httpx.TimeoutException('timeout'),
+            side_effect=httpx2.TimeoutException('timeout'),
         ):
             result = await client._connect()
             assert result == 'connected'
@@ -241,7 +240,7 @@ async def test_proxy_client_max_connect_retry_default():
 
 @pytest.mark.asyncio
 async def test_proxy_client_connect_credential_error():
-    """Test connection converts RuntimeError wrapping credential ValueError to McpError."""
+    """Test connection converts RuntimeError wrapping credential ValueError to MCPError."""
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
@@ -252,7 +251,7 @@ async def test_proxy_client_connect_credential_error():
     runtime_error.__cause__ = credential_error
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32603
         assert 'credentials' in exc_info.value.error.message.lower()

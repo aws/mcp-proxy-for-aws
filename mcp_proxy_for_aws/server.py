@@ -23,7 +23,7 @@ This server provides a unified interface to backend servers by:
 """
 
 import asyncio
-import httpx
+import httpx2
 import logging
 import os
 from fastmcp.server.middleware.error_handling import RetryMiddleware
@@ -95,7 +95,7 @@ async def run_proxy(args) -> None:
         all_profiles[1:],
     )
 
-    timeout = httpx.Timeout(
+    timeout = httpx2.Timeout(
         args.timeout,
         connect=args.connect_timeout,
         read=args.read_timeout,
@@ -177,7 +177,7 @@ def add_profile_override_middleware(
     service: str,
     region: str,
     metadata: dict,
-    timeout: httpx.Timeout,
+    timeout: httpx2.Timeout,
     endpoint: str,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
@@ -192,7 +192,7 @@ def add_profile_override_middleware(
         service: The AWS service name
         region: The AWS region
         metadata: User-supplied metadata (AWS_REGION is resolved per profile by the middleware)
-        timeout: The httpx timeout configuration
+        timeout: The httpx2 timeout configuration
         endpoint: The MCP endpoint URL
         disable_telemetry: Whether to disable telemetry on profile transports
         skip_auth: Whether to skip signing when credentials are unavailable

@@ -14,7 +14,7 @@
 
 """Tests for the mcp-proxy-for-aws Server."""
 
-import httpx
+import httpx2
 import os
 import pytest
 from fastmcp.client.transports import ClientTransport
@@ -409,7 +409,7 @@ class TestServer:
             result = determine_service_name(endpoint)
             assert result == expected_service
 
-    @patch('mcp_proxy_for_aws.sigv4_helper.httpx.AsyncClient')
+    @patch('mcp_proxy_for_aws.sigv4_helper.httpx2.AsyncClient')
     def test_create_sigv4_client(self, mock_async_client):
         """Test creating SigV4 authenticated client with request hooks."""
         create_sigv4_client(service='test-service', region='us-west-2', profile='test-profile')
@@ -459,7 +459,7 @@ class TestProfileDedup:
             service='test',
             region='us-east-1',
             metadata={},
-            timeout=httpx.Timeout(30),
+            timeout=httpx2.Timeout(30),
             endpoint='https://test.example.com',
         )
         assert result is not None
@@ -475,7 +475,7 @@ class TestProfileDedup:
             service='test',
             region='us-east-1',
             metadata={},
-            timeout=httpx.Timeout(30),
+            timeout=httpx2.Timeout(30),
             endpoint='https://test.example.com',
         )
         assert result is not None
@@ -492,7 +492,7 @@ class TestProfileDedup:
             service='test',
             region='us-east-1',
             metadata={},
-            timeout=httpx.Timeout(30),
+            timeout=httpx2.Timeout(30),
             endpoint='https://test.example.com',
         )
         assert result is None

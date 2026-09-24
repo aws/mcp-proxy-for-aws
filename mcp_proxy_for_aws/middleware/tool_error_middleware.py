@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import anyio
-import httpx
+import httpx2
 import logging
 import mcp.types as mt
 from fastmcp.exceptions import ToolError
@@ -79,7 +79,7 @@ class ToolErrorMiddleware(Middleware):
         """
         current: BaseException | None = error
         while current is not None:
-            if isinstance(current, httpx.HTTPStatusError) and current.response.status_code in (
+            if isinstance(current, httpx2.HTTPStatusError) and current.response.status_code in (
                 401,
                 403,
             ):

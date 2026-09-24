@@ -47,10 +47,10 @@ class ToolFilteringMiddleware(Middleware):
             # Check the tool annotations and disable if needed
             annotations = tool.annotations
 
-            # Skip the tools with no readOnlyHint=True annotation
-            read_only_hint = getattr(annotations, 'readOnlyHint', False)
+            # Skip the tools with no read_only_hint=True annotation
+            read_only_hint = getattr(annotations, 'read_only_hint', False)
             if not read_only_hint:
-                # Skip tools that don't have readOnlyHint=True
+                # Skip tools that don't have read_only_hint=True
                 self.logger.info('Skipping tool %s needing write permissions', tool.name)
                 continue
 
@@ -81,7 +81,7 @@ class ToolFilteringMiddleware(Middleware):
                     f'Tool {context.message.name!r} could not be resolved from the upstream '
                     'server, so its read-only hint could not be verified.'
                 )
-            if not getattr(tool.annotations, 'readOnlyHint', False):
+            if not getattr(tool.annotations, 'read_only_hint', False):
                 raise ToolError(
                     f'Tool {context.message.name!r} is not available in read-only mode.'
                 )

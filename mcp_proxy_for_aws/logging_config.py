@@ -44,7 +44,7 @@ def configure_logging(level: str | None = None) -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(console_handler)
 
-    # Set httpx logging to WARNING by default to reduce noise
-    logging.getLogger('httpx').setLevel(logging.WARNING)
-    logging.getLogger('httpcore').setLevel(logging.WARNING)
-    logging.getLogger('botocore').setLevel(logging.WARNING)
+    # Set HTTP client logging to WARNING by default to reduce noise. httpx2 renamed its
+    # loggers; both spellings are listed because dependencies may still pull in httpx itself.
+    for name in ('httpx', 'httpx2', 'httpcore', 'httpcore2', 'botocore'):
+        logging.getLogger(name).setLevel(logging.WARNING)
