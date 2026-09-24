@@ -19,10 +19,6 @@ from botocore.credentials import Credentials
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
 from functools import partial
-
-# `TransportStreams` lives in an underscored module but is listed in that module's `__all__`,
-# and it is where the SDK's own type checker points callers. There is no non-underscored
-# re-export to use instead.
 from mcp.client._transport import TransportStreams
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client

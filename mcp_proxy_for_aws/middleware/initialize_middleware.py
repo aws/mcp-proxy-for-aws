@@ -82,8 +82,6 @@ class InitializeMiddleware(Middleware):
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
-            # SDK v2 field name; the camelCase `clientInfo` spelling only resolves through
-            # fastmcp's deprecation bridge.
             client_info = context.message.params.client_info
             set_client_info(client_info)
             logger.info(
@@ -105,18 +103,11 @@ class InitializeMiddleware(Middleware):
                 # will be displayed in the q cli logs.
                 await client._connect()
 
-            # Report the backend's instructions rather than the proxy's own, so the client is
-            # told what the backend it is really talking to can do.
-            #
-            # SDK v2 removed `ServerSession._init_options`, which earlier releases reached into
-            # to do this before the response was built. Both remaining routes are needed,
-            # because the two eras read instructions at different moments: the handshake eras
-            # snapshot them while `call_next` builds the InitializeResult (so the result is
-            # rewritten after the fact, below), and the sessionless era reads them off the
-            # server object per request (so the attribute is set, in _publish_instructions).
-            #
-            # Backend capabilities are no longer copied by hand: fastmcp 4's proxy negotiates
-            # them from the backend connection itself.
+            # Report the backend's instructions rather than the proxy's own. Two routes are
+            # needed because the eras read instructions at different moments: the handshake
+            # eras snapshot them while `call_next` builds the result (rewritten below), the
+            # sessionless era reads them off the server object (set in _publish_instructions).
+            # Capabilities are no longer copied by hand; fastmcp 4's proxy negotiates them.
             instructions = self._backend_instructions(client)
             if instructions:
                 self._publish_instructions(context, instructions)

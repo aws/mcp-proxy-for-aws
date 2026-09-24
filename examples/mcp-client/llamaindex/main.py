@@ -86,9 +86,7 @@ async def create_agent():
         endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
     )
 
-    # Get authenticated transport streams from the MCP client.
-    # MCP SDK v2 yields two streams; the session-id callback SDK v1 returned is gone, because
-    # the modern protocol revision is sessionless.
+    # Get authenticated transport streams from the MCP client
     async with mcp_client as (read, write):
         # Create an MCP session with the transport streams
         async with ClientSession(read, write) as session:
