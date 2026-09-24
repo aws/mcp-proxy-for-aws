@@ -15,6 +15,7 @@
 import logging
 from dataclasses import dataclass
 from fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 from typing import Any
 
 
@@ -88,6 +89,12 @@ async def elicit_for_my_name(elicitation_expected: str, ctx: Context):
 
 
 ##### Metadata Testing
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True))
+def read_only_probe() -> str:
+    """MCP Tool annotated read-only, so the proxy's --read-only filtering has something to see."""
+    return 'read-only ok'
 
 
 @mcp.tool
