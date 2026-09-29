@@ -16,7 +16,7 @@
 
 MCP's older protocol versions open with a handshake: the client sends `initialize` and the
 server answers with what it supports. The newest one, `2026-07-28`, dropped the handshake --
-every request stands on its own. fastmcp 4 negotiates whichever the client asks for.
+every request stands on its own. The client picks which to negotiate.
 
 That difference matters to a proxy. With no handshake, `InitializeMiddleware.on_initialize`
 never runs, so its `on_request` fallback is what connects the backend and forwards the
@@ -32,8 +32,7 @@ from .mcp.simple_mcp_client import build_mcp_client
 
 logger = logging.getLogger(__name__)
 
-# 'legacy' pins the older handshake protocol; 'auto' lets fastmcp negotiate, which
-# against a fastmcp 4 server settles on the newer handshake-free 2026-07-28.
+# 'legacy' pins the older handshake protocol; 'auto' negotiates, settling on 2026-07-28.
 PROTOCOLS = ['legacy', 'auto']
 
 
@@ -69,9 +68,8 @@ async def test_backend_instructions_reach_the_client_on_both_protocols(
 ):
     """The client is told the backend's instructions, not the proxy's own placeholder.
 
-    The two protocol versions read instructions at different moments, so `InitializeMiddleware`
-    needs a different route for each. MCP SDK v2 removed the private attribute the older code
-    wrote through, and a mock-based unit test could not catch that, so assert it for real here.
+    The two protocol versions read instructions at different moments, so
+    `InitializeMiddleware` needs a different route for each.
     """
     client = build_mcp_client(
         endpoint=remote_mcp_server_configuration['endpoint'],
@@ -93,7 +91,7 @@ async def test_backend_instructions_reach_the_client_on_both_protocols(
 async def test_read_only_hint_survives_on_both_protocols(
     remote_mcp_server_configuration: RemoteMCPServerConfiguration, mode: str
 ):
-    """Tool annotations arrive under the MCP SDK v2 `read_only_hint` field name.
+    """Tool annotations arrive under the `read_only_hint` field name.
 
     `--read-only` filters on this hint, so reading the wrong field name filters every tool away
     instead of failing.

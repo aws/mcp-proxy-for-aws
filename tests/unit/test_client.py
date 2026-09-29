@@ -38,9 +38,7 @@ def mock_session():
 @pytest.fixture
 def mock_streams():
     """Mock stream components."""
-    # Returns (read_stream, write_stream) to mimic the client context manager. MCP SDK v2
-    # yields two streams, not three: the `get_session_id` callback is gone, because the modern
-    # protocol revision is sessionless.
+    # Returns (read_stream, write_stream) to mimic the client context manager.
     return AsyncMock(), AsyncMock()
 
 

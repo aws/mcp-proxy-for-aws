@@ -124,7 +124,6 @@ def _sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
 
 def _build_user_agent(disable_telemetry: bool) -> str:
     """Build the User-Agent header value, including client telemetry when available."""
-    # Wire-visible: reports `python-httpx2` where releases before fastmcp 4 reported `python-httpx`.
     user_agent = f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}'
 
     client_info = get_client_info()

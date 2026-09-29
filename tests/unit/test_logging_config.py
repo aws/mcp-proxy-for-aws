@@ -51,9 +51,7 @@ def test_configure_logging_invalid_level():
 def test_httpx_logging_level():
     """Test that HTTP client logging is set to WARNING.
 
-    httpx2 renamed its loggers from ``httpx``/``httpcore.*`` to ``httpx2``/``httpcore2.*``.
-    Both spellings must be quietened: the httpx2 names are what fastmcp 4 emits under, and
-    the httpx names still reach the root logger through other dependencies.
+    Both httpx and httpx2 logger names must be quietened, since dependencies may use either.
     """
     # Configure logging
     configure_logging()

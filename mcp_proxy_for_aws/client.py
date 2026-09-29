@@ -76,12 +76,7 @@ def aws_iam_streamablehttp_client(
             pass
 
     Note:
-        The MCP Python SDK v2 (which fastmcp 4 requires) yields two streams rather than the
-        three that SDK v1 yielded: the ``get_session_id`` callback is gone, because the modern
-        protocol revision is sessionless and the session id is no longer transport state a
-        caller can read. The removed ``sse_read_timeout`` parameter has no SDK v2 equivalent;
-        it was already a no-op here, since it was never forwarded to the transport. Bound a
-        long-lived read with ``timeout`` or a custom ``httpx_client_factory`` instead.
+        Bound a long-lived read with ``timeout`` or a custom ``httpx_client_factory``.
     """
     logger.debug('Preparing AWS IAM MCP client for endpoint: %s', endpoint)
 

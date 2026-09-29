@@ -24,20 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 class InitializeMiddleware(Middleware):
-    """Intercept MCP initialize request and initialize the proxy client.
+    """Connect the proxy client before the first tool call, and report the backend's identity.
 
-    Two entry points, one per protocol era:
-
-    ``on_initialize`` handles the handshake eras (through ``2025-11-25``), where the client
-    sends an ``initialize`` request carrying its identity. Every MCP client shipping today
-    negotiates one of these, so this is the path that normally runs.
-
-    ``on_request`` handles the ``2026-07-28`` era, where there is no handshake at all -- the
-    protocol is sessionless, so ``on_initialize`` never fires and fastmcp documents it as
-    such. Without a fallback the backend would stay unconnected until the first tool call, and
-    a misconfigured endpoint would surface as a confusing mid-call failure rather than at
-    connect time. The fallback restores the eager connect; it cannot restore the client
-    identity, because the sessionless protocol does not carry ``clientInfo`` on any request.
+    ``on_initialize`` runs when the client opens with a handshake, which is where the client
+    identity comes from. Protocol version ``2026-07-28`` has no handshake, so ``on_request``
+    connects the backend on the first request instead -- otherwise a bad endpoint would only
+    surface mid-tool-call. That path has no client identity to capture.
     """
 
     def __init__(self, client_factory: AWSMCPProxyClientFactory) -> None:
@@ -50,10 +42,8 @@ class InitializeMiddleware(Middleware):
     def _backend_instructions(client) -> str | None:
         """Return the backend server's instructions, if it sent any.
 
-        Reads ``Client.instructions`` rather than ``Client.initialize_result.instructions``:
-        the latter is ``None`` whenever the backend connection negotiated the sessionless era,
-        because there is no InitializeResult to hold it. ``Client.instructions`` is fastmcp 4's
-        era-neutral accessor for the same value.
+        ``Client.initialize_result`` is ``None`` when the backend connection had no handshake,
+        so read ``Client.instructions``, which holds the value either way.
         """
         instructions = getattr(client, 'instructions', None)
         return instructions if isinstance(instructions, str) and instructions else None
@@ -62,10 +52,8 @@ class InitializeMiddleware(Middleware):
     def _publish_instructions(context: MiddlewareContext, instructions: str) -> None:
         """Point the proxy's advertised instructions at the backend's.
 
-        This is what the sessionless era reads: it has no handshake to answer, so it builds its
-        ``server/discover`` reply from the server object at request time. Setting the attribute
-        here is therefore enough on that era, and harmless on the handshake eras, where
-        ``on_initialize`` additionally rewrites the already-built result.
+        A handshake-free connection builds its reply from the server object at request time, so
+        setting this is what it reads.
         """
         fastmcp_ctx = context.fastmcp_context
         if fastmcp_ctx is None:
@@ -103,11 +91,9 @@ class InitializeMiddleware(Middleware):
                 # will be displayed in the q cli logs.
                 await client._connect()
 
-            # Report the backend's instructions rather than the proxy's own. Two routes are
-            # needed because the eras read instructions at different moments: the handshake
-            # eras snapshot them while `call_next` builds the result (rewritten below), the
-            # sessionless era reads them off the server object (set in _publish_instructions).
-            # Capabilities are no longer copied by hand; fastmcp 4's proxy negotiates them.
+            # Report the backend's instructions rather than the proxy's own. A handshake
+            # snapshots them while `call_next` builds the result, so that result is rewritten
+            # below as well as the server object being set.
             instructions = self._backend_instructions(client)
             if instructions:
                 self._publish_instructions(context, instructions)
@@ -122,20 +108,13 @@ class InitializeMiddleware(Middleware):
 
     @override
     async def on_request(self, context: MiddlewareContext, call_next: CallNext):
-        """Connect the backend on the first request of a sessionless (2026-07-28) connection.
+        """Connect the backend on the first request when the connection had no handshake.
 
-        On the handshake eras ``on_initialize`` has already run and set the flag, so this is a
-        straight pass-through. On the sessionless era it stands in for the handshake that never
-        happens, so the backend is reachable (or the failure is reported) before the first tool
-        call rather than during it.
+        A pass-through once ``on_initialize`` has already connected.
         """
         if not self._backend_connected:
             self._backend_connected = True
-            logger.info(
-                'No initialize handshake seen (sessionless protocol); '
-                'connecting the backend on first request %s.',
-                context.method,
-            )
+            logger.info('No initialize handshake seen; connecting backend on %s.', context.method)
             client = await self._client_factory.get_client()
             await client._connect()
             instructions = self._backend_instructions(client)

@@ -100,9 +100,8 @@ async def test_on_initialize_connects_client():
     mock_client._connect.assert_called_once()
     mock_call_next.assert_called_once_with(mock_context)
 
-    # Backend sent no instructions, so the proxy's own are untouched. Capabilities are no
-    # longer copied here at all; fastmcp 4's proxy negotiates them from the backend connection
-    # (asserted end to end in test_backend_capabilities_are_proxied_on_both_eras).
+    # Backend sent no instructions, so the proxy's own are untouched. Capabilities are not
+    # copied here; the proxy negotiates them (see test_backend_capabilities_are_proxied).
     assert mock_fastmcp_ctx.fastmcp.instructions == 'proxy instructions'
 
 
@@ -167,8 +166,8 @@ async def test_on_initialize_skips_connect_for_special_clients(client_name):
 @pytest.mark.parametrize(
     'mode, backend_instructions, expected',
     [
-        # Both eras must end up reporting the backend's instructions, though they read them at
-        # different moments -- see InitializeMiddleware._publish_instructions.
+        # Both protocol versions must report the backend's instructions, though they read them
+        # at different moments -- see InitializeMiddleware._publish_instructions.
         ('legacy', 'BACKEND SAYS HELLO', 'BACKEND SAYS HELLO'),
         ('auto', 'BACKEND SAYS HELLO', 'BACKEND SAYS HELLO'),
         # A backend that sends none must not blank out the proxy's own.
@@ -180,10 +179,8 @@ async def test_on_initialize_skips_connect_for_special_clients(client_name):
 async def test_backend_instructions_reach_the_client(mode, backend_instructions, expected):
     """The client is told the backend's instructions, not the proxy's placeholder.
 
-    Driven through a real FastMCPProxy and a real Client rather than mocks. The mock-based
-    version of this test asserted against a `Mock` stand-in for a private SDK attribute
-    (`ServerSession._init_options`) that SDK v2 removed outright, so it kept passing after the
-    behaviour it covered had stopped working.
+    Driven through a real FastMCPProxy and Client: a mocked session would report success
+    whether or not the instructions were actually forwarded.
     """
     backend = FastMCP('backend-server', instructions=backend_instructions)
 
@@ -208,13 +205,8 @@ async def test_backend_instructions_reach_the_client(mode, backend_instructions,
 
 @pytest.mark.parametrize('mode', ['legacy', 'auto'])
 @pytest.mark.asyncio
-async def test_backend_capabilities_are_proxied_on_both_eras(mode):
-    """Backend tools/prompts/resources reach the client without hand-copied capabilities.
-
-    Earlier releases copied `InitializeResult.capabilities` onto the session by hand. fastmcp 4
-    negotiates them from the backend connection instead, so this asserts the outcome that
-    mattered: everything the backend exposes is reachable through the proxy.
-    """
+async def test_backend_capabilities_are_proxied(mode):
+    """Everything the backend exposes -- tools, resources, prompts -- is reachable through the proxy."""
     backend = FastMCP('backend-server')
 
     @backend.tool()
@@ -244,11 +236,10 @@ async def test_backend_capabilities_are_proxied_on_both_eras(mode):
 
 @pytest.mark.asyncio
 async def test_on_request_connects_backend_when_no_handshake_ran():
-    """The sessionless era never calls on_initialize, so on_request must connect the backend.
+    """A handshake-free connection never calls on_initialize, so on_request must connect.
 
-    Without this fallback the backend would stay unconnected until the first tool call, turning
-    an unreachable or misconfigured endpoint into a mid-call failure instead of a connect-time
-    one.
+    Otherwise the backend stays unconnected until the first tool call, turning a bad endpoint
+    into a mid-call failure instead of a connect-time one.
     """
     mock_client = Mock()
     mock_client._connect = AsyncMock()
@@ -286,7 +277,7 @@ async def test_on_request_connects_backend_only_once():
 
 @pytest.mark.asyncio
 async def test_on_request_does_not_reconnect_after_handshake():
-    """On the handshake eras on_initialize already connected, so on_request must not repeat it."""
+    """After a handshake, on_initialize already connected, so on_request must not repeat it."""
     mock_client = Mock()
     mock_client._connect = AsyncMock()
     mock_client.initialize_result = None
