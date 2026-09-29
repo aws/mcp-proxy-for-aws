@@ -22,11 +22,9 @@ from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from unittest.mock import AsyncMock, Mock
 
 
-# These fixtures annotate tools with the real `mcp.types.ToolAnnotations` model rather than a
-# bare `Mock`. A `Mock` auto-creates whatever attribute is read, so it reports every hint as
-# truthy no matter which name the middleware asks for -- which is how the SDK v2 rename from
-# `read_only_hint` to `read_only_hint` slipped past this suite entirely. Using the real model
-# pins the assertions to the field name the SDK actually ships.
+# Annotate with the real `mcp.types.ToolAnnotations` model, not a bare `Mock`: a `Mock`
+# auto-creates whatever attribute is read, so it reports every hint truthy regardless of the
+# field name the middleware asks for.
 def _tool(name: str, annotations: ToolAnnotations | None) -> Mock:
     """Build a tool stub carrying real ToolAnnotations (or none at all)."""
     tool = Mock()
