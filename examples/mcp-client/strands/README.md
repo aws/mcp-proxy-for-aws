@@ -23,6 +23,12 @@ MCP_SERVER_REGION=us-west-2
 
 All three environment variables are required.
 
+> **Currently not runnable against this repository's checkout.** Strands Agents SDK pins the MCP Python
+> SDK below 2.0 (`mcp<2`), while mcp-proxy-for-aws now requires fastmcp 4, which requires
+> `mcp>=2.0.0`. This example is therefore excluded from the uv workspace and its transport code
+> still expects the SDK 1.x three-stream shape. Run it against a published
+> `mcp-proxy-for-aws<1.8` release, or wait for Strands Agents SDK to support mcp 2.x.
+
 ## Usage
 
 Run the example:

@@ -24,32 +24,42 @@ logger = logging.getLogger(__name__)
 
 
 class InitializeMiddleware(Middleware):
-    """Intercept MCP initialize request and initialize the proxy client."""
+    """Connect the proxy client before the first tool call, and report the backend's identity.
+
+    ``on_initialize`` runs when the client opens with a handshake, which is where the client
+    identity comes from. Protocol version ``2026-07-28`` has no handshake, so ``on_request``
+    connects the backend on the first request instead -- otherwise a bad endpoint would only
+    surface mid-tool-call. That path has no client identity to capture.
+    """
 
     def __init__(self, client_factory: AWSMCPProxyClientFactory) -> None:
         """Create a middleware with client factory."""
         super().__init__()
         self._client_factory = client_factory
+        self._backend_connected = False
 
-    def _overwrite_init_options(
-        self, context: MiddlewareContext, init_result: mt.InitializeResult
-    ):
-        """Overwrite the session's _init_options with the backend server's info.
+    @staticmethod
+    def _backend_instructions(client) -> str | None:
+        """Return the backend server's instructions, if it sent any.
 
-        The MCP SDK builds the InitializeResult from session._init_options
-        inside call_next. By modifying _init_options before call_next runs,
-        the response sent to the client will contain the backend server's
-        info instead of the proxy's defaults.
+        ``Client.initialize_result`` is ``None`` when the backend connection had no handshake,
+        so read ``Client.instructions``, which holds the value either way.
+        """
+        instructions = getattr(client, 'instructions', None)
+        return instructions if isinstance(instructions, str) and instructions else None
+
+    @staticmethod
+    def _publish_instructions(context: MiddlewareContext, instructions: str) -> None:
+        """Point the proxy's advertised instructions at the backend's.
+
+        A handshake-free connection builds its reply from the server object at request time, so
+        setting this is what it reads.
         """
         fastmcp_ctx = context.fastmcp_context
-        if fastmcp_ctx is None or fastmcp_ctx._session is None:
-            logger.debug('No session available, skipping init_options overwrite.')
+        if fastmcp_ctx is None:
+            logger.debug('No fastmcp context available, skipping instructions forwarding.')
             return
-
-        fastmcp_ctx._session._init_options.capabilities = init_result.capabilities
-
-        if init_result.instructions:
-            fastmcp_ctx._session._init_options.instructions = init_result.instructions
+        fastmcp_ctx.fastmcp.instructions = instructions
 
     @override
     async def on_initialize(
@@ -60,7 +70,7 @@ class InitializeMiddleware(Middleware):
         try:
             logger.debug('Received initialize request %s.', context.message)
             self._client_factory.set_init_params(context.message)
-            client_info = context.message.params.clientInfo
+            client_info = context.message.params.client_info
             set_client_info(client_info)
             logger.info(
                 'Captured client_info: name=%s, version=%s', client_info.name, client_info.version
@@ -69,6 +79,7 @@ class InitializeMiddleware(Middleware):
             # connect the http client, fail and don't succeed the stdio connect
             # if remote client cannot be connected
             client_name = client_info.name.lower()
+            self._backend_connected = True
             if 'kiro cli' not in client_name and 'q dev cli' not in client_name:
                 # q cli / kiro cli uses the rust SDK which does not handle json rpc error
                 # properly during initialization.
@@ -80,12 +91,34 @@ class InitializeMiddleware(Middleware):
                 # will be displayed in the q cli logs.
                 await client._connect()
 
-            # Overwrite the proxy's init_options with the backend server's info
-            # so the InitializeResult sent to the client reflects the backend.
-            if client.initialize_result is not None:
-                self._overwrite_init_options(context, client.initialize_result)
+            # Report the backend's instructions rather than the proxy's own. A handshake
+            # snapshots them while `call_next` builds the result, so that result is rewritten
+            # below as well as the server object being set.
+            instructions = self._backend_instructions(client)
+            if instructions:
+                self._publish_instructions(context, instructions)
 
-            return await call_next(context)
+            result = await call_next(context)
+            if instructions and result is not None:
+                result.instructions = instructions
+            return result
         except Exception:
             logger.exception('Initialize failed in middleware.')
             raise
+
+    @override
+    async def on_request(self, context: MiddlewareContext, call_next: CallNext):
+        """Connect the backend on the first request when the connection had no handshake.
+
+        A pass-through once ``on_initialize`` has already connected.
+        """
+        if not self._backend_connected:
+            self._backend_connected = True
+            logger.info('No initialize handshake seen; connecting backend on %s.', context.method)
+            client = await self._client_factory.get_client()
+            await client._connect()
+            instructions = self._backend_instructions(client)
+            if instructions:
+                self._publish_instructions(context, instructions)
+
+        return await call_next(context)

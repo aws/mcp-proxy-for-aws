@@ -23,8 +23,20 @@ members = [
 # dependencies are dynamic and derived from this workspace's lock file at build time, so
 # including it would make `uv lock` build the wrapper's metadata from the very lock file
 # it is trying to write. See packages/proxy/hatch_build.py.
+#
+# Two examples are excluded for a different reason: their agent frameworks still pin the MCP
+# SDK below 2.0 (`agent-framework-core[all]` and `strands-agents` both require `mcp<2`), while
+# fastmcp 4 requires `mcp>=2.0.0`. A workspace resolves every member together, so leaving them
+# in either makes `uv lock` unsatisfiable (agent-framework) or silently backtracks the
+# framework to an ancient stub release that cannot be imported (strands-agents resolved to
+# 0.0.1). Both examples' own pyproject files are untouched and still installable standalone
+# against a published mcp-proxy-for-aws; restore them here once their frameworks admit mcp 2.x.
+# The langchain and llamaindex examples stay in: langchain-mcp-adapters allows `mcp>=1.24.0`
+# and llama-index-tools-mcp already requires `mcp>=2.0.0`.
 exclude = [
-    "packages/proxy"
+    "packages/proxy",
+    "examples/mcp-client/agent-framework",
+    "examples/mcp-client/strands"
 ]
 
 [project]
@@ -37,10 +49,17 @@ description = "MCP Proxy for AWS"
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
 dependencies = [
-    "fastmcp>=3.2,<3.5",
+    # fastmcp 4 moved to the MCP Python SDK v2 and the `2026-07-28` protocol revision.
+    # The 4.0.3 floor is deliberate: it carries the mixed-era backend fix
+    # (PrefectHQ/fastmcp#4971), which a proxy hits on every connection whose frontend and
+    # backend negotiate different protocol eras. The cap is the next major, which drops the
+    # camelCase compatibility bridge this project no longer relies on.
+    "fastmcp>=4.0.3,<5",
     # Used directly for SigV4 signing, request hooks and error handling, so it is declared
-    # rather than relied on transitively through fastmcp -> mcp. The cap matches mcp's own.
-    "httpx>=0.27.1,<1.0",
+    # rather than relied on transitively through fastmcp -> mcp. fastmcp 4 replaced httpx
+    # with httpx2 across its whole HTTP stack, and httpx2 rejects an `httpx.Auth` instance
+    # outright, so the signing path must be built on the same library fastmcp uses.
+    "httpx2>=2.13.1,<3.0",
     "boto3>=1.41.0",
     "botocore[crt]>=1.41.0",
 ]
@@ -134,7 +153,19 @@ docstring-code-format = true
 
 [tool.pyright]
 include = ["mcp_proxy_for_aws", "tests", "examples/*"]
-exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/dist", "**/build"]
+# The agent-framework and strands examples are excluded from the uv workspace (see
+# [tool.uv.workspace]), so their frameworks are not installed in the dev environment and every
+# import in them would be reported as unresolved. Re-include them when they rejoin the
+# workspace.
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+    "**/node_modules",
+    "**/dist",
+    "**/build",
+    "examples/mcp-client/agent-framework",
+    "examples/mcp-client/strands",
+]
 
 [tool.commitizen]
 name = "cz_conventional_commits"

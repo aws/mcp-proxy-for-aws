@@ -87,7 +87,7 @@ async def create_agent():
     )
 
     # Get authenticated transport streams from the MCP client
-    async with mcp_client as (read, write, session_id_callback):
+    async with mcp_client as (read, write):
         # Create an MCP session with the transport streams
         async with ClientSession(read, write) as session:
             # Load MCP tools from the session using LlamaIndex's MCPToolSpec

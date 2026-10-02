@@ -119,7 +119,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         mock_client = MagicMock()
         mock_create_sigv4_client.return_value = mock_client
@@ -162,7 +162,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -194,7 +194,7 @@ class TestCreateTransportWithSigv4:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_kwargs_passthrough(self, mock_create_sigv4_client):
         """Test that kwargs are passed through to create_sigv4_client."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         url = 'https://test-service.us-west-2.api.aws/mcp'
         service = 'test-service'
@@ -420,7 +420,7 @@ class TestCreateTransportWithCustomHeaders:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_caller_headers_merged_into_client(self, mock_create_sigv4_client):
         """Test caller headers are merged with the transport's own headers."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         mock_create_sigv4_client.return_value = MagicMock()
 
@@ -444,7 +444,7 @@ class TestCreateTransportWithCustomHeaders:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_caller_headers_take_precedence(self, mock_create_sigv4_client):
         """Test a caller header overrides the same transport header."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         mock_create_sigv4_client.return_value = MagicMock()
 
@@ -467,7 +467,7 @@ class TestCreateTransportWithCustomHeaders:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_caller_headers_registered_as_sensitive(self, mock_create_sigv4_client):
         """Test caller header names are redacted from logs."""
-        from httpx import Timeout
+        from httpx2 import Timeout
         from mcp_proxy_for_aws.sigv4_helper import _sanitize_headers
 
         mock_create_sigv4_client.return_value = MagicMock()
@@ -488,7 +488,7 @@ class TestCreateTransportWithCustomHeaders:
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_no_caller_headers_leaves_transport_headers_untouched(self, mock_create_sigv4_client):
         """Test omitting headers does not alter what the transport passes through."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         mock_create_sigv4_client.return_value = MagicMock()
 
@@ -519,7 +519,7 @@ class TestCreateTransportReservedHeaders:
     )
     def test_reserved_header_raises(self, name):
         """Test a header SigV4 rewrites is rejected rather than silently discarded."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         with pytest.raises(ValueError, match='set by SigV4 signing'):
             create_transport_with_sigv4(
@@ -533,7 +533,7 @@ class TestCreateTransportReservedHeaders:
 
     def test_non_reserved_header_allowed(self):
         """Test an ordinary header is accepted."""
-        from httpx import Timeout
+        from httpx2 import Timeout
 
         result = create_transport_with_sigv4(
             'https://test.example.com/mcp',
