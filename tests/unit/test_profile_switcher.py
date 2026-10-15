@@ -1045,3 +1045,99 @@ class TestProfileClientCustomHeaders:
             await mw._get_profile_client('dev-profile')
 
         assert mock_create.call_args.args[-1] == {'x-tenant': 'acme'}
+
+
+class TestConfigurableAuthTools:
+    """Verify auth_tools overrides which tools accept aws_profile."""
+
+    def _middleware(self, auth_tools):
+        return ProfileOverrideMiddleware(
+            allowed_profiles=ALLOWED_PROFILES,
+            default_profile='default-profile',
+            service='eks-mcp',
+            region='us-east-1',
+            metadata={},
+            timeout=httpx.Timeout(30),
+            endpoint='https://eks-mcp.us-east-1.api.aws/mcp',
+            auth_tools=auth_tools,
+        )
+
+    def test_default_keeps_builtin_tool_set(self, middleware):
+        """Without auth_tools the AWS API MCP Server tools are used."""
+        assert middleware.is_auth_tool('aws___call_aws')
+        assert not middleware.is_auth_tool('list_k8s_resources')
+
+    def test_exact_names_and_patterns(self):
+        """Exact names and fnmatch patterns both match; everything else is excluded."""
+        middleware = self._middleware(['list_k8s_resources', 'get_*'])
+        assert middleware.is_auth_tool('list_k8s_resources')
+        assert middleware.is_auth_tool('get_pod_logs')
+        assert not middleware.is_auth_tool('search_eks_documentation')
+        assert not middleware.is_auth_tool('aws___call_aws')
+
+    def test_wildcard_matches_every_tool(self):
+        """A bare * opts every tool in."""
+        middleware = self._middleware(['*'])
+        assert middleware.is_auth_tool('read_k8s_resource')
+        assert middleware.is_auth_tool('aws___call_aws')
+
+    @pytest.mark.asyncio
+    async def test_injects_aws_profile_into_configured_tools(self, mock_context):
+        """Configured tools get aws_profile in their schema, others do not."""
+        middleware = self._middleware(['list_k8s_resources'])
+        eks_tool = Mock()
+        eks_tool.name = 'list_k8s_resources'
+        eks_tool.parameters = {
+            'type': 'object',
+            'properties': {'cluster_name': {'type': 'string'}},
+        }
+        doc_tool = Mock()
+        doc_tool.name = 'search_eks_documentation'
+        doc_tool.parameters = {'type': 'object', 'properties': {'query': {'type': 'string'}}}
+        call_next = AsyncMock(return_value=[eks_tool, doc_tool])
+
+        result = await middleware.on_list_tools(mock_context, call_next)
+
+        assert result[0].parameters['properties']['aws_profile']['enum'] == sorted(
+            ALLOWED_PROFILES
+        )
+        assert 'aws_profile' not in result[1].parameters['properties']
+
+    @pytest.mark.asyncio
+    async def test_routes_configured_tool_through_profile_client(self, mock_context):
+        """A configured tool called with a non-default profile uses the dedicated client."""
+        middleware = self._middleware(['*'])
+        mock_context.message = Mock()
+        mock_context.message.name = 'list_k8s_resources'
+        mock_context.message.arguments = {'cluster_name': 'dev', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock()
+
+        mock_result = Mock()
+        mock_result.is_error = False
+        mock_result.content = [Mock(text='ok')]
+        mock_result.structured_content = None
+        mock_result.meta = None
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(return_value=mock_result)
+
+        with patch.object(middleware, '_get_profile_client', AsyncMock(return_value=mock_client)):
+            await middleware.on_call_tool(mock_context, call_next)
+
+        mock_client.call_tool.assert_called_once_with(
+            'list_k8s_resources', {'cluster_name': 'dev'}, raise_on_error=False
+        )
+        call_next.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_tool_still_strips_and_passes_through(self, mock_context):
+        """Tools outside auth_tools keep the old behaviour: aws_profile stripped, normal path."""
+        middleware = self._middleware(['list_*'])
+        mock_context.message = Mock()
+        mock_context.message.name = 'search_eks_documentation'
+        mock_context.message.arguments = {'query': 'x', 'aws_profile': 'dev-profile'}
+        call_next = AsyncMock(return_value=Mock())
+
+        await middleware.on_call_tool(mock_context, call_next)
+
+        call_next.assert_called_once_with(mock_context)
+        assert 'aws_profile' not in mock_context.message.arguments

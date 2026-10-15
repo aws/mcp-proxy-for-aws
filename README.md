@@ -106,6 +106,7 @@ docker build -t mcp-proxy-for-aws .
 | ---	                 | ---	                                                                                                                                                                                                                                    | ---	                                                                        |---	|
 | `--service`	         | AWS service name for SigV4 signing, if omitted we try to infer this from the url	                                                                                                                                                       | Inferred from endpoint if not provided	                                     |No	|
 | `--profile`	         | AWS profile(s) to use. First profile is the default. Additional profiles enable per-call switching via `aws_profile` tool parameter (e.g., `--profile prod-readonly dev staging`)	| Falls back to `AWS_PROFILE` if `--profile` and `AWS_MCP_PROXY_PROFILES` are not set |No	|
+| `--profile-tools`	  | Tool names or fnmatch patterns that accept the `aws_profile` parameter when several profiles are configured (e.g., `--profile-tools list_k8s_resources "get_*"`, or `--profile-tools "*"` for every tool). Needed for backends other than the AWS API MCP Server, such as the EKS MCP Server	| AWS API MCP Server tools; `AWS_MCP_PROXY_PROFILE_TOOLS` takes precedence when set |No	|
 | `--region`	          | AWS region to use	                                                                                                                                                                                                                      | Uses `AWS_REGION` environment variable if not set	                           |No	|
 | `--metadata`	        | Metadata to inject into MCP requests as key=value pairs (e.g., `--metadata KEY1=value1 KEY2=value2`)                                                                                                                                    | `AWS_REGION` is automatically injected based on `--region` if not provided    |No	|
 | `--header`	          | Extra HTTP header as a key=value pair, repeat the flag for more (e.g., `--header x-tenant=acme --header x-trace=abc123`). Sent as real HTTP headers and covered by the SigV4 signature; values are redacted from logs. Headers set by signing (`authorization`, `date`, `x-amz-date`, `x-amz-security-token`) are rejected.                                       | None                                                                        |No	|
@@ -160,9 +161,22 @@ mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp --profile prod-reado
 AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp
 ```
 
+**Other backends (for example the EKS MCP Server):**
+
+By default only the AWS API MCP Server's auth-requiring tools accept `aws_profile`. For other backends, list the tool names or `fnmatch` patterns that should accept it:
+
+```bash
+mcp-proxy-for-aws-cli https://eks-mcp.us-east-1.api.aws/mcp --profile prod-readonly dev --profile-tools "*"
+
+# Via environment variable (takes precedence over --profile-tools)
+AWS_MCP_PROXY_PROFILE_TOOLS="list_k8s_resources read_k8s_resource get_pod_logs" mcp-proxy-for-aws-cli ...
+```
+
+`--read-only` still applies to every profile, so a read-only proxy stays read-only in every account. If profiles differ in what they may write, run separate proxies rather than mixing them behind one `aws_profile` switch.
+
 **How it works:**
 
-- The proxy injects an `aws_profile` parameter into auth-requiring tools
+- The proxy injects an `aws_profile` parameter into auth-requiring tools (the AWS API MCP Server tools by default, or the tools matched by `--profile-tools`)
 - The agent can pass `aws_profile` on any call to route it through a specific profile's credentials
 - If `aws_profile` is omitted, the default (first) profile is used
 - Invalid profiles are rejected with an error listing allowed values

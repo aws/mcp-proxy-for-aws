@@ -104,6 +104,18 @@ Examples:
     )
 
     parser.add_argument(
+        '--profile-tools',
+        nargs='+',
+        dest='profile_tools',
+        metavar='TOOL',
+        default=None,
+        help='Tool names or fnmatch patterns that accept the aws_profile parameter when '
+        'several profiles are configured (e.g., --profile-tools list_k8s_resources "get_*", '
+        'or --profile-tools "*" for every tool). Defaults to the AWS API MCP Server tools. '
+        'AWS_MCP_PROXY_PROFILE_TOOLS (space-separated) takes precedence when set.',
+    )
+
+    parser.add_argument(
         '--region',
         help='AWS region to sign (uses AWS_REGION environment variable if not provided)',
         default=None,
@@ -204,6 +216,8 @@ Examples:
     if args.endpoint is None:
         if args.profiles and '://' in args.profiles[-1]:
             args.endpoint = args.profiles.pop()
+        elif args.profile_tools and '://' in args.profile_tools[-1]:
+            args.endpoint = args.profile_tools.pop()
         else:
             parser.error('the following arguments are required: endpoint')
 

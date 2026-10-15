@@ -20,12 +20,17 @@ credentials. The argument is stripped before forwarding to the backend.
 
 Each non-default profile gets its own lazily-created ``StreamableHttpTransport`` and MCP
 session, so parallel subagents querying different accounts don't interfere with each other.
+
+Which tools accept ``aws_profile`` defaults to the AWS API MCP Server's auth-requiring tools
+(``AUTH_REQUIRING_TOOLS``). Backends with other tool names (for example the EKS MCP Server)
+opt in with ``auth_tools``: exact tool names or ``fnmatch`` patterns such as ``"*"``.
 When the default profile is specified explicitly, the call is routed through the normal
 middleware chain (no duplicate connection).
 """
 
 import asyncio
 import copy
+import fnmatch
 import httpx
 import logging
 import mcp.types as mt
@@ -67,6 +72,7 @@ class ProfileOverrideMiddleware(Middleware):
         disable_telemetry: bool = False,
         skip_auth: bool = False,
         headers: dict[str, str] | None = None,
+        auth_tools: Sequence[str] | None = None,
     ) -> None:
         """Initialize the middleware with connection and profile configuration.
 
@@ -74,9 +80,15 @@ class ProfileOverrideMiddleware(Middleware):
         ``AWS_REGION`` default): each profile client injects its own ``AWS_REGION``
         resolved from that profile's configuration, with user metadata taking
         precedence.
+
+        ``auth_tools`` lists the tool names (or ``fnmatch`` patterns) that accept
+        ``aws_profile``. When omitted, ``AUTH_REQUIRING_TOOLS`` is used.
         """
         super().__init__()
         self._allowed_profiles = set(allowed_profiles)
+        self._auth_tool_patterns: list[str] = (
+            list(auth_tools) if auth_tools else sorted(self.AUTH_REQUIRING_TOOLS)
+        )
         self._default_profile = default_profile
         self._endpoint = endpoint
         self._service = service
@@ -89,7 +101,8 @@ class ProfileOverrideMiddleware(Middleware):
         self._profile_clients: dict[str, Client] = {}
         self._lock = asyncio.Lock()
 
-    # Tools that require AWS authentication and support profile switching
+    # Tools that require AWS authentication and support profile switching, used when
+    # no ``auth_tools`` are configured (AWS API MCP Server tool names).
     AUTH_REQUIRING_TOOLS = {
         'aws___call_aws',
         'aws___run_script',
@@ -97,6 +110,10 @@ class ProfileOverrideMiddleware(Middleware):
         'aws___get_tasks',
         'aws___suggest_aws_commands',
     }
+
+    def is_auth_tool(self, name: str) -> bool:
+        """Whether ``name`` accepts ``aws_profile`` (exact name or ``fnmatch`` pattern)."""
+        return any(fnmatch.fnmatchcase(name, pattern) for pattern in self._auth_tool_patterns)
 
     # ── tool listing ────────────────────────────────────────────────
 
@@ -110,7 +127,7 @@ class ProfileOverrideMiddleware(Middleware):
         tools = await call_next(context)
 
         for tool in tools:
-            if tool.name not in self.AUTH_REQUIRING_TOOLS:
+            if not self.is_auth_tool(tool.name):
                 continue
             if not isinstance(tool.parameters, dict):
                 continue
@@ -150,7 +167,7 @@ class ProfileOverrideMiddleware(Middleware):
             # Only process aws_profile for auth-requiring tools.
             # If an agent hallucinates the parameter on a non-auth tool,
             # strip it silently and route through the normal path.
-            if context.message.name not in self.AUTH_REQUIRING_TOOLS:
+            if not self.is_auth_tool(context.message.name):
                 logger.warning('Ignoring aws_profile on non-auth tool %r', context.message.name)
                 arguments.pop('aws_profile', None)
                 return await call_next(context)

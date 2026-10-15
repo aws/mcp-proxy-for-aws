@@ -73,6 +73,11 @@ async def run_proxy(args) -> None:
     # Dedup profiles, preserve order, include all (including default)
     all_profiles = list(dict.fromkeys(profiles))
 
+    # AWS_MCP_PROXY_PROFILE_TOOLS: Space-separated tool names or fnmatch patterns that
+    # accept the aws_profile parameter. Takes precedence over --profile-tools. When
+    # neither is set the middleware falls back to the AWS API MCP Server tool names.
+    profile_tools = resolve_profile_tools(args)
+
     # The signing region must match the endpoint; the metadata region tells the
     # backend where to operate and follows the AWS CLI/boto3 resolution chain.
     signing_region = determine_signing_region(args.endpoint, args.region)
@@ -86,13 +91,15 @@ async def run_proxy(args) -> None:
 
     # Log server configuration
     logger.info(
-        'Using service: %s, signing region: %s, region: %s, metadata: %s, profile: %s, switch profiles: %s',
+        'Using service: %s, signing region: %s, region: %s, metadata: %s, profile: %s, '
+        'switch profiles: %s, profile tools: %s',
         service,
         signing_region,
         region,
         metadata,
         default_profile,
         all_profiles[1:],
+        profile_tools or 'default',
     )
 
     timeout = httpx.Timeout(
@@ -145,6 +152,7 @@ async def run_proxy(args) -> None:
             args.disable_telemetry,
             args.skip_auth,
             args.headers,
+            profile_tools,
         )
 
         if args.retries:
@@ -170,6 +178,21 @@ def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:
     mcp.add_middleware(ToolErrorMiddleware(tool_call_timeout=tool_timeout))
 
 
+def resolve_profile_tools(args) -> list[str] | None:
+    """Return the tool names/patterns that accept ``aws_profile``, or None for the default.
+
+    ``AWS_MCP_PROXY_PROFILE_TOOLS`` (space-separated) takes precedence over
+    ``--profile-tools``, mirroring ``AWS_MCP_PROXY_PROFILES`` and ``--profile``.
+    """
+    env_profile_tools = os.environ.get('AWS_MCP_PROXY_PROFILE_TOOLS')
+    if env_profile_tools:
+        return env_profile_tools.split()
+    profile_tools = getattr(args, 'profile_tools', None)
+    if isinstance(profile_tools, (list, tuple)) and profile_tools:
+        return list(profile_tools)
+    return None
+
+
 def add_profile_override_middleware(
     mcp: FastMCP,
     all_profiles: list[str],
@@ -182,6 +205,7 @@ def add_profile_override_middleware(
     disable_telemetry: bool = False,
     skip_auth: bool = False,
     headers: dict[str, str] | None = None,
+    auth_tools: list[str] | None = None,
 ) -> ProfileOverrideMiddleware | None:
     """Add profile override middleware to target MCP server.
 
@@ -197,6 +221,8 @@ def add_profile_override_middleware(
         disable_telemetry: Whether to disable telemetry on profile transports
         skip_auth: Whether to skip signing when credentials are unavailable
         headers: Additional HTTP headers to send on every request
+        auth_tools: Tool names or fnmatch patterns that accept aws_profile
+            (None keeps the AWS API MCP Server default)
 
     Returns:
         The ProfileOverrideMiddleware instance if added, None otherwise
@@ -205,7 +231,11 @@ def add_profile_override_middleware(
         return None
     if default_profile is None:
         return None
-    logger.info('Adding profile override middleware with profiles: %s', all_profiles)
+    logger.info(
+        'Adding profile override middleware with profiles: %s, tools: %s',
+        all_profiles,
+        auth_tools or 'default',
+    )
     middleware = ProfileOverrideMiddleware(
         allowed_profiles=all_profiles,
         default_profile=default_profile,
@@ -217,6 +247,7 @@ def add_profile_override_middleware(
         disable_telemetry=disable_telemetry,
         skip_auth=skip_auth,
         headers=headers,
+        auth_tools=auth_tools,
     )
     mcp.add_middleware(middleware)
     return middleware

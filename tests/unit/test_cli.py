@@ -433,3 +433,38 @@ class TestRepeatedKeyValueFlags:
         args = parse_args()
 
         assert args.headers == {'x-dup': 'second'}
+
+
+class TestProfileTools:
+    """Tests for the --profile-tools option."""
+
+    @patch('sys.argv', ['mcp-proxy-for-aws', 'https://test.example.com'])
+    def test_profile_tools_default_none(self):
+        """Without the flag, profile_tools is None (middleware default applies)."""
+        args = parse_args()
+        assert args.profile_tools is None
+
+    @patch(
+        'sys.argv',
+        [
+            'mcp-proxy-for-aws',
+            'https://test.example.com',
+            '--profile-tools',
+            'list_k8s_resources',
+            'get_*',
+        ],
+    )
+    def test_profile_tools_parsed(self):
+        """Several names/patterns are collected in order."""
+        args = parse_args()
+        assert args.profile_tools == ['list_k8s_resources', 'get_*']
+
+    @patch(
+        'sys.argv',
+        ['mcp-proxy-for-aws', '--profile-tools', '*', 'https://test.example.com'],
+    )
+    def test_profile_tools_before_endpoint(self):
+        """An endpoint swallowed by --profile-tools is recovered."""
+        args = parse_args()
+        assert args.endpoint == 'https://test.example.com'
+        assert args.profile_tools == ['*']

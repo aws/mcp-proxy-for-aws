@@ -25,6 +25,7 @@ from mcp_proxy_for_aws.server import (
     add_tool_filtering_middleware,
     main,
     parse_args,
+    resolve_profile_tools,
     run_proxy,
 )
 from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
@@ -678,3 +679,47 @@ class TestEnvVarActivatesMiddleware:
                 assert middleware._allowed_profiles == {'default', 'dev', 'staging'}
                 assert middleware._default_profile == 'default'
                 break
+
+
+class TestProfileTools:
+    """Tests for --profile-tools / AWS_MCP_PROXY_PROFILE_TOOLS resolution."""
+
+    @patch.dict('os.environ', {}, clear=False)
+    def test_defaults_to_none(self):
+        """No flag and no env var keeps the middleware default."""
+        os.environ.pop('AWS_MCP_PROXY_PROFILE_TOOLS', None)
+        args = Mock()
+        args.profile_tools = None
+        assert resolve_profile_tools(args) is None
+
+    @patch.dict('os.environ', {}, clear=False)
+    def test_cli_flag_used(self):
+        """--profile-tools is used when the env var is unset."""
+        os.environ.pop('AWS_MCP_PROXY_PROFILE_TOOLS', None)
+        args = Mock()
+        args.profile_tools = ['list_k8s_resources', 'get_*']
+        assert resolve_profile_tools(args) == ['list_k8s_resources', 'get_*']
+
+    @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILE_TOOLS': '  read_* list_* '})
+    def test_env_var_takes_precedence(self):
+        """AWS_MCP_PROXY_PROFILE_TOOLS wins over --profile-tools."""
+        args = Mock()
+        args.profile_tools = ['other']
+        assert resolve_profile_tools(args) == ['read_*', 'list_*']
+
+    def test_middleware_receives_auth_tools(self):
+        """add_profile_override_middleware forwards auth_tools to the middleware."""
+        mcp = Mock()
+        result = add_profile_override_middleware(
+            mcp,
+            all_profiles=['default', 'dev'],
+            default_profile='default',
+            service='eks-mcp',
+            region='us-east-1',
+            metadata={},
+            timeout=httpx.Timeout(30),
+            endpoint='https://test.example.com',
+            auth_tools=['*'],
+        )
+        assert result is not None
+        assert result.is_auth_tool('list_k8s_resources')
