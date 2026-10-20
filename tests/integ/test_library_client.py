@@ -24,7 +24,11 @@ import logging
 import os
 import pytest
 from botocore.credentials import Credentials
-from mcp import ClientSession, McpError
+from mcp import ClientSession
+try:
+    from mcp.shared.exceptions import McpError
+except ImportError:
+    from mcp import McpError
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from mcp_proxy_for_aws.utils import get_service_name_and_region_from_endpoint
 from tests.integ.conftest import RemoteMCPServerConfiguration
