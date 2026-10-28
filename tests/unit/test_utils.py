@@ -116,6 +116,52 @@ class TestValidateEndpointUrl:
 class TestCreateTransportWithSigv4:
     """Test cases for create_transport_with_sigv4 function (line 129)."""
 
+    def test_remote_http_endpoint_rejected(self):
+        """Remote plaintext HTTP must be refused even when --service and --region are set.
+
+        Regression test for the bypass where passing both service and region caused
+        validate_endpoint_url to be skipped, allowing SigV4-signed credentials to be
+        transmitted over an unencrypted connection.
+        """
+        from httpx import Timeout
+
+        with pytest.raises(ValueError, match='HTTP is not allowed'):
+            create_transport_with_sigv4(
+                url='http://attacker.example/mcp',
+                service='s3',
+                region='us-east-1',
+                metadata={},
+                custom_timeout=Timeout(30.0),
+            )
+
+    def test_localhost_http_allowed(self):
+        """localhost http:// must still be accepted for local development."""
+        from httpx import Timeout
+
+        # Should not raise
+        result = create_transport_with_sigv4(
+            url='http://localhost:5000/mcp',
+            service='s3',
+            region='us-east-1',
+            metadata={},
+            custom_timeout=Timeout(30.0),
+        )
+        assert isinstance(result, StreamableHttpTransport)
+
+    def test_remote_https_allowed(self):
+        """Remote https:// endpoints must be accepted."""
+        from httpx import Timeout
+
+        # Should not raise
+        result = create_transport_with_sigv4(
+            url='https://my-service.us-east-1.api.aws/mcp',
+            service='s3',
+            region='us-east-1',
+            metadata={},
+            custom_timeout=Timeout(30.0),
+        )
+        assert isinstance(result, StreamableHttpTransport)
+
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4(self, mock_create_sigv4_client):
         """Test creating StreamableHttpTransport with SigV4 authentication."""
