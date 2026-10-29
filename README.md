@@ -138,7 +138,12 @@ export AWS_REGION=<aws_region>
 
 # Multi-profile switching (alternative to --profile flag, useful for plugin integration)
 export AWS_MCP_PROXY_PROFILES="prod-readonly dev staging"
+
+# Add profiles matching a regular expression (requires an explicit default profile)
+export AWS_MCP_PROXY_PROFILE_REGEX=".*-readonly"
 ```
+
+See [Multi-account access](#multi-account-access) for regex matching and validation details.
 
 > [!NOTE]
 > `AWS_MCP_PROXY_PROFILES` takes precedence over `--profile` / `AWS_PROFILE` when set.
@@ -159,6 +164,18 @@ mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp --profile prod-reado
 # Via environment variable (same behavior, for plugin integration)
 AWS_MCP_PROXY_PROFILES="prod-readonly dev staging" mcp-proxy-for-aws-cli https://aws-mcp.us-east-1.api.aws/mcp
 ```
+
+To include profiles by name pattern, set `AWS_MCP_PROXY_PROFILE_REGEX`:
+
+```bash
+export AWS_MCP_PROXY_PROFILES="dev-ai-agent-readonly"
+export AWS_MCP_PROXY_PROFILE_REGEX=".*-ai-agent-readonly"
+```
+
+The regex matches entire profile names at startup. Matching profiles become
+available for per-call switching. Specify the default profile through
+`AWS_MCP_PROXY_PROFILES`, `--profile`, or `AWS_PROFILE`, and restart the proxy
+to reflect profile changes.
 
 **How it works:**
 
