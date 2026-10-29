@@ -26,6 +26,7 @@ import asyncio
 import httpx
 import logging
 import os
+import re
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.providers.proxy import FastMCPProxy
@@ -38,6 +39,7 @@ from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddlew
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
+from mcp_proxy_for_aws.sigv4_helper import create_aws_session
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -47,6 +49,49 @@ from mcp_proxy_for_aws.utils import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_profiles(fallback_profiles: list[str] | None) -> list[str]:
+    """Resolve explicit profiles and append regex matches at startup.
+
+    Args:
+        fallback_profiles: Candidates already resolved from CLI / AWS_PROFILE by
+            parse_args(). AWS_MCP_PROXY_PROFILES takes precedence when nonempty.
+            The first explicit profile is the default; this function does not
+            read AWS_PROFILE itself.
+
+    Returns:
+        Explicit profiles followed by full-name regex matches, with
+        duplicates removed while preserving order.
+
+    Raises:
+        ValueError: If the regex is invalid, no explicit default is supplied,
+            no profiles match, or the AWS session cannot be created.
+    """
+    env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
+    profiles = env_profiles.split() if env_profiles else list(fallback_profiles or [])
+    pattern = os.environ.get('AWS_MCP_PROXY_PROFILE_REGEX')
+    if pattern:
+        try:
+            regex = re.compile(pattern)
+        except re.error as exc:
+            raise ValueError(f'Invalid AWS_MCP_PROXY_PROFILE_REGEX: {exc}') from exc
+        if not profiles:
+            raise ValueError(
+                'AWS_MCP_PROXY_PROFILE_REGEX requires an explicit default profile via '
+                'AWS_MCP_PROXY_PROFILES, --profile, or AWS_PROFILE'
+            )
+        matches = [
+            profile
+            for profile in create_aws_session(profiles[0]).available_profiles
+            if regex.fullmatch(profile)
+        ]
+        if not matches:
+            raise ValueError(
+                'AWS_MCP_PROXY_PROFILE_REGEX did not match any available AWS profiles'
+            )
+        profiles.extend(matches)
+    return list(dict.fromkeys(profiles))
 
 
 async def run_proxy(args) -> None:
@@ -62,16 +107,8 @@ async def run_proxy(args) -> None:
     # support. The first profile is the default; additional profiles are available for
     # per-call override via the aws_profile tool parameter. Takes precedence over
     # --profile / AWS_PROFILE to allow runtime configuration without CLI changes.
-    env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
-    if env_profiles:
-        profiles = env_profiles.split()
-    elif args.profiles:
-        profiles = args.profiles
-    else:
-        profiles = []
-    default_profile = profiles[0] if profiles else None
-    # Dedup profiles, preserve order, include all (including default)
-    all_profiles = list(dict.fromkeys(profiles))
+    all_profiles = resolve_profiles(args.profiles)
+    default_profile = all_profiles[0] if all_profiles else None
 
     # The signing region must match the endpoint; the metadata region tells the
     # backend where to operate and follows the AWS CLI/boto3 resolution chain.

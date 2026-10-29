@@ -15,7 +15,6 @@
 """Tests for the mcp-proxy-for-aws Server."""
 
 import httpx
-import os
 import pytest
 from fastmcp.client.transports import ClientTransport
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
@@ -25,6 +24,7 @@ from mcp_proxy_for_aws.server import (
     add_tool_filtering_middleware,
     main,
     parse_args,
+    resolve_profiles,
     run_proxy,
 )
 from mcp_proxy_for_aws.sigv4_helper import create_sigv4_client
@@ -499,6 +499,118 @@ class TestProfileDedup:
         mcp.add_middleware.assert_not_called()
 
 
+class TestRegexProfiles:
+    """Test startup profile expansion without accessing AWS credentials or services."""
+
+    @pytest.fixture(autouse=True)
+    def clean_profile_environment(self):
+        """Isolate profile settings before the local configuration fixture runs."""
+        with patch.dict('os.environ', {}, clear=True):
+            yield
+
+    @pytest.fixture
+    def local_profiles(self, tmp_path):
+        """Provide local profiles without accessing real AWS settings."""
+        config = tmp_path / 'config'
+        config.write_text(
+            '[default]\nregion = us-east-1\n'
+            '[profile b-readonly]\nregion = us-east-1\n'
+            '[profile a-readonly]\nregion = us-east-1\n'
+            '[profile a-readonly-extra]\nregion = us-east-1\n'
+            '[profile admin]\nregion = us-east-1\n'
+        )
+        credentials = tmp_path / 'credentials'
+        credentials.write_text('')
+        with patch.dict(
+            'os.environ',
+            {
+                'AWS_CONFIG_FILE': str(config),
+                'AWS_SHARED_CREDENTIALS_FILE': str(credentials),
+                'AWS_MCP_PROXY_PROFILE_REGEX': '.*-readonly',
+            },
+        ):
+            yield
+
+    @pytest.mark.parametrize(
+        ('profiles', 'pattern', 'expected'),
+        [
+            pytest.param(
+                ['admin', 'default'],
+                'a-readonly',
+                ['admin', 'default', 'a-readonly'],
+                id='preserves-default-and-explicit-order',
+            ),
+            pytest.param(
+                ['default'],
+                'a-readonly',
+                ['default', 'a-readonly'],
+                id='full-name-match',
+            ),
+            pytest.param(
+                ['a-readonly', 'a-readonly'],
+                '.*-readonly',
+                ['a-readonly', 'b-readonly'],
+                id='deduplication',
+            ),
+            pytest.param(['default'], 'default', ['default'], id='default-only'),
+        ],
+    )
+    def test_profile_selection(self, local_profiles, profiles, pattern, expected):
+        """Preserve the default and explicit order, full-name matching and uniqueness."""
+        with patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILE_REGEX': pattern}):
+            assert resolve_profiles(profiles) == expected
+
+    @pytest.mark.parametrize('profile_source', ['env', 'cli'])
+    @pytest.mark.parametrize('default_profile', [None, 'deleted-profile'])
+    def test_explicit_default_overrides_missing_aws_profile(
+        self, local_profiles, profile_source, default_profile
+    ):
+        """Enumerate real local profiles despite a stale lower-priority AWS_PROFILE."""
+        env = {'AWS_PROFILE': 'deleted-profile', 'AWS_EC2_METADATA_DISABLED': 'true'}
+        if default_profile is not None:
+            env['AWS_DEFAULT_PROFILE'] = default_profile
+        argv = ['test', 'https://test.example.com']
+        if profile_source == 'env':
+            env['AWS_MCP_PROXY_PROFILES'] = 'default'
+        else:
+            argv.extend(['--profile', 'default'])
+        with patch.dict('os.environ', env), patch('sys.argv', argv):
+            profiles = resolve_profiles(parse_args().profiles)
+        assert profiles[0] == 'default'
+        assert set(profiles) == {'default', 'a-readonly', 'b-readonly'}
+
+    @pytest.mark.parametrize('pattern', [None, ''])
+    def test_no_regex_does_not_load_profiles(self, pattern):
+        """Retain existing behavior without enumerating local AWS configuration."""
+        env = {'AWS_MCP_PROXY_PROFILE_REGEX': pattern} if pattern is not None else {}
+        with (
+            patch.dict('os.environ', env),
+            patch('mcp_proxy_for_aws.server.create_aws_session') as session,
+        ):
+            assert resolve_profiles(['dev', 'dev', 'prod']) == ['dev', 'prod']
+            assert resolve_profiles(None) == []
+            session.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ('pattern', 'profiles', 'message'),
+        [
+            ('[', ['dev'], 'Invalid AWS_MCP_PROXY_PROFILE_REGEX'),
+            ('.*', None, 'requires an explicit default profile'),
+            ('missing-.*', ['dev'], 'did not match any available AWS profiles'),
+        ],
+    )
+    def test_configuration_errors(self, pattern, profiles, message):
+        """Reject invalid patterns, missing defaults, and empty matches at startup."""
+        with (
+            patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILE_REGEX': pattern}),
+            patch('mcp_proxy_for_aws.server.create_aws_session') as session,
+        ):
+            session.return_value.available_profiles = ['dev']
+            with pytest.raises(ValueError, match=message):
+                resolve_profiles(profiles)
+
+
+@patch.dict('os.environ', {}, clear=True)
 class TestEnvVarProfiles:
     """Tests for AWS_MCP_PROXY_PROFILES env var support."""
 
@@ -507,32 +619,27 @@ class TestEnvVarProfiles:
     def test_env_var_parsed_when_no_profile_flag(self):
         """Env var is read when --profile is not passed."""
         args = parse_args()
-        assert args.profiles is None  # No CLI profiles
+        assert resolve_profiles(args.profiles) == ['default', 'dev', 'staging']
 
     @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': 'default dev staging'})
     @patch('sys.argv', ['test', 'https://test.example.com', '--profile', 'explicit'])
     def test_env_var_takes_precedence_over_profile_flag(self):
         """AWS_MCP_PROXY_PROFILES env var takes precedence over --profile flag."""
         args = parse_args()
-        # args.profiles will have the CLI value, but run_proxy checks env var first
-        assert args.profiles == ['explicit']
+        assert resolve_profiles(args.profiles) == ['default', 'dev', 'staging']
 
     @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': ''})
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_empty_env_var_ignored(self):
         """Empty env var is treated as unset."""
         args = parse_args()
-        assert args.profiles is None
+        assert resolve_profiles(args.profiles) == []
 
     @patch.dict('os.environ', {'AWS_MCP_PROXY_PROFILES': '  dev   staging  '})
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_env_var_handles_extra_whitespace(self):
         """Extra whitespace in env var is handled correctly."""
-        # The env var parsing happens in run_proxy, not parse_args
-        # Test the split logic directly
-        env_profiles = os.environ.get('AWS_MCP_PROXY_PROFILES')
-        profiles = env_profiles.split() if env_profiles else []
-        assert profiles == ['dev', 'staging']
+        assert resolve_profiles(parse_args().profiles) == ['dev', 'staging']
 
 
 class TestFix2EnvVarPrecedence:
