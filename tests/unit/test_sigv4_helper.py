@@ -25,8 +25,10 @@ from mcp_proxy_for_aws.sigv4_helper import (
     DEFAULT_ROLE_SESSION_NAME,
     SENSITIVE_HEADERS,
     SigV4HTTPXAuth,
+    _forward_client_capabilities_hook,
     _sanitize_headers,
     _set_user_agent_hook,
+    _sign_request_hook,
     create_aws_session,
     create_sigv4_client,
     register_sensitive_headers,
@@ -130,8 +132,8 @@ class TestCreateSigv4Client:
         assert 'response' in call_args[1]['event_hooks']
         assert 'request' in call_args[1]['event_hooks']
         assert len(call_args[1]['event_hooks']['response']) == 1
-        # user-agent + metadata + sign hooks
-        assert len(call_args[1]['event_hooks']['request']) == 3
+        # user-agent + metadata + client capabilities + sign hooks
+        assert len(call_args[1]['event_hooks']['request']) == 4
         assert call_args[1]['headers']['Accept'] == 'application/json, text/event-stream'
         expected_user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
         assert call_args[1]['headers']['User-Agent'] == expected_user_agent
@@ -293,6 +295,17 @@ class TestCreateSigv4Client:
         # The user-agent hook must run first so a later-captured client info is
         # reflected on every request, including the signed one.
         assert request_hooks[0].func is _set_user_agent_hook
+
+    @patch('httpx.AsyncClient')
+    def test_create_sigv4_client_forwards_capabilities_before_signing(self, mock_client_class):
+        """The capability hook runs before signing so the signature covers the modified body."""
+        mock_client_class.return_value = Mock()
+
+        create_sigv4_client(service='test-service', region='test-region')
+
+        request_hooks = mock_client_class.call_args[1]['event_hooks']['request']
+        assert request_hooks[-2] is _forward_client_capabilities_hook
+        assert request_hooks[-1].func is _sign_request_hook
 
 
 class TestSetUserAgentHook:

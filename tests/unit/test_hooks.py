@@ -18,7 +18,9 @@ import httpx
 import json
 import pytest
 from functools import partial
+from mcp.types import ClientCapabilities
 from mcp_proxy_for_aws.sigv4_helper import (
+    _forward_client_capabilities_hook,
     _handle_error_response,
     _inject_metadata_hook,
     _sign_request_hook,
@@ -364,6 +366,128 @@ class TestMetadataInjectionHook:
         assert modified_body['params']['arguments'] == {'arg1': 'value1'}
         assert modified_body['params']['other_field'] == 'preserved'
         assert modified_body['params']['_meta']['AWS_REGION'] == 'us-west-2'
+
+
+def create_initialize_request_body(capabilities: dict) -> bytes:
+    """Helper to create an initialize request body with the given capabilities."""
+    return json.dumps(
+        {
+            'jsonrpc': '2.0',
+            'id': 0,
+            'method': 'initialize',
+            'params': {
+                'protocolVersion': '2025-11-25',
+                'capabilities': capabilities,
+                'clientInfo': {'name': 'mcp-proxy-for-aws', 'version': 'test'},
+            },
+        }
+    ).encode('utf-8')
+
+
+class TestForwardClientCapabilitiesHook:
+    """Test cases for _forward_client_capabilities_hook function."""
+
+    ui_extension = {'io.modelcontextprotocol/ui': {'mimeTypes': ['text/html;profile=mcp-app']}}
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities')
+    async def test_hook_forwards_extensions_and_experimental(self, mock_get_capabilities):
+        """Test that the client's extensions and experimental capabilities reach initialize."""
+        mock_get_capabilities.return_value = ClientCapabilities.model_validate(
+            {'extensions': self.ui_extension, 'experimental': {'someFeature': {'enabled': True}}}
+        )
+        request = create_request_with_sigv4_headers(
+            'https://example.com/mcp', create_initialize_request_body({'sampling': {}})
+        )
+
+        await _forward_client_capabilities_hook(request)
+
+        modified_body = json.loads((await request.aread()).decode('utf-8'))
+        capabilities = modified_body['params']['capabilities']
+        assert capabilities['extensions'] == self.ui_extension
+        assert capabilities['experimental'] == {'someFeature': {'enabled': True}}
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities')
+    async def test_hook_keeps_proxy_sampling_elicitation_and_roots(self, mock_get_capabilities):
+        """Test that the client's sampling, elicitation and roots do not replace the proxy's."""
+        proxy_capabilities = {
+            'sampling': {},
+            'elicitation': {'form': {}, 'url': {}},
+            'roots': {'listChanged': True},
+        }
+        mock_get_capabilities.return_value = ClientCapabilities.model_validate(
+            {
+                'sampling': {'context': {}},
+                'elicitation': {'form': {}},
+                'roots': {'listChanged': False},
+                'extensions': self.ui_extension,
+            }
+        )
+        request = create_request_with_sigv4_headers(
+            'https://example.com/mcp', create_initialize_request_body(proxy_capabilities)
+        )
+
+        await _forward_client_capabilities_hook(request)
+
+        modified_body = json.loads((await request.aread()).decode('utf-8'))
+        capabilities = modified_body['params']['capabilities']
+        assert capabilities == {**proxy_capabilities, 'extensions': self.ui_extension}
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities')
+    async def test_hook_skips_non_initialize_requests(self, mock_get_capabilities):
+        """Test that the hook leaves requests other than initialize unchanged."""
+        mock_get_capabilities.return_value = ClientCapabilities.model_validate(
+            {'extensions': self.ui_extension}
+        )
+        request_body = json.dumps(
+            {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'myTool'}}
+        ).encode('utf-8')
+        request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
+
+        await _forward_client_capabilities_hook(request)
+
+        assert await request.aread() == request_body
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities')
+    async def test_hook_skips_when_nothing_to_forward(self, mock_get_capabilities):
+        """Test that the hook leaves initialize unchanged when the client has nothing to forward."""
+        mock_get_capabilities.return_value = ClientCapabilities.model_validate(
+            {'sampling': {}, 'roots': {'listChanged': True}}
+        )
+        request_body = create_initialize_request_body({'sampling': {}})
+        request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
+
+        await _forward_client_capabilities_hook(request)
+
+        assert await request.aread() == request_body
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities')
+    async def test_hook_handles_invalid_json_gracefully(self, mock_get_capabilities):
+        """Test that the hook leaves a body that is not valid JSON unchanged."""
+        mock_get_capabilities.return_value = ClientCapabilities.model_validate(
+            {'extensions': self.ui_extension}
+        )
+        request_body = b'not valid json {'
+        request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
+
+        await _forward_client_capabilities_hook(request)
+
+        assert await request.aread() == request_body
+
+    @pytest.mark.asyncio
+    @patch('mcp_proxy_for_aws.sigv4_helper.get_client_capabilities', return_value=None)
+    async def test_hook_skips_when_no_client_capabilities(self, mock_get_capabilities):
+        """Test that the hook leaves initialize unchanged before client capabilities are known."""
+        request_body = create_initialize_request_body({'sampling': {}})
+        request = create_request_with_sigv4_headers('https://example.com/mcp', request_body)
+
+        await _forward_client_capabilities_hook(request)
+
+        assert await request.aread() == request_body
 
 
 @patch('mcp_proxy_for_aws.sigv4_helper.create_aws_session')

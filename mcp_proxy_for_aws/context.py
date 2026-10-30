@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from mcp.types import Implementation
+from mcp.types import ClientCapabilities, Implementation
 
 
 _client_info: Implementation | None = None
+_client_capabilities: ClientCapabilities | None = None
 
 
 def get_client_info() -> Implementation | None:
@@ -27,3 +28,14 @@ def set_client_info(info: Implementation | None) -> None:
     """Set the client info."""
     global _client_info
     _client_info = info
+
+
+def get_client_capabilities() -> ClientCapabilities | None:
+    """Get the stored client capabilities."""
+    return _client_capabilities
+
+
+def set_client_capabilities(capabilities: ClientCapabilities | None) -> None:
+    """Set the client capabilities."""
+    global _client_capabilities
+    _client_capabilities = capabilities
