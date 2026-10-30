@@ -27,7 +27,7 @@ from collections.abc import Generator, Iterable
 from functools import partial
 from httpx import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
-from mcp_proxy_for_aws.context import get_client_info
+from mcp_proxy_for_aws.context import get_client_capabilities, get_client_info
 from typing import Any
 
 
@@ -259,6 +259,7 @@ def create_sigv4_client(
             'request': [
                 partial(_set_user_agent_hook, disable_telemetry),
                 partial(_inject_metadata_hook, metadata or {}),
+                _forward_client_capabilities_hook,
                 partial(_sign_request_hook, region, service, profile, skip_auth),
             ],
         },
@@ -361,6 +362,37 @@ async def _sign_request_hook(
     next(auth_flow)  # Execute the generator to perform signing
 
     logger.debug('Request headers after signing: %s', _sanitize_headers(dict(request.headers)))
+
+
+async def _forward_client_capabilities_hook(request: httpx.Request) -> None:
+    """Request hook to add the client's experimental and extension capabilities to initialize.
+
+    Args:
+        request: The HTTP request object
+    """
+    client_capabilities = get_client_capabilities()
+    if client_capabilities is None or not request.content:
+        return
+
+    forwarded_capabilities = dict(client_capabilities.model_extra or {})
+    if client_capabilities.experimental is not None:
+        forwarded_capabilities['experimental'] = client_capabilities.experimental
+    if not forwarded_capabilities:
+        return
+
+    try:
+        body = json.loads(request.content)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(body, dict) or body.get('method') != 'initialize':
+        return
+
+    body.setdefault('params', {}).setdefault('capabilities', {}).update(forwarded_capabilities)
+    new_content = json.dumps(body).encode('utf-8')
+    request.stream = httpx.ByteStream(new_content)
+    request._content = new_content
+
+    logger.debug('Forwarded client capabilities: %s', sorted(forwarded_capabilities))
 
 
 async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request) -> None:
