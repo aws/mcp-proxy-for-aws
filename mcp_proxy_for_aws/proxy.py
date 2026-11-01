@@ -14,6 +14,7 @@
 
 import httpx
 import logging
+from botocore.exceptions import BotoCoreError
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
 from fastmcp.server.providers.proxy import StatefulProxyClient
@@ -61,7 +62,12 @@ class AWSMCPProxyClient(StatefulProxyClient):
             if isinstance(e.__cause__, McpError):
                 raise e.__cause__
 
-            if isinstance(e.__cause__, ValueError) and 'credentials' in str(e.__cause__).lower():
+            # Credential resolution and SigV4 signing fail with a BotoCoreError (an expired
+            # `aws login` session, a missing region) or with the ValueError raised when no
+            # credentials resolve. A reconnect cannot fix either, so report the message now.
+            if isinstance(e.__cause__, BotoCoreError) or (
+                isinstance(e.__cause__, ValueError) and 'credentials' in str(e.__cause__).lower()
+            ):
                 from mcp.types import INTERNAL_ERROR, ErrorData
 
                 raise McpError(
