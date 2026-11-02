@@ -152,6 +152,7 @@ def get_service_name_and_region_from_endpoint(endpoint: str) -> tuple[str, str]:
         - Validates URL scheme is HTTPS before parsing
         - Matches bedrock-agentcore endpoints (gateway and runtime)
         - Matches AWS API Gateway endpoints (service.region.api.aws)
+        - Matches Lambda Web Function endpoints (domain-id.shard-id.lambda-web.region.on.aws)
         - Falls back to extracting first hostname segment as service name
     """
     # Validate URL scheme for security
@@ -165,6 +166,10 @@ def get_service_name_and_region_from_endpoint(endpoint: str) -> tuple[str, str]:
             return 'bedrock-agentcore', region  # gateway and runtime
         case [service, region, 'api', 'aws']:
             return service, region
+        case [_, _, 'lambda-web', region, 'on', 'aws']:
+            # Lambda Web Function HomeRegion and PerRegion endpoints. MultiRegion endpoints
+            # (domain-id.lambda-web.global.on.aws) need SigV4a, so they don't match.
+            return 'lambda', region
         case [service, *_]:
             # Fallback: extract first segment as service name
             return service, ''
