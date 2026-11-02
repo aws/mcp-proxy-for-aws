@@ -15,7 +15,7 @@
 import logging
 import mcp.types as mt
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from mcp_proxy_for_aws.context import set_client_info
+from mcp_proxy_for_aws.context import set_client_capabilities, set_client_info
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from typing_extensions import override
 
@@ -62,6 +62,7 @@ class InitializeMiddleware(Middleware):
             self._client_factory.set_init_params(context.message)
             client_info = context.message.params.clientInfo
             set_client_info(client_info)
+            set_client_capabilities(context.message.params.capabilities)
             logger.info(
                 'Captured client_info: name=%s, version=%s', client_info.name, client_info.version
             )
