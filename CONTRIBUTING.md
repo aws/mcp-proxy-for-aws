@@ -72,7 +72,7 @@ feat(auth): add support for custom SigV4 signing profiles
 
 ## Development Standards
 
-- **Python**: 3.10+ with type hints
+- **Python**: 3.11+ with type hints
 - **Code Style**: Follow `ruff` configuration (99 char line limit)
 - **Testing**: Maintain 80%+ test coverage
 - **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
