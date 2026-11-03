@@ -14,10 +14,13 @@
 
 """Unit tests for the client, parameterized by internal call."""
 
+import httpx
+import json
 import pytest
 from botocore.credentials import Credentials
 from datetime import timedelta
-from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
+from mcp_proxy_for_aws.client import _MetadataInjectingAuth, aws_iam_streamablehttp_client
+from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth
 from unittest.mock import AsyncMock, Mock, patch
 
 
@@ -347,8 +350,8 @@ async def test_http_localhost_endpoint_allowed(mock_session, mock_streams):
     ],
     ids=['single-key', 'multiple-keys', 'otel-trace-context'],
 )
-async def test_metadata_adds_event_hook(mock_session, mock_streams, metadata):
-    """Test that providing metadata adds a request event hook to the http client."""
+async def test_metadata_wraps_auth(mock_session, mock_streams, metadata):
+    """Test that metadata is injected by the auth flow, before signing, not by a request hook."""
     mock_read, mock_write, mock_get_session = mock_streams
 
     with patch('boto3.Session', return_value=mock_session):
@@ -371,8 +374,12 @@ async def test_metadata_adds_event_hook(mock_session, mock_streams, metadata):
 
             # Factory should always be used
             mock_factory.assert_called_once()
-            # Event hook should be added to the client
-            assert len(mock_http_client.event_hooks['request']) == 1
+            # Request hooks run after the auth flow, so metadata must not be injected by one
+            assert len(mock_http_client.event_hooks['request']) == 0
+            auth = mock_factory.call_args[1]['auth']
+            assert isinstance(auth, _MetadataInjectingAuth)
+            assert isinstance(auth.auth, SigV4HTTPXAuth)
+            assert auth.metadata == metadata
             assert mock_stream_client.call_args[1]['http_client'] is mock_http_client
 
 
@@ -382,8 +389,8 @@ async def test_metadata_adds_event_hook(mock_session, mock_streams, metadata):
     [None, {}],
     ids=['none', 'empty-dict'],
 )
-async def test_metadata_falsy_no_hook_added(mock_session, mock_streams, metadata):
-    """Test that falsy metadata (None or empty) does not add event hooks."""
+async def test_metadata_falsy_no_injection(mock_session, mock_streams, metadata):
+    """Test that falsy metadata (None or empty) leaves the SigV4 auth unwrapped."""
     mock_read, mock_write, mock_get_session = mock_streams
     mock_http_client = Mock()
     mock_http_client.event_hooks = {'request': []}
@@ -406,6 +413,7 @@ async def test_metadata_falsy_no_hook_added(mock_session, mock_streams, metadata
 
             mock_factory.assert_called_once()
             assert len(mock_http_client.event_hooks['request']) == 0
+            assert isinstance(mock_factory.call_args[1]['auth'], SigV4HTTPXAuth)
 
 
 @pytest.mark.asyncio
@@ -438,4 +446,64 @@ async def test_metadata_preserves_factory_headers_and_auth(mock_session, mock_st
 
                 factory_kwargs = mock_factory.call_args[1]
                 assert factory_kwargs['headers'] == headers
-                assert factory_kwargs['auth'] is mock_auth
+                assert isinstance(factory_kwargs['auth'], _MetadataInjectingAuth)
+                assert factory_kwargs['auth'].auth is mock_auth
+
+
+class _RecordingAuth(httpx.Auth):
+    """Stands in for SigV4HTTPXAuth and records the body it was asked to sign."""
+
+    def __init__(self, *args):
+        self.signed_bodies: list[bytes] = []
+
+    def auth_flow(self, request):
+        self.signed_bodies.append(request.content)
+        request.headers['Authorization'] = 'signed'
+        yield request
+
+
+@pytest.mark.asyncio
+async def test_metadata_is_injected_before_signing(mock_session, mock_streams):
+    """The body that is signed is the body that is sent, with the metadata in _meta."""
+    mock_read, mock_write, mock_get_session = mock_streams
+    recording_auth = _RecordingAuth()
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={})
+
+    def factory(headers=None, timeout=None, auth=None):
+        return httpx.AsyncClient(
+            headers=headers, timeout=timeout, auth=auth, transport=httpx.MockTransport(handler)
+        )
+
+    with patch('boto3.Session', return_value=mock_session):
+        with patch('mcp_proxy_for_aws.client.SigV4HTTPXAuth', return_value=recording_auth):
+            with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
+                mock_stream_client.return_value.__aenter__ = AsyncMock(
+                    return_value=(mock_read, mock_write, mock_get_session)
+                )
+                mock_stream_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+                async with aws_iam_streamablehttp_client(
+                    endpoint='https://test.example.com/mcp',
+                    aws_service='bedrock-agentcore',
+                    metadata={'com.example/key': 'value'},
+                    httpx_client_factory=factory,
+                ):
+                    pass
+
+                http_client = mock_stream_client.call_args[1]['http_client']
+
+    async with http_client:
+        await http_client.post(
+            'https://test.example.com/mcp',
+            json={'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list', 'params': {}},
+        )
+
+    (request,) = sent
+    assert json.loads(request.content)['params']['_meta'] == {'com.example/key': 'value'}
+    assert recording_auth.signed_bodies == [request.content]
+    assert request.headers['Content-Length'] == str(len(request.content))
+    assert request.headers['Authorization'] == 'signed'

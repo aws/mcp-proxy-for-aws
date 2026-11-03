@@ -17,18 +17,44 @@ import httpx
 import logging
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from botocore.credentials import Credentials
+from collections.abc import Generator
 from contextlib import _AsyncGeneratorContextManager
 from datetime import timedelta
-from functools import partial
 from mcp.client.streamable_http import GetSessionIdCallback, streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
 from mcp.shared.message import SessionMessage
 from mcp_proxy_for_aws.mcp1_compat import _translate_http_error_hook
-from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
+from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata
 from mcp_proxy_for_aws.utils import validate_endpoint_url
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
+
+
+class _MetadataInjectingAuth(httpx.Auth):
+    """Inject metadata into the request body, then sign it with the wrapped auth.
+
+    httpx runs the auth flow before the client's request hooks, so a request hook that
+    injects metadata would change the body after it was signed.
+    """
+
+    requires_request_body = True
+
+    def __init__(self, auth: httpx.Auth, metadata: dict[str, Any]):
+        """Initialize _MetadataInjectingAuth.
+
+        Args:
+            auth: The auth that signs the request after metadata injection
+            metadata: Metadata to inject into the MCP _meta field
+        """
+        self.auth = auth
+        self.metadata = metadata
+
+    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+        """Injects the metadata, then hands the request to the wrapped auth to sign."""
+        _inject_metadata(self.metadata, request)
+        yield from self.auth.auth_flow(request)
 
 
 def aws_iam_streamablehttp_client(
@@ -122,7 +148,12 @@ def aws_iam_streamablehttp_client(
     logger.debug('AWS service: %s', aws_service)
 
     # Create a SigV4 authentication handler with AWS credentials
-    auth = SigV4HTTPXAuth(creds, aws_service, region)
+    auth: httpx.Auth = SigV4HTTPXAuth(creds, aws_service, region)
+
+    # Inject metadata as part of the auth flow, before signing, so the signature covers it
+    if metadata:
+        auth = _MetadataInjectingAuth(auth, metadata)
+        logger.debug('Metadata injection enabled with %d keys', len(metadata))
 
     # Create the HTTP client with authentication and configuration
     httpx_timeout = httpx.Timeout(
@@ -132,13 +163,6 @@ def aws_iam_streamablehttp_client(
 
     # Temporary mcp 1.x plumbing, see mcp_proxy_for_aws.mcp1_compat. Remove with that module.
     http_client.event_hooks.setdefault('response', []).append(_translate_http_error_hook)
-
-    # Append metadata injection hook if metadata is provided
-    if metadata:
-        http_client.event_hooks.setdefault('request', []).insert(
-            0, partial(_inject_metadata_hook, metadata)
-        )
-        logger.debug('Metadata injection enabled with %d keys', len(metadata))
 
     # Return the streamable HTTP client context manager with AWS IAM authentication
     return streamable_http_client(
