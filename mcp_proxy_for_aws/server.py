@@ -162,7 +162,7 @@ async def run_proxy(args) -> None:
 def add_initialize_middleware(mcp: FastMCP, client_factory: AWSMCPProxyClientFactory) -> None:
     """Add initialize middleware ahead of all other middleware.
 
-    It must run before FastMCPProxy's own ProxyInitializeMiddleware, which opens the
+    It must run before FastMCPProxy's own ProxyMetadataMiddleware, which reads the
     backend session, so the host's capabilities are known when that session starts.
 
     Args:

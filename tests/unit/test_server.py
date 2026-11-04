@@ -18,7 +18,7 @@ import httpx2
 import os
 import pytest
 from fastmcp.client.transports import ClientTransport
-from fastmcp.server.providers.proxy import FastMCPProxy, ProxyInitializeMiddleware
+from fastmcp.server.providers.proxy import FastMCPProxy, ProxyMetadataMiddleware
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.server import (
@@ -355,12 +355,12 @@ class TestServer:
     )
     @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
     @patch('mcp_proxy_for_aws.server.determine_aws_region', return_value='us-east-1')
-    async def test_initialize_middleware_runs_before_proxy_initialize_middleware(
+    async def test_initialize_middleware_runs_before_proxy_metadata_middleware(
         self, mock_determine_region, mock_create_transport
     ):
-        """Test that InitializeMiddleware runs before FastMCP's ProxyInitializeMiddleware.
+        """Test that InitializeMiddleware runs before FastMCP's ProxyMetadataMiddleware.
 
-        ProxyInitializeMiddleware opens the backend session, so if it ran first the host's
+        ProxyMetadataMiddleware reads the backend session, so if it ran first the host's
         capabilities (e.g. the MCP Apps UI extension) would not be forwarded.
         """
         # Arrange
@@ -378,9 +378,9 @@ class TestServer:
         # Assert
         middleware_types = [type(middleware) for middleware in middleware_at_run]
         assert InitializeMiddleware in middleware_types
-        assert ProxyInitializeMiddleware in middleware_types
+        assert ProxyMetadataMiddleware in middleware_types
         assert middleware_types.index(InitializeMiddleware) < middleware_types.index(
-            ProxyInitializeMiddleware
+            ProxyMetadataMiddleware
         )
 
     @patch('sys.argv', ['test', 'https://test.example.com'])
