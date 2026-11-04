@@ -24,15 +24,18 @@ members = [
 # including it would make `uv lock` build the wrapper's metadata from the very lock file
 # it is trying to write. See packages/proxy/hatch_build.py.
 #
-# The agent-framework example is excluded for a different reason: Microsoft Agent Framework
-# caps the MCP SDK below the major this project requires. A workspace resolves every member
-# together, so including it makes `uv lock` unsatisfiable. Its own pyproject file is
-# self-contained and installable on its own against a published mcp-proxy-for-aws; it can
-# join the workspace once that cap lifts. Every other example is a member -- their frameworks
-# all accept the SDK major this project resolves.
+# The agent-framework and langchain examples are excluded for a different reason: Microsoft
+# Agent Framework caps the MCP SDK below the major this project requires, and the LangChain
+# MCP adapters cannot be imported on it (the latest release caps it as well). A workspace
+# resolves every member together, so including either makes `uv lock` unsatisfiable or leaves
+# an example that cannot run. Their own pyproject files are self-contained and installable on
+# their own against a published mcp-proxy-for-aws; they can join the workspace once those
+# limits lift. Every other example is a member -- their frameworks accept the SDK major this
+# project resolves.
 exclude = [
     "packages/proxy",
-    "examples/mcp-client/agent-framework"
+    "examples/mcp-client/agent-framework",
+    "examples/mcp-client/langchain"
 ]
 
 [project]
@@ -144,9 +147,9 @@ docstring-code-format = true
 
 [tool.pyright]
 include = ["mcp_proxy_for_aws", "tests", "examples/*"]
-# The agent-framework example is excluded from the uv workspace (see [tool.uv.workspace]), so
-# its framework is not installed in the dev environment and every import in it would be
-# reported as unresolved. Drop this entry if it ever becomes a member.
+# The agent-framework and langchain examples are excluded from the uv workspace (see
+# [tool.uv.workspace]), so their frameworks are not installed in the dev environment and every
+# import in them would be reported as unresolved. Drop these entries if they ever become members.
 exclude = [
     "**/__pycache__",
     "**/.venv",
@@ -154,6 +157,7 @@ exclude = [
     "**/dist",
     "**/build",
     "examples/mcp-client/agent-framework",
+    "examples/mcp-client/langchain",
 ]
 
 [tool.commitizen]

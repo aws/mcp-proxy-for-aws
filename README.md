@@ -353,7 +353,7 @@ async with mcp_tools:
 
 > `aws_iam_streamablehttp_client` yields two streams, a reader and a writer. Frameworks that
 > cap the MCP Python SDK below the major this project requires (currently Microsoft Agent
-> Framework) cannot consume them.
+> Framework and the LangChain MCP adapters) cannot consume them.
 
 **Example - LangChain:**
 ```python

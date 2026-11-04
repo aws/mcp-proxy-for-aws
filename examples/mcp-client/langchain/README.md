@@ -23,6 +23,11 @@ MCP_SERVER_REGION=us-west-2
 
 All three environment variables are required.
 
+> **Not runnable against this repository's checkout.** The LangChain MCP adapters cannot be
+> imported on the MCP Python SDK major `mcp-proxy-for-aws` requires (the latest release caps
+> it below that major), so this example is not a member of the uv workspace. Run it against a
+> published `mcp-proxy-for-aws` release, or wait for the adapters to support it.
+
 ## Usage
 
 Run the example:
