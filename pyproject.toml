@@ -39,11 +39,11 @@ exclude = [
 name = "mcp-proxy-for-aws"
 
 # NOTE: "Patch"=9223372036854775807 bumps next release to zero.
-version = "1.7.0"
+version = "1.8.0"
 
 description = "MCP Proxy for AWS"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     # The floor is deliberate: it carries a backend fix this proxy depends on whenever its
     # frontend and backend connections open in different ways. The cap is the next major,
@@ -68,7 +68,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -89,8 +88,6 @@ dev = [
     # Build backend, needed in the dev environment to unit-test packages/proxy's
     # build hooks (which import hatchling's plugin interfaces).
     "hatchling>=1.27.0",
-    # tomllib backport, for tests that read pyproject.toml on Python 3.10.
-    "tomli>=2.0.0; python_full_version < '3.11'",
     "pre-commit>=4.1.0",
     "ruff>=0.9.7",
     "pyright>=1.1.398",

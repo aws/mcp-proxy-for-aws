@@ -101,6 +101,8 @@ def create_transport_with_sigv4(
     Raises:
         ValueError: If a header name would be overwritten by SigV4 signing
     """
+    validate_endpoint_url(url)
+
     if extra_headers:
         reserved = find_reserved_headers(extra_headers)
         if reserved:
