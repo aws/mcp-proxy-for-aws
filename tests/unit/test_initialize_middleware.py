@@ -19,7 +19,12 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.transports import FastMCPTransport
 from fastmcp.server.providers.proxy import FastMCPProxy
 from mcp import MCPError
-from mcp_proxy_for_aws.context import get_client_capabilities, get_client_info, set_client_info
+from mcp_proxy_for_aws.context import (
+    get_client_capabilities,
+    get_client_info,
+    set_client_capabilities,
+    set_client_info,
+)
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClient, AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.sigv4_helper import _build_user_agent
@@ -530,3 +535,84 @@ async def test_on_request_does_not_reconnect_after_handshake():
 
     # Still one: the handshake path already owns the connect.
     assert mock_client._connect.await_count == 1
+
+
+def _request_with_capabilities(method: str, capabilities) -> Mock:
+    """A request context whose session reports the given client capabilities."""
+    context = Mock()
+    context.method = method
+    context.fastmcp_context.session.client_capabilities = capabilities
+    context.fastmcp_context.session.client_params = None
+    return context
+
+
+@pytest.mark.asyncio
+async def test_on_request_stores_client_capabilities_before_connecting():
+    """Without a handshake the capabilities come off the request, ahead of the backend connect.
+
+    The forwarding hook reads them when the backend's initialize goes out, so storing them
+    after the connect would leave the extensions off it.
+    """
+    capabilities = mt.ClientCapabilities.model_validate(
+        {
+            'extensions': {
+                'io.modelcontextprotocol/ui': {'mimeTypes': ['text/html;profile=mcp-app']}
+            }
+        }
+    )
+    call_order = []
+    mock_client = Mock()
+    mock_client._connect = AsyncMock(
+        side_effect=lambda: call_order.append(('connect', get_client_capabilities()))
+    )
+    factory = Mock()
+    factory.get_client = AsyncMock(return_value=mock_client)
+
+    middleware = InitializeMiddleware(factory)
+    context = _request_with_capabilities('tools/list', capabilities)
+
+    set_client_capabilities(None)
+    try:
+        await middleware.on_request(context, AsyncMock())
+        assert call_order == [('connect', capabilities)]
+    finally:
+        set_client_capabilities(None)
+
+
+@pytest.mark.asyncio
+async def test_on_request_leaves_capabilities_unset_when_none_were_declared():
+    """A client that declares nothing leaves the stored capabilities alone."""
+    mock_client = Mock()
+    mock_client._connect = AsyncMock()
+    factory = Mock()
+    factory.get_client = AsyncMock(return_value=mock_client)
+
+    middleware = InitializeMiddleware(factory)
+    context = _request_with_capabilities('tools/list', None)
+
+    set_client_capabilities(None)
+    await middleware.on_request(context, AsyncMock())
+
+    assert get_client_capabilities() is None
+    mock_client._connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_on_request_does_not_replace_capabilities_after_connecting():
+    """The backend connection is opened once, so later requests do not swap the capabilities."""
+    first = mt.ClientCapabilities.model_validate({'experimental': {'first': {}}})
+    later = mt.ClientCapabilities.model_validate({'experimental': {'later': {}}})
+    mock_client = Mock()
+    mock_client._connect = AsyncMock()
+    factory = Mock()
+    factory.get_client = AsyncMock(return_value=mock_client)
+
+    middleware = InitializeMiddleware(factory)
+
+    set_client_capabilities(None)
+    try:
+        await middleware.on_request(_request_with_capabilities('tools/list', first), AsyncMock())
+        await middleware.on_request(_request_with_capabilities('tools/list', later), AsyncMock())
+        assert get_client_capabilities() == first
+    finally:
+        set_client_capabilities(None)

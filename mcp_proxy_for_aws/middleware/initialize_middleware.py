@@ -16,7 +16,12 @@ import asyncio
 import logging
 import mcp.types as mt
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from mcp_proxy_for_aws.context import get_client_info, set_client_capabilities, set_client_info
+from mcp_proxy_for_aws.context import (
+    get_client_capabilities,
+    get_client_info,
+    set_client_capabilities,
+    set_client_info,
+)
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from typing_extensions import override
 
@@ -69,6 +74,20 @@ class InitializeMiddleware(Middleware):
         logger.info(
             'Captured client_info: name=%s, version=%s', client_info.name, client_info.version
         )
+
+    @staticmethod
+    def _capture_client_capabilities(context: MiddlewareContext) -> None:
+        """Record the capabilities the client declared, when the request carried any.
+
+        Without a handshake they ride along with each request. The backend connection is
+        opened once, so those of the request that opens it are the ones it is given.
+        """
+        fastmcp_ctx = context.fastmcp_context
+        if fastmcp_ctx is None or fastmcp_ctx.request_context is None:
+            return
+        capabilities = getattr(fastmcp_ctx.session, 'client_capabilities', None)
+        if isinstance(capabilities, mt.ClientCapabilities):
+            set_client_capabilities(capabilities)
 
     @staticmethod
     def _publish_instructions(context: MiddlewareContext, instructions: str) -> None:
@@ -145,6 +164,9 @@ class InitializeMiddleware(Middleware):
             return await call_next(context)
 
         if not self._backend_connected:
+            # Ahead of the connect, so the backend's initialize carries them.
+            if get_client_capabilities() is None:
+                self._capture_client_capabilities(context)
             async with self._connect_lock:
                 if not self._backend_connected:
                     await self._connect_backend(context)
