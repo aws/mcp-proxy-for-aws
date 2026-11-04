@@ -26,11 +26,10 @@ OPENAI_API_KEY=sk-...
 
 All four environment variables are required.
 
-> **Currently not runnable against this repository's checkout.** Microsoft Agent Framework pins the MCP Python
-> SDK below 2.0 (`mcp<2`), while mcp-proxy-for-aws now requires fastmcp 4, which requires
-> `mcp>=2.0.0`. This example is therefore excluded from the uv workspace and its transport code
-> still expects the SDK 1.x three-stream shape. Run it against a published
-> `mcp-proxy-for-aws<1.8` release, or wait for Microsoft Agent Framework to support mcp 2.x.
+> **Not runnable against this repository's checkout.** Microsoft Agent Framework caps the MCP
+> Python SDK below the major `mcp-proxy-for-aws` requires, so this example is not a member of
+> the uv workspace and its transport code expects a different stream shape. Run it against a
+> published `mcp-proxy-for-aws` release, or wait for the framework to lift that cap.
 
 ## Usage
 

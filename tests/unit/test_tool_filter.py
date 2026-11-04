@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, Mock
 # Annotate with the real `mcp.types.ToolAnnotations` model, not a bare `Mock`: a `Mock`
 # auto-creates whatever attribute is read, so it reports every hint truthy regardless of the
 # field name the middleware asks for.
-def _tool(name: str, annotations: ToolAnnotations | None) -> Mock:
+def _tool(name: str, annotations: object | None) -> Mock:
     """Build a tool stub carrying real ToolAnnotations (or none at all)."""
     tool = Mock()
     tool.name = name
@@ -400,3 +400,53 @@ class TestOnCallTool:
         # Assert
         assert result == ['result']
         call_next.assert_called_once_with(context)
+
+
+class _CurrentNameOnlyAnnotations:
+    """Annotations exposing only `read_only_hint`, with no alias and no deprecation shim.
+
+    `ToolAnnotations` still resolves the old camelCase name through a fastmcp shim, so both
+    spellings behave alike and no test built on it can tell them apart. Reading the alias off
+    this stub yields the `getattr` default instead, which makes the difference observable.
+    """
+
+    def __init__(self, read_only_hint: bool) -> None:
+        self.read_only_hint = read_only_hint
+
+
+class TestAnnotationFieldName:
+    """Guard the annotation field name the filter reads."""
+
+    @pytest.mark.asyncio
+    async def test_filtering_reads_the_current_annotation_field_name(self):
+        """Filtering must key off `read_only_hint`, not the deprecated alias.
+
+        The alias works today only via a fastmcp shim -- the very bridge the `fastmcp<5` cap
+        in pyproject.toml says this project does not depend on.
+        """
+        tools = [
+            _tool('read_only_tool', _CurrentNameOnlyAnnotations(read_only_hint=True)),
+            _tool('write_tool', _CurrentNameOnlyAnnotations(read_only_hint=False)),
+        ]
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        result = await middleware.on_list_tools(
+            Mock(spec=MiddlewareContext), AsyncMock(return_value=tools)
+        )
+
+        assert [tool.name for tool in result] == ['read_only_tool']
+
+    @pytest.mark.asyncio
+    async def test_call_tool_check_reads_the_current_annotation_field_name(self):
+        """Same guard for the `on_call_tool` enforcement path."""
+        tool = _tool('read_only_tool', _CurrentNameOnlyAnnotations(read_only_hint=True))
+        middleware = ToolFilteringMiddleware(read_only=True)
+
+        context = Mock(spec=MiddlewareContext)
+        context.message = Mock()
+        context.message.name = 'read_only_tool'
+        context.fastmcp_context = Mock()
+        context.fastmcp_context.fastmcp.get_tool = AsyncMock(return_value=tool)
+        call_next = AsyncMock(return_value='result')
+
+        assert await middleware.on_call_tool(context, call_next) == 'result'

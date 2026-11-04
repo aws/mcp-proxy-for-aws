@@ -21,6 +21,7 @@ from botocore.credentials import BaseAssumeRoleCredentialFetcher
 from httpx2 import __version__ as httpx_version
 from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
+from mcp_proxy_for_aws.context import set_client_info
 from mcp_proxy_for_aws.sigv4_helper import (
     DEFAULT_ROLE_SESSION_NAME,
     SENSITIVE_HEADERS,
@@ -544,3 +545,68 @@ class TestClientCreationLogRedaction:
 
         assert 'do-not-log-me' not in caplog.text
         assert '[REDACTED]' in caplog.text
+
+
+class TestUserAgentOnSentRequests:
+    """The User-Agent as it leaves on a real request, not as passed to a patched client."""
+
+    @pytest.fixture
+    def aws_env(self, monkeypatch):
+        """Static credentials, so the signing hook has something to sign with."""
+        monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'AKIAIOSFODNN7EXAMPLE')
+        monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')
+        monkeypatch.delenv('AWS_PROFILE', raising=False)
+        monkeypatch.delenv('AWS_SESSION_TOKEN', raising=False)
+
+    async def _send(self, disable_telemetry: bool) -> httpx2.Request:
+        """Send one request through a real signing client and return what was sent."""
+        sent: list[httpx2.Request] = []
+
+        def handler(request: httpx2.Request) -> httpx2.Response:
+            sent.append(request)
+            return httpx2.Response(200, json={'jsonrpc': '2.0', 'id': 1, 'result': {}})
+
+        client = create_sigv4_client(
+            service='test-service',
+            region='us-west-2',
+            disable_telemetry=disable_telemetry,
+            transport=httpx2.MockTransport(handler),
+        )
+        async with client:
+            await client.post('http://localhost:9999/mcp', json={'jsonrpc': '2.0', 'id': 1})
+
+        assert len(sent) == 1
+        return sent[0]
+
+    @pytest.mark.asyncio
+    async def test_sent_request_carries_client_info_in_user_agent(self, aws_env):
+        """A captured client identity has to reach the header the backend actually receives.
+
+        The other User-Agent tests patch `httpx2.AsyncClient` and read the kwargs, so they
+        never prove the header survives onto a request.
+        """
+        set_client_info(Implementation(name='Probe Client', version='4.2'))
+        try:
+            request = await self._send(disable_telemetry=False)
+        finally:
+            set_client_info(None)
+
+        user_agent = request.headers['User-Agent']
+        assert 'mcp-proxy-for-aws/' in user_agent
+        # Spaces and slashes are escaped so the suffix stays a single valid UA product token.
+        assert 'probe-client/4.2' in user_agent
+        # And the request really went out signed.
+        assert request.headers['Authorization'].startswith('AWS4-HMAC-SHA256 ')
+
+    @pytest.mark.asyncio
+    async def test_sent_request_omits_client_info_when_telemetry_disabled(self, aws_env):
+        """`--disable-telemetry` has to suppress the suffix on the wire too."""
+        set_client_info(Implementation(name='Probe Client', version='4.2'))
+        try:
+            request = await self._send(disable_telemetry=True)
+        finally:
+            set_client_info(None)
+
+        user_agent = request.headers['User-Agent']
+        assert 'mcp-proxy-for-aws/' in user_agent
+        assert 'probe-client' not in user_agent

@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import logging
 import mcp.types as mt
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from mcp_proxy_for_aws.context import set_client_info
+from mcp_proxy_for_aws.context import get_client_info, set_client_info
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
 from typing_extensions import override
 
@@ -26,10 +27,10 @@ logger = logging.getLogger(__name__)
 class InitializeMiddleware(Middleware):
     """Connect the proxy client before the first tool call, and report the backend's identity.
 
-    ``on_initialize`` runs when the client opens with a handshake, which is where the client
-    identity comes from. Protocol version ``2026-07-28`` has no handshake, so ``on_request``
-    connects the backend on the first request instead -- otherwise a bad endpoint would only
-    surface mid-tool-call. That path has no client identity to capture.
+    ``on_initialize`` runs only for a client that opens with a handshake. For one that opens
+    without, ``on_request`` connects the backend on its first request instead -- otherwise a
+    bad endpoint would only surface mid-tool-call -- and reads the client's identity off that
+    request.
     """
 
     def __init__(self, client_factory: AWSMCPProxyClientFactory) -> None:
@@ -37,6 +38,7 @@ class InitializeMiddleware(Middleware):
         super().__init__()
         self._client_factory = client_factory
         self._backend_connected = False
+        self._connect_lock = asyncio.Lock()
 
     @staticmethod
     def _backend_instructions(client) -> str | None:
@@ -47,6 +49,26 @@ class InitializeMiddleware(Middleware):
         """
         instructions = getattr(client, 'instructions', None)
         return instructions if isinstance(instructions, str) and instructions else None
+
+    @staticmethod
+    def _capture_client_info(context: MiddlewareContext) -> None:
+        """Record the client's identity when the request carried any.
+
+        Without a handshake the client sends its identity alongside every request rather than
+        once up front, and the SDK surfaces it on the session. Sending it is optional there, so
+        a client that stays anonymous simply leaves the User-Agent suffix off.
+        """
+        fastmcp_ctx = context.fastmcp_context
+        if fastmcp_ctx is None or fastmcp_ctx.request_context is None:
+            return
+        params = getattr(fastmcp_ctx.session, 'client_params', None)
+        client_info = getattr(params, 'client_info', None)
+        if not isinstance(client_info, mt.Implementation):
+            return
+        set_client_info(client_info)
+        logger.info(
+            'Captured client_info: name=%s, version=%s', client_info.name, client_info.version
+        )
 
     @staticmethod
     def _publish_instructions(context: MiddlewareContext, instructions: str) -> None:
@@ -87,8 +109,7 @@ class InitializeMiddleware(Middleware):
                 # if calling _connect below raise mcp error, the q cli will skip the message
                 # and continue wait for a json rpc response message which will never come.
                 # Luckily, q cli calls list tool immediately after being connected to a mcp server
-                # the list_tool call will require the client to be connected again, so the mcp error
-                # will be displayed in the q cli logs.
+                # that call reaches the backend again, so the failure is logged for them to find.
                 await client._connect()
 
             # Report the backend's instructions rather than the proxy's own. A handshake
@@ -112,13 +133,43 @@ class InitializeMiddleware(Middleware):
 
         A pass-through once ``on_initialize`` has already connected.
         """
+        if get_client_info() is None:
+            # Ahead of the connect below, so the backend's first signed request already
+            # carries the client's User-Agent suffix.
+            self._capture_client_info(context)
+
+        if context.method == 'initialize':
+            # This hook runs ahead of `on_initialize` in the chain, so connecting here would
+            # pre-empt the handshake path and its per-client opt-outs. Leave it to that hook.
+            return await call_next(context)
+
         if not self._backend_connected:
-            self._backend_connected = True
-            logger.info('No initialize handshake seen; connecting backend on %s.', context.method)
-            client = await self._client_factory.get_client()
-            await client._connect()
-            instructions = self._backend_instructions(client)
-            if instructions:
-                self._publish_instructions(context, instructions)
+            async with self._connect_lock:
+                if not self._backend_connected:
+                    await self._connect_backend(context)
 
         return await call_next(context)
+
+    async def _connect_backend(self, context: MiddlewareContext) -> None:
+        """Connect the backend, marking it connected only once that has worked.
+
+        A backend that cannot be reached therefore fails each request until it can, not just
+        the first. ``server/discover`` is the exception: it is how a client works out which
+        protocol era this server speaks, and one that errors is taken for a legacy server and
+        sent a handshake it will be refused. So a failed connect is logged there and left to
+        the next request, which raises the real error.
+        """
+        logger.info('No initialize handshake seen; connecting backend on %s.', context.method)
+        try:
+            client = await self._client_factory.get_client()
+            await client._connect()
+        except Exception:
+            logger.exception('Backend connect failed on %s.', context.method)
+            if context.method != 'server/discover':
+                raise
+            return
+
+        self._backend_connected = True
+        instructions = self._backend_instructions(client)
+        if instructions:
+            self._publish_instructions(context, instructions)

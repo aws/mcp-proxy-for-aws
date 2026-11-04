@@ -351,10 +351,9 @@ async with mcp_tools:
 
 **Use with:** Frameworks that require direct access to the MCP sessions, e.g. LangChain, LlamaIndex. The `aws_iam_streamablehttp_client` provides the authenticated transport streams, which are then used to create an MCP `ClientSession`.
 
-> **Requires MCP Python SDK 2.x.** `aws_iam_streamablehttp_client` yields two streams. Earlier
-> releases, on SDK 1.x, yielded a third `get_session_id` callback; the modern protocol revision
-> is sessionless, so the SDK no longer exposes one. Frameworks still pinned to `mcp<2` (currently
-> Microsoft Agent Framework and Strands Agents SDK) cannot consume these streams.
+> `aws_iam_streamablehttp_client` yields two streams, a reader and a writer. Frameworks that
+> cap the MCP Python SDK below the major this project requires (currently Microsoft Agent
+> Framework) cannot consume them.
 
 **Example - LangChain:**
 ```python

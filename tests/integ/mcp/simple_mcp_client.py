@@ -35,7 +35,7 @@ def build_mcp_client(
         endpoint: The MCP server endpoint URL
         region_name: AWS region name
         metadata: Optional custom metadata to pass via --metadata flag
-        mode: MCP protocol version to negotiate. Defaults to the older handshake protocol.
+        mode: How the client opens the connection. Defaults to a handshake.
         extra_args: Extra command line flags to pass to mcp-proxy-for-aws.
 
     Returns:
@@ -52,9 +52,9 @@ def build_mcp_client(
         ),
         elicitation_handler=_basic_elicitation_handler,
         timeout=30.0,  # seconds
-        # Defaults to the older handshake protocol, which every MCP client shipping today
-        # negotiates and which is the only one with `ping` and `ctx.elicit()`.
-        # test_protocol_versions.py overrides this to also cover the newer handshake-free one.
+        # Defaults to a handshake connection, which every MCP client shipping today
+        # negotiates and which is the only one carrying `ping` and `ctx.elicit()`.
+        # test_connection_modes.py overrides this to also cover a handshake-free one.
         mode=mode,
     )
 

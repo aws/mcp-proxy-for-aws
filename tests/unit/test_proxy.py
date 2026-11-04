@@ -16,7 +16,8 @@
 
 import httpx2
 import pytest
-from fastmcp.client.transports import ClientTransport
+from fastmcp import FastMCP
+from fastmcp.client.transports import ClientTransport, FastMCPTransport
 from mcp import MCPError
 from mcp.types import ErrorData, InitializeRequest, JSONRPCError
 from mcp_proxy_for_aws.proxy import (
@@ -75,13 +76,33 @@ async def test_proxy_client_connect_http_error_non_mcp():
 
 
 @pytest.mark.asyncio
-async def test_proxy_client_aexit_does_not_disconnect():
-    """Test __aexit__ does not disconnect the client."""
-    mock_transport = Mock(spec=ClientTransport)
-    client = AWSMCPProxyClient(mock_transport)
+async def test_proxy_client_stays_connected_across_context_exits():
+    """Leaving a context must leave the backend connection up, without leaking nesting.
 
-    result = await client.__aexit__(None, None, None)
-    assert result is None
+    stdio has no way to say "session over" short of closing the pipe, so the connection has
+    to outlive each ``async with`` block -- but the nesting counter still has to unwind, or
+    the base client's own teardown path can never fire. Driven through a real connection:
+    asserting ``__aexit__``'s return value proves neither half.
+    """
+    backend = FastMCP('backend-server')
+
+    @backend.tool()
+    def backend_tool() -> str:
+        """A backend tool."""
+        return 'ok'
+
+    client = AWSMCPProxyClient(FastMCPTransport(backend))
+    try:
+        for _ in range(3):
+            async with client:
+                assert client.is_connected()
+            assert client.is_connected(), 'backend connection was dropped on context exit'
+
+        assert client._session_state.nesting_counter == 0, (
+            'context exits did not unwind the nesting counter'
+        )
+    finally:
+        await client._disconnect(force=True)
 
 
 def test_client_factory_initialization():

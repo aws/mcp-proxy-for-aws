@@ -110,7 +110,7 @@ async def test_fastmcp_handles_error_after_initialization_completes():
 @pytest.mark.parametrize(
     'mode, expect_initialize',
     [
-        # `mode=None` lets the client negotiate, which settles on handshake-free 2026-07-28.
+        # `mode=None` lets the client negotiate, which settles on a handshake-free connection.
         (None, False),
         ('auto', False),
         ('legacy', True),
@@ -119,9 +119,9 @@ async def test_fastmcp_handles_error_after_initialization_completes():
 async def test_on_initialize_only_runs_on_handshake_connections(mode, expect_initialize):
     """Pin the `on_initialize` contract that InitializeMiddleware depends on.
 
-    Protocol version 2026-07-28 has no handshake, so `on_initialize` never fires there and any
-    setup hung off it is silently skipped -- hence the `on_request` fallback. If a release ever
-    starts calling `on_initialize` without a handshake, this fails and the fallback can go.
+    A handshake-free connection never fires `on_initialize`, so any setup hung off it is
+    silently skipped -- hence the `on_request` fallback. If a release ever starts calling
+    `on_initialize` without a handshake, this fails and the fallback can go.
     """
     seen: list[str] = []
 

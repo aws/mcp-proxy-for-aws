@@ -159,6 +159,29 @@ class TestCreateTransportWithSigv4:
         else:
             assert result is not None
 
+    @pytest.mark.parametrize('disable_telemetry', [True, False])
+    @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
+    def test_create_transport_with_sigv4_forwards_disable_telemetry(
+        self, mock_create_sigv4_client, disable_telemetry
+    ):
+        """The telemetry switch must reach the client that builds the User-Agent."""
+        from httpx2 import Timeout
+
+        result = create_transport_with_sigv4(
+            'https://test-service.us-west-2.api.aws/mcp',
+            'test-service',
+            'us-west-2',
+            {},
+            Timeout(30.0),
+            disable_telemetry=disable_telemetry,
+        )
+
+        factory = result.httpx_client_factory
+        assert factory is not None
+        factory(headers=None, timeout=None, auth=None)
+
+        assert mock_create_sigv4_client.call_args.kwargs['disable_telemetry'] is disable_telemetry
+
     @patch('mcp_proxy_for_aws.utils.create_sigv4_client')
     def test_create_transport_with_sigv4_no_profile(self, mock_create_sigv4_client):
         """Test creating transport without profile."""

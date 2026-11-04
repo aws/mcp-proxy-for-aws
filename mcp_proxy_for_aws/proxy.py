@@ -27,7 +27,17 @@ logger = logging.getLogger(__name__)
 
 
 class AWSMCPProxyClient(StatefulProxyClient):
-    """Proxy client that handles HTTP errors when connection fails."""
+    """Proxy client that handles HTTP errors when connection fails.
+
+    ``StatefulProxyClient`` is the base because this proxy bridges stdio to HTTP (SigV4), and
+    the backend connection has to stay up for as long as the stdio pipe does. stdio has no
+    equivalent of streamable-http's DELETE to end a session -- closing stdin terminates the
+    subprocess -- so the connection is only torn down at program exit. That base releases each
+    ``async with`` without disconnecting, which is exactly that lifecycle; overriding
+    ``__aexit__`` to do nothing would also skip its nesting bookkeeping.
+
+    https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#stdio
+    """
 
     def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
         """Constructor of AWSMCPProxyClient."""
@@ -88,21 +98,6 @@ class AWSMCPProxyClient(StatefulProxyClient):
                 )
 
             return await self._connect(retry + 1)
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """The MCP Proxy for AWS project is a proxy from stdio to http (sigv4).
-
-        We want the client to remain connected until the stdio connection is closed.
-
-        https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#stdio
-
-            1. close stdin
-            2. terminate subprocess
-
-        There is no equivalent of the streamble-http DELETE concept in stdio to terminate a session.
-        Hence the connection will be terminated only at program exit.
-        """
-        pass
 
 
 class AWSMCPProxyClientFactory:
