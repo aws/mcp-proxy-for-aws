@@ -43,6 +43,7 @@ class InitializeMiddleware(Middleware):
         super().__init__()
         self._client_factory = client_factory
         self._backend_connected = False
+        self._backend_capabilities: mt.ServerCapabilities | None = None
         self._connect_lock = asyncio.Lock()
 
     @staticmethod
@@ -54,6 +55,27 @@ class InitializeMiddleware(Middleware):
         """
         instructions = getattr(client, 'instructions', None)
         return instructions if isinstance(instructions, str) and instructions else None
+
+    @staticmethod
+    def _backend_server_capabilities(client) -> mt.ServerCapabilities | None:
+        """Return what the backend server says it supports.
+
+        ``Client.server_capabilities`` holds it whether or not the backend connection had a
+        handshake.
+        """
+        capabilities = getattr(client, 'server_capabilities', None)
+        return capabilities if isinstance(capabilities, mt.ServerCapabilities) else None
+
+    def _advertise_backend_capabilities(self, result) -> None:
+        """Replace the capabilities in a reply with the backend's.
+
+        The proxy would otherwise advertise what its own handlers can do, which promises
+        features the backend does not have and hides the extensions it does.
+        """
+        if self._backend_capabilities is None:
+            return
+        if isinstance(getattr(result, 'capabilities', None), mt.ServerCapabilities):
+            result.capabilities = self._backend_capabilities
 
     @staticmethod
     def _capture_client_info(context: MiddlewareContext) -> None:
@@ -121,7 +143,6 @@ class InitializeMiddleware(Middleware):
             # connect the http client, fail and don't succeed the stdio connect
             # if remote client cannot be connected
             client_name = client_info.name.lower()
-            self._backend_connected = True
             if 'kiro cli' not in client_name and 'q dev cli' not in client_name:
                 # q cli / kiro cli uses the rust SDK which does not handle json rpc error
                 # properly during initialization.
@@ -131,6 +152,7 @@ class InitializeMiddleware(Middleware):
                 # Luckily, q cli calls list tool immediately after being connected to a mcp server
                 # that call reaches the backend again, so the failure is logged for them to find.
                 await client._connect()
+            self._backend_connected = True
 
             # Report the backend's instructions rather than the proxy's own. A handshake
             # snapshots them while `call_next` builds the result, so that result is rewritten
@@ -139,9 +161,12 @@ class InitializeMiddleware(Middleware):
             if instructions:
                 self._publish_instructions(context, instructions)
 
+            self._backend_capabilities = self._backend_server_capabilities(client)
+
             result = await call_next(context)
             if instructions and result is not None:
                 result.instructions = instructions
+            self._advertise_backend_capabilities(result)
             return result
         except Exception:
             logger.exception('Initialize failed in middleware.')
@@ -171,7 +196,10 @@ class InitializeMiddleware(Middleware):
                 if not self._backend_connected:
                     await self._connect_backend(context)
 
-        return await call_next(context)
+        result = await call_next(context)
+        if context.method == 'server/discover':
+            self._advertise_backend_capabilities(result)
+        return result
 
     async def _connect_backend(self, context: MiddlewareContext) -> None:
         """Connect the backend, marking it connected only once that has worked.
@@ -193,6 +221,7 @@ class InitializeMiddleware(Middleware):
             return
 
         self._backend_connected = True
+        self._backend_capabilities = self._backend_server_capabilities(client)
         instructions = self._backend_instructions(client)
         if instructions:
             self._publish_instructions(context, instructions)

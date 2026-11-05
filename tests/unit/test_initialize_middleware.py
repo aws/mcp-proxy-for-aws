@@ -28,7 +28,7 @@ from mcp_proxy_for_aws.context import (
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClient, AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.sigv4_helper import _build_user_agent
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 
 PROXY_INSTRUCTIONS = 'PROXY PLACEHOLDER INSTRUCTIONS'
@@ -616,3 +616,61 @@ async def test_on_request_does_not_replace_capabilities_after_connecting():
         assert get_client_capabilities() == first
     finally:
         set_client_capabilities(None)
+
+
+@pytest.mark.parametrize('mode', ['legacy', 'auto'])
+@pytest.mark.asyncio
+async def test_proxy_advertises_the_backends_capabilities_not_its_own(mode):
+    """The client sees what the backend supports, whichever way it opened the connection.
+
+    The proxy's own handlers would otherwise promise prompts, resources and change
+    notifications the backend may not have, and hide the extensions it does advertise.
+    """
+    backend_capabilities = mt.ServerCapabilities(
+        tools=mt.ToolsCapability(list_changed=False),
+        extensions={'io.modelcontextprotocol/tasks': {}},
+    )
+    backend = FastMCP('backend-server')
+
+    @backend.tool()
+    def backend_tool() -> str:
+        """A backend tool."""
+        return 'ok'
+
+    factory = AWSMCPProxyClientFactory(FastMCPTransport(backend))
+    proxy = FastMCPProxy(client_factory=factory, name='MCP Proxy for AWS')
+    proxy.add_middleware(InitializeMiddleware(factory))
+
+    with patch.object(
+        AWSMCPProxyClient,
+        'server_capabilities',
+        new_callable=PropertyMock,
+        return_value=backend_capabilities,
+    ):
+        async with Client(proxy, mode=mode) as client:
+            await client.list_tools()
+            advertised = client.server_capabilities
+
+    assert advertised is not None
+    assert advertised.prompts is None
+    assert advertised.resources is None
+    assert advertised.tools == mt.ToolsCapability(list_changed=False)
+    assert advertised.extensions == {'io.modelcontextprotocol/tasks': {}}
+
+
+@pytest.mark.asyncio
+async def test_failed_connect_in_on_initialize_does_not_mark_the_backend_connected():
+    """A connect that failed must be retried by the next request, not skipped."""
+    mock_client = Mock()
+    mock_client._connect = AsyncMock(side_effect=MCPError(code=-1, message='unreachable'))
+    factory = Mock()
+    factory.get_client = AsyncMock(return_value=mock_client)
+
+    middleware = InitializeMiddleware(factory)
+    context = Mock()
+    context.message = create_initialize_request('test-client')
+
+    with pytest.raises(MCPError):
+        await middleware.on_initialize(context, AsyncMock())
+
+    assert middleware._backend_connected is False
