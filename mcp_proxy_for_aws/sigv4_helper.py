@@ -319,6 +319,52 @@ async def _handle_error_response(response: httpx2.Response) -> None:
                     log_level, 'HTTP %d Error for url %s', response.status_code, response.url
                 )
 
+        _report_rejected_credentials(response)
+
+
+def _report_rejected_credentials(response: httpx2.Response) -> None:
+    """Give a 401/403 to a request the SDK answers itself a JSON-RPC error that names the status.
+
+    The SDK answers a failed POST with a stand-in error that drops the status and the body, so
+    nothing downstream could tell rejected credentials from any other failure. A reply that is
+    already a JSON-RPC error is left to pass through. Anything else is rewritten into one whose
+    code is the HTTP status and whose message carries what the endpoint said, which is what
+    ``ToolErrorMiddleware`` and the host's error message are built from.
+    """
+    try:
+        if response.request.method != 'POST' or response.status_code not in (401, 403):
+            return
+        request_body = json.loads(response.request.content)
+        request_id = request_body.get('id') if isinstance(request_body, dict) else None
+        if not isinstance(request_id, (int, str)):
+            # A notification has nothing waiting on a reply.
+            return
+
+        detail = response.text.strip()
+        try:
+            reply = json.loads(detail)
+        except json.JSONDecodeError:
+            reply = None
+        if isinstance(reply, dict) and 'error' in reply:
+            return
+
+        message = f'HTTP {response.status_code} {response.reason_phrase}'
+        if detail:
+            message = f'{message}: {detail}'
+        content = json.dumps(
+            {
+                'jsonrpc': '2.0',
+                'id': request_id,
+                'error': {'code': response.status_code, 'message': message},
+            }
+        ).encode('utf-8')
+        response._content = content
+        response.headers['content-type'] = 'application/json'
+        response.headers['content-length'] = str(len(content))
+        response.headers.pop('content-encoding', None)
+    except Exception as e:
+        logger.debug('Could not report rejected credentials as a JSON-RPC error: %s', e)
+
 
 async def _sign_request_hook(
     region: str,

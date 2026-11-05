@@ -625,3 +625,69 @@ class TestSignRequestHook:
         await _sign_request_hook('us-east-1', 'execute-api', None, True, request)
 
         mock_auth_class.assert_not_called()
+
+
+class TestRejectedCredentialsAreReportedToTheCaller:
+    """A 401/403 must reach the caller as a JSON-RPC error that names the HTTP status.
+
+    The SDK answers a failed POST with a stand-in error that drops the status and the body, so
+    without this the credential hint could never tell rejected credentials from any other failure.
+    """
+
+    @staticmethod
+    def _response(status: int, body: bytes, request_body: dict, method: str = 'POST', **headers):
+        request = httpx2.Request(method, 'https://example.com/mcp', json=request_body)
+        return httpx2.Response(status_code=status, content=body, request=request, headers=headers)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('status', [401, 403])
+    async def test_plain_rejection_becomes_a_json_rpc_error_with_the_status_as_code(self, status):
+        """What the endpoint said is kept, and the error is keyed to the waiting request."""
+        response = self._response(
+            status,
+            b'{"message":"The security token included in the request is invalid."}',
+            {'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call'},
+            **{'content-type': 'application/json'},
+        )
+
+        await _handle_error_response(response)
+
+        body = json.loads(response.content)
+        assert body['id'] == 7
+        assert body['error']['code'] == status
+        assert 'security token included in the request is invalid' in body['error']['message']
+        assert response.status_code == status
+
+    @pytest.mark.asyncio
+    async def test_json_rpc_error_body_passes_through_untouched(self):
+        """An endpoint that already answers in JSON-RPC keeps its own error."""
+        original = json.dumps(
+            {'jsonrpc': '2.0', 'id': None, 'error': {'code': -32001, 'message': 'expired'}}
+        ).encode()
+        response = self._response(
+            403,
+            original,
+            {'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call'},
+            **{'content-type': 'application/json'},
+        )
+
+        await _handle_error_response(response)
+
+        assert response.content == original
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        'status, method, request_body',
+        [
+            (500, 'POST', {'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call'}),
+            (403, 'GET', {'jsonrpc': '2.0', 'id': 7, 'method': 'tools/call'}),
+            (403, 'POST', {'jsonrpc': '2.0', 'method': 'notifications/initialized'}),
+        ],
+    )
+    async def test_other_failures_are_left_alone(self, status, method, request_body):
+        """Only a rejected request that is waiting on a reply is rewritten."""
+        response = self._response(status, b'denied', request_body, method=method)
+
+        await _handle_error_response(response)
+
+        assert response.content == b'denied'

@@ -19,6 +19,7 @@ import mcp.types as mt
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import ToolResult
+from mcp import MCPError
 
 
 logger = logging.getLogger(__name__)
@@ -74,8 +75,10 @@ class ToolErrorMiddleware(Middleware):
         """Check if the error is likely caused by expired or invalid credentials.
 
         Walks the exception chain (__cause__/__context__) because the
-        HTTPStatusError may be wrapped.  isinstance already respects the
-        MRO, so subclasses are caught too.
+        error may be wrapped.  isinstance already respects the MRO, so
+        subclasses are caught too.  The SDK reports a rejected request as an
+        MCPError rather than an HTTPStatusError; the transport hook gives that
+        error the HTTP status as its code.
         """
         current: BaseException | None = error
         while current is not None:
@@ -83,6 +86,8 @@ class ToolErrorMiddleware(Middleware):
                 401,
                 403,
             ):
+                return True
+            if isinstance(current, MCPError) and current.code in (401, 403):
                 return True
             if isinstance(current, ValueError) and 'credentials' in str(current).lower():
                 return True

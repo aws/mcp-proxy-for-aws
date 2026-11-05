@@ -277,3 +277,67 @@ async def test_proxy_client_connect_credential_error():
         assert exc_info.value.error.code == -32603
         assert 'credentials' in exc_info.value.error.message.lower()
         assert '--skip-auth' in exc_info.value.error.message
+
+
+class TestRejectedCredentialsThroughTheRealTransport:
+    """Drive the real HTTP transport against a server that rejects the signature.
+
+    Unit tests that raise a hand-built HTTPStatusError cannot show what the SDK does with a real
+    403, which is to answer with a stand-in error and drop the status. This goes the whole way.
+    """
+
+    @pytest.fixture
+    def rejecting_endpoint(self):
+        """A local endpoint that answers every POST with a plain 403."""
+        import http.server
+        import json as _json
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get('content-length', 0)))
+                body = _json.dumps(
+                    {'message': 'The security token included in the request is invalid.'}
+                ).encode()
+                self.send_response(403)
+                self.send_header('content-type', 'application/json')
+                self.send_header('content-length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):  # noqa: A002
+                pass
+
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield f'http://127.0.0.1:{server.server_port}/mcp'
+        server.shutdown()
+        server.server_close()
+
+    @pytest.mark.asyncio
+    async def test_connect_surfaces_what_the_endpoint_said_and_the_status(
+        self, rejecting_endpoint, monkeypatch
+    ):
+        """The caller gets an MCPError with the status and the endpoint's own words."""
+        import httpx2
+        from mcp import MCPError
+        from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
+        from mcp_proxy_for_aws.utils import create_transport_with_sigv4
+
+        monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'test')
+        monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'test')
+        monkeypatch.setenv('AWS_SESSION_TOKEN', 'test')
+        transport = create_transport_with_sigv4(
+            rejecting_endpoint, 'aws-mcp', 'us-east-1', {}, httpx2.Timeout(5)
+        )
+        client = AWSMCPProxyClient(transport)
+
+        with pytest.raises(BaseException) as raised:
+            await client._connect()
+
+        error = raised.value
+        assert isinstance(error, MCPError)
+        assert error.code == 403
+        assert 'security token included in the request is invalid' in str(error)
+        assert ToolErrorMiddleware._is_credential_error(error)

@@ -167,3 +167,23 @@ class TestToolErrorMiddleware:
 
         with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
             await middleware.on_call_tool(context, call_next)
+
+
+class TestCredentialErrorFromTheSdk:
+    """The SDK reports a rejected request as an MCPError carrying the HTTP status as its code."""
+
+    @pytest.mark.parametrize('code', [401, 403])
+    def test_mcp_error_with_a_rejection_status_is_a_credential_error(self, code):
+        """A 401 or 403 code marks the error as a credential error."""
+        assert ToolErrorMiddleware._is_credential_error(MCPError(code=code, message='denied'))
+
+    def test_wrapped_mcp_error_is_a_credential_error(self):
+        """The chain is walked, so a wrapped error is still found."""
+        wrapper = RuntimeError('wrapped')
+        wrapper.__cause__ = MCPError(code=403, message='denied')
+        assert ToolErrorMiddleware._is_credential_error(wrapper)
+
+    @pytest.mark.parametrize('code', [-32603, 404, 500])
+    def test_other_mcp_errors_are_not(self, code):
+        """Other codes are not credential errors."""
+        assert not ToolErrorMiddleware._is_credential_error(MCPError(code=code, message='x'))
