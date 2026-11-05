@@ -15,7 +15,7 @@
 """SigV4 Helper for AWS request signing functionality."""
 
 import boto3
-import httpx
+import httpx2
 import json
 import logging
 import subprocess
@@ -25,7 +25,7 @@ from botocore.awsrequest import AWSRequest
 from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials, ProcessProvider
 from collections.abc import Generator, Iterable
 from functools import partial
-from httpx import __version__ as httpx_version
+from httpx2 import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.context import get_client_capabilities, get_client_info
 from typing import Any
@@ -124,7 +124,7 @@ def _sanitize_headers(headers: dict[str, str]) -> dict[str, str]:
 
 def _build_user_agent(disable_telemetry: bool) -> str:
     """Build the User-Agent header value, including client telemetry when available."""
-    user_agent = f'python-httpx/{httpx_version} mcp-proxy-for-aws/{__version__}'
+    user_agent = f'python-httpx2/{httpx_version} mcp-proxy-for-aws/{__version__}'
 
     client_info = get_client_info()
     if client_info and not disable_telemetry:
@@ -134,7 +134,7 @@ def _build_user_agent(disable_telemetry: bool) -> str:
     return user_agent
 
 
-class SigV4HTTPXAuth(httpx.Auth):
+class SigV4HTTPXAuth(httpx2.Auth):
     """HTTPX Auth class that signs requests with AWS SigV4."""
 
     def __init__(
@@ -155,7 +155,9 @@ class SigV4HTTPXAuth(httpx.Auth):
         self.region = region
         self.signer = SigV4Auth(credentials, service, region)
 
-    def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
+    def auth_flow(
+        self, request: httpx2.Request
+    ) -> Generator[httpx2.Request, httpx2.Response, None]:
         """Signs the request with SigV4 and adds the signature to the request headers."""
         # Create an AWS request
         headers = dict(request.headers)
@@ -203,14 +205,14 @@ def create_sigv4_client(
     service: str,
     region: str,
     profile: str | None = None,
-    timeout: httpx.Timeout | None = None,
+    timeout: httpx2.Timeout | None = None,
     headers: dict[str, str] | None = None,
     metadata: dict[str, Any] | None = None,
     disable_telemetry: bool = False,
     skip_auth: bool = False,
     **kwargs: Any,
-) -> httpx.AsyncClient:
-    """Create an httpx.AsyncClient with SigV4 authentication.
+) -> httpx2.AsyncClient:
+    """Create an httpx2.AsyncClient with SigV4 authentication.
 
     Args:
         service: AWS service name for SigV4 signing
@@ -221,16 +223,16 @@ def create_sigv4_client(
         metadata: Metadata to inject into MCP _meta field
         disable_telemetry: Whether to disable telemetry
         skip_auth: Whether to skip signing when credentials are unavailable
-        **kwargs: Additional arguments to pass to httpx.AsyncClient
+        **kwargs: Additional arguments to pass to httpx2.AsyncClient
 
     Returns:
-        httpx.AsyncClient with SigV4 authentication
+        httpx2.AsyncClient with SigV4 authentication
     """
     # Create a copy of kwargs to avoid modifying the passed dict
     client_kwargs = {
         'follow_redirects': False,
         'timeout': timeout,
-        'limits': httpx.Limits(max_keepalive_connections=1, max_connections=5),
+        'limits': httpx2.Limits(max_keepalive_connections=1, max_connections=5),
         **kwargs,
     }
 
@@ -246,13 +248,13 @@ def create_sigv4_client(
     client_kwargs['headers'] = default_headers
 
     logger.info(
-        'Creating httpx.AsyncClient with custom headers: %s',
+        'Creating httpx2.AsyncClient with custom headers: %s',
         _sanitize_headers(client_kwargs.get('headers', {})),
     )
 
-    logger.info("Creating httpx.AsyncClient with SigV4 request hooks for service '%s'", service)
+    logger.info("Creating httpx2.AsyncClient with SigV4 request hooks for service '%s'", service)
 
-    return httpx.AsyncClient(
+    return httpx2.AsyncClient(
         **client_kwargs,
         event_hooks={
             'response': [_handle_error_response],
@@ -266,12 +268,12 @@ def create_sigv4_client(
     )
 
 
-async def _set_user_agent_hook(disable_telemetry: bool, request: httpx.Request) -> None:
+async def _set_user_agent_hook(disable_telemetry: bool, request: httpx2.Request) -> None:
     """Request hook to set the User-Agent header with up-to-date client telemetry."""
     request.headers['User-Agent'] = _build_user_agent(disable_telemetry)
 
 
-async def _handle_error_response(response: httpx.Response) -> None:
+async def _handle_error_response(response: httpx2.Response) -> None:
     """Event hook to handle HTTP error responses and extract details.
 
     This function is called for every HTTP response to check for errors
@@ -317,13 +319,59 @@ async def _handle_error_response(response: httpx.Response) -> None:
                     log_level, 'HTTP %d Error for url %s', response.status_code, response.url
                 )
 
+        _report_rejected_credentials(response)
+
+
+def _report_rejected_credentials(response: httpx2.Response) -> None:
+    """Give a 401/403 to a request the SDK answers itself a JSON-RPC error that names the status.
+
+    The SDK answers a failed POST with a stand-in error that drops the status and the body, so
+    nothing downstream could tell rejected credentials from any other failure. A reply that is
+    already a JSON-RPC error is left to pass through. Anything else is rewritten into one whose
+    code is the HTTP status and whose message carries what the endpoint said, which is what
+    ``ToolErrorMiddleware`` and the host's error message are built from.
+    """
+    try:
+        if response.request.method != 'POST' or response.status_code not in (401, 403):
+            return
+        request_body = json.loads(response.request.content)
+        request_id = request_body.get('id') if isinstance(request_body, dict) else None
+        if not isinstance(request_id, (int, str)):
+            # A notification has nothing waiting on a reply.
+            return
+
+        detail = response.text.strip()
+        try:
+            reply = json.loads(detail)
+        except json.JSONDecodeError:
+            reply = None
+        if isinstance(reply, dict) and 'error' in reply:
+            return
+
+        message = f'HTTP {response.status_code} {response.reason_phrase}'
+        if detail:
+            message = f'{message}: {detail}'
+        content = json.dumps(
+            {
+                'jsonrpc': '2.0',
+                'id': request_id,
+                'error': {'code': response.status_code, 'message': message},
+            }
+        ).encode('utf-8')
+        response._content = content
+        response.headers['content-type'] = 'application/json'
+        response.headers['content-length'] = str(len(content))
+        response.headers.pop('content-encoding', None)
+    except Exception as e:
+        logger.debug('Could not report rejected credentials as a JSON-RPC error: %s', e)
+
 
 async def _sign_request_hook(
     region: str,
     service: str,
     profile: str | None,
     skip_auth: bool,
-    request: httpx.Request,
+    request: httpx2.Request,
 ) -> None:
     """Request hook to sign HTTP requests with AWS SigV4.
 
@@ -364,7 +412,7 @@ async def _sign_request_hook(
     logger.debug('Request headers after signing: %s', _sanitize_headers(dict(request.headers)))
 
 
-async def _forward_client_capabilities_hook(request: httpx.Request) -> None:
+async def _forward_client_capabilities_hook(request: httpx2.Request) -> None:
     """Request hook to add the client's experimental and extension capabilities to initialize.
 
     Args:
@@ -392,13 +440,13 @@ async def _forward_client_capabilities_hook(request: httpx.Request) -> None:
 
     body.setdefault('params', {}).setdefault('capabilities', {}).update(forwarded_capabilities)
     new_content = json.dumps(body).encode('utf-8')
-    request.stream = httpx.ByteStream(new_content)
+    request.stream = httpx2.ByteStream(new_content)
     request._content = new_content
 
     logger.debug('Forwarded client capabilities: %s', sorted(forwarded_capabilities))
 
 
-async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request) -> None:
+async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx2.Request) -> None:
     """Request hook to inject metadata into MCP calls.
 
     Args:
@@ -446,7 +494,7 @@ async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request
                 new_content = json.dumps(body).encode('utf-8')
 
                 # Update the request with new content
-                request.stream = httpx.ByteStream(new_content)
+                request.stream = httpx2.ByteStream(new_content)
                 request._content = new_content
 
                 logger.info('Injected metadata into _meta: %s', body['params']['_meta'])

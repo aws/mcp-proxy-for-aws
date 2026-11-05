@@ -26,7 +26,7 @@ middleware chain (no duplicate connection).
 
 import asyncio
 import copy
-import httpx
+import httpx2
 import logging
 import mcp.types as mt
 from collections.abc import Sequence
@@ -62,7 +62,7 @@ class ProfileOverrideMiddleware(Middleware):
         service: str,
         region: str,
         metadata: dict[str, Any],
-        timeout: httpx.Timeout,
+        timeout: httpx2.Timeout,
         endpoint: str,
         disable_telemetry: bool = False,
         skip_auth: bool = False,

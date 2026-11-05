@@ -39,7 +39,9 @@ import os
 from contextlib import asynccontextmanager
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from strands import Agent
+from strands.tools.mcp import MCPTransport
 from strands.tools.mcp.mcp_client import MCPClient
+from typing import cast
 
 
 # Load configuration from .env file (if present)
@@ -67,10 +69,15 @@ async def create_agent():
     """
 
     # Define an MCP client factory function for AWS IAM authentication
-    def mcp_client_factory():
-        return aws_iam_streamablehttp_client(
+    def mcp_client_factory() -> MCPTransport:
+        transport = aws_iam_streamablehttp_client(
             endpoint=MCP_URL, aws_region=MCP_REGION, aws_service=MCP_SERVICE
         )
+        # Strands declares `MCPTransport` against the SDK's concrete in-memory streams, while
+        # a transport yields the SDK's stream protocols, so the two never type-match -- the same
+        # goes for the SDK's own `streamable_http_client`. Strands only unpacks the two streams,
+        # which a transport provides.
+        return cast('MCPTransport', transport)
 
     # Create a Strands MCP client and retrieve the tools from the server
     with MCPClient(mcp_client_factory) as mcp_client:

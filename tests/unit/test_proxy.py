@@ -14,10 +14,11 @@
 
 """Tests for proxy module."""
 
-import httpx
+import httpx2
 import pytest
-from fastmcp.client.transports import ClientTransport
-from mcp import McpError
+from fastmcp import FastMCP
+from fastmcp.client.transports import ClientTransport, FastMCPTransport
+from mcp import MCPError
 from mcp.types import ErrorData, InitializeRequest, JSONRPCError
 from mcp_proxy_for_aws.proxy import (
     AWSMCPProxyClient,
@@ -49,10 +50,10 @@ async def test_proxy_client_connect_http_error_with_mcp_error():
     mock_response = Mock()
     mock_response.aread = AsyncMock(return_value=jsonrpc_error.model_dump_json().encode())
 
-    http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
+    http_error = httpx2.HTTPStatusError('error', request=Mock(), response=mock_response)
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
         assert exc_info.value.error.message == 'Invalid Request'
@@ -67,21 +68,41 @@ async def test_proxy_client_connect_http_error_non_mcp():
     mock_response = Mock()
     mock_response.aread = AsyncMock(return_value=b'Not a JSON-RPC message')
 
-    http_error = httpx.HTTPStatusError('error', request=Mock(), response=mock_response)
+    http_error = httpx2.HTTPStatusError('error', request=Mock(), response=mock_response)
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=http_error):
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(httpx2.HTTPStatusError):
             await client._connect()
 
 
 @pytest.mark.asyncio
-async def test_proxy_client_aexit_does_not_disconnect():
-    """Test __aexit__ does not disconnect the client."""
-    mock_transport = Mock(spec=ClientTransport)
-    client = AWSMCPProxyClient(mock_transport)
+async def test_proxy_client_stays_connected_across_context_exits():
+    """Leaving a context must leave the backend connection up, without leaking nesting.
 
-    result = await client.__aexit__(None, None, None)
-    assert result is None
+    stdio has no way to say "session over" short of closing the pipe, so the connection has
+    to outlive each ``async with`` block -- but the nesting counter still has to unwind, or
+    the base client's own teardown path can never fire. Driven through a real connection:
+    asserting ``__aexit__``'s return value proves neither half.
+    """
+    backend = FastMCP('backend-server')
+
+    @backend.tool()
+    def backend_tool() -> str:
+        """A backend tool."""
+        return 'ok'
+
+    client = AWSMCPProxyClient(FastMCPTransport(backend))
+    try:
+        for _ in range(3):
+            async with client:
+                assert client.is_connected()
+            assert client.is_connected(), 'backend connection was dropped on context exit'
+
+        assert client._session_state.nesting_counter == 0, (
+            'context exits did not unwind the nesting counter'
+        )
+    finally:
+        await client._disconnect(force=True)
 
 
 def test_client_factory_initialization():
@@ -171,17 +192,16 @@ async def test_client_factory_disconnect_all_handles_exceptions():
 
 @pytest.mark.asyncio
 async def test_proxy_client_connect_runtime_error_with_mcp_error():
-    """Test connection handles RuntimeError wrapping McpError."""
+    """Test connection handles RuntimeError wrapping MCPError."""
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
-    error_data = ErrorData(code=-32600, message='Invalid Request')
-    mcp_error = McpError(error=error_data)
+    mcp_error = MCPError(code=-32600, message='Invalid Request')
     runtime_error = RuntimeError('Connection failed')
     runtime_error.__cause__ = mcp_error
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32600
 
@@ -225,7 +245,7 @@ async def test_proxy_client_connect_runtime_error_with_timeout():
             client,
             '_disconnect',
             new_callable=AsyncMock,
-            side_effect=httpx.TimeoutException('timeout'),
+            side_effect=httpx2.TimeoutException('timeout'),
         ):
             result = await client._connect()
             assert result == 'connected'
@@ -241,7 +261,7 @@ async def test_proxy_client_max_connect_retry_default():
 
 @pytest.mark.asyncio
 async def test_proxy_client_connect_credential_error():
-    """Test connection converts RuntimeError wrapping credential ValueError to McpError."""
+    """Test connection converts RuntimeError wrapping credential ValueError to MCPError."""
     mock_transport = Mock(spec=ClientTransport)
     client = AWSMCPProxyClient(mock_transport)
 
@@ -252,8 +272,72 @@ async def test_proxy_client_connect_credential_error():
     runtime_error.__cause__ = credential_error
 
     with patch('mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error):
-        with pytest.raises(McpError) as exc_info:
+        with pytest.raises(MCPError) as exc_info:
             await client._connect()
         assert exc_info.value.error.code == -32603
         assert 'credentials' in exc_info.value.error.message.lower()
         assert '--skip-auth' in exc_info.value.error.message
+
+
+class TestRejectedCredentialsThroughTheRealTransport:
+    """Drive the real HTTP transport against a server that rejects the signature.
+
+    Unit tests that raise a hand-built HTTPStatusError cannot show what the SDK does with a real
+    403, which is to answer with a stand-in error and drop the status. This goes the whole way.
+    """
+
+    @pytest.fixture
+    def rejecting_endpoint(self):
+        """A local endpoint that answers every POST with a plain 403."""
+        import http.server
+        import json as _json
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get('content-length', 0)))
+                body = _json.dumps(
+                    {'message': 'The security token included in the request is invalid.'}
+                ).encode()
+                self.send_response(403)
+                self.send_header('content-type', 'application/json')
+                self.send_header('content-length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):  # noqa: A002
+                pass
+
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield f'http://127.0.0.1:{server.server_port}/mcp'
+        server.shutdown()
+        server.server_close()
+
+    @pytest.mark.asyncio
+    async def test_connect_surfaces_what_the_endpoint_said_and_the_status(
+        self, rejecting_endpoint, monkeypatch
+    ):
+        """The caller gets an MCPError with the status and the endpoint's own words."""
+        import httpx2
+        from mcp import MCPError
+        from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
+        from mcp_proxy_for_aws.utils import create_transport_with_sigv4
+
+        monkeypatch.setenv('AWS_ACCESS_KEY_ID', 'test')
+        monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'test')
+        monkeypatch.setenv('AWS_SESSION_TOKEN', 'test')
+        transport = create_transport_with_sigv4(
+            rejecting_endpoint, 'aws-mcp', 'us-east-1', {}, httpx2.Timeout(5)
+        )
+        client = AWSMCPProxyClient(transport)
+
+        with pytest.raises(BaseException) as raised:
+            await client._connect()
+
+        error = raised.value
+        assert isinstance(error, MCPError)
+        assert error.code == 403
+        assert 'security token included in the request is invalid' in str(error)
+        assert ToolErrorMiddleware._is_credential_error(error)

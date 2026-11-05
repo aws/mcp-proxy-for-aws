@@ -5,7 +5,10 @@ requires-python = ">=3.11"
 dependencies = [
     "mcp-proxy-for-aws",
     "python-dotenv",
-    "strands-agents",
+    # Floor is load-bearing: without it uv may pick a release that caps the MCP SDK below
+    # the major this workspace resolves, and it answers that by silently backtracking
+    # strands-agents to a stub release that cannot be imported.
+    "strands-agents>=1.57.1",
 ]
 
 [tool.uv.sources]

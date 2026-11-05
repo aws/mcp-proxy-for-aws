@@ -351,6 +351,10 @@ async with mcp_tools:
 
 **Use with:** Frameworks that require direct access to the MCP sessions, e.g. LangChain, LlamaIndex. The `aws_iam_streamablehttp_client` provides the authenticated transport streams, which are then used to create an MCP `ClientSession`.
 
+> `aws_iam_streamablehttp_client` yields two streams, a reader and a writer. Frameworks that
+> cap the MCP Python SDK below the major this project requires (currently Microsoft Agent
+> Framework and the LangChain MCP adapters) cannot consume them.
+
 **Example - LangChain:**
 ```python
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
@@ -361,7 +365,7 @@ mcp_client = aws_iam_streamablehttp_client(
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
-async with mcp_client as (read, write, session_id_callback):
+async with mcp_client as (read, write):
     async with ClientSession(read, write) as session:
         mcp_tools = await load_mcp_tools(session)
         agent = create_langchain_agent(tools=mcp_tools, ...)
@@ -377,7 +381,7 @@ mcp_client = aws_iam_streamablehttp_client(
     aws_service=service  # The underlying AWS service, e.g. "bedrock-agentcore"
 )
 
-async with mcp_client as (read, write, session_id_callback):
+async with mcp_client as (read, write):
     async with ClientSession(read, write) as session:
         mcp_tools = await McpToolSpec(client=session).to_tool_list_async()
         agent = ReActAgent(tools=mcp_tools, ...)
