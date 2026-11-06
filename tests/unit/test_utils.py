@@ -316,6 +316,17 @@ class TestValidateRequiredArgs:
             result = determine_service_name(endpoint)
             assert result == 'bedrock-agentcore', f'Failed for endpoint: {endpoint}'
 
+    def test_validate_service_name_lambda_web_function(self):
+        """Test parsing service name for Lambda Web Function endpoints."""
+        test_cases = [
+            'https://bcdfghjklmnpqrst.b7t.lambda-web.ap-northeast-3.on.aws',
+            'https://bcdfghjklmnpqrst.b7t.lambda-web.ap-northeast-3.on.aws/mcp',
+        ]
+
+        for endpoint in test_cases:
+            result = determine_service_name(endpoint)
+            assert result == 'lambda', f'Failed for endpoint: {endpoint}'
+
     def test_validate_service_name_service_parsing_simple_hostname(self):
         """Test parsing service from simple hostname."""
         endpoint = 'https://myservice'
@@ -383,6 +394,29 @@ class TestDetermineSigningRegion:
 
         assert result == expected_region
         # Environment variable should not be checked when region can be parsed from endpoint
+
+    @patch('os.getenv')
+    def test_determine_region_from_lambda_web_function_endpoint(self, mock_getenv):
+        """Test parsing region from a Lambda Web Function endpoint."""
+        endpoint = 'https://bcdfghjklmnpqrst.b7t.lambda-web.ap-northeast-3.on.aws/mcp'
+
+        result = determine_signing_region(endpoint, None)
+
+        assert result == 'ap-northeast-3'
+        mock_getenv.assert_not_called()
+
+    @patch('os.getenv')
+    def test_determine_region_not_parsed_from_lambda_web_function_global_endpoint(
+        self, mock_getenv
+    ):
+        """MultiRegion Lambda Web Function endpoints sign with SigV4a, so no region is parsed."""
+        endpoint = 'https://bcdfghjklmn.lambda-web.global.on.aws/mcp'
+        mock_getenv.return_value = None
+
+        with pytest.raises(ValueError) as exc_info:
+            determine_signing_region(endpoint, None)
+
+        assert 'Could not determine AWS region' in str(exc_info.value)
 
     @patch('os.getenv')
     def test_determine_region_without_region_failure(self, mock_getenv):
