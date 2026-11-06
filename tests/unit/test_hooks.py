@@ -204,6 +204,21 @@ class TestMetadataInjectionHook:
         assert modified_body['params']['_meta']['tracking_id'] == 'test-123'
 
     @pytest.mark.asyncio
+    async def test_hook_updates_content_length(self):
+        """Test that Content-Length matches the body after metadata injection."""
+        request = httpx.Request(
+            'POST',
+            'https://example.com/mcp',
+            json={'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list', 'params': {}},
+        )
+        original_length = request.headers['Content-Length']
+
+        await _inject_metadata_hook({'tracking_id': 'test-123'}, request)
+
+        assert request.headers['Content-Length'] == str(len(request.content))
+        assert request.headers['Content-Length'] != original_length
+
+    @pytest.mark.asyncio
     async def test_hook_merges_with_existing_metadata(self):
         """Test that hook merges with existing _meta, existing takes precedence."""
         metadata = {'AWS_REGION': 'us-west-2', 'field1': 'injected'}
