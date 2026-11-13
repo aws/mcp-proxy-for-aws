@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import httpx2
 import logging
 from fastmcp import Client
@@ -108,6 +109,7 @@ class AWSMCPProxyClientFactory:
         self._transport = transport
         self._client: AWSMCPProxyClient | None = None
         self._initialize_request: InitializeRequest | None = None
+        self._connect_lock = asyncio.Lock()
 
     def set_init_params(self, initialize_request: InitializeRequest):
         """Set client init parameters."""
@@ -119,6 +121,19 @@ class AWSMCPProxyClientFactory:
             self._client = AWSMCPProxyClient(self._transport)
 
         return self._client
+
+    async def ensure_connected(self) -> Client:
+        """Get the client, connecting it first unless it already is.
+
+        Safe to call from any number of entry points: the connection is opened once, and a
+        failed attempt leaves it closed so the next call tries again.
+        """
+        client = await self.get_client()
+        if not client.is_connected():
+            async with self._connect_lock:
+                if not client.is_connected():
+                    await client._connect()
+        return client
 
     async def __call__(self) -> Client:
         """Implement the callable factory interface."""

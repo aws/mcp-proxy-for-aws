@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import logging
 import mcp.types as mt
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
@@ -42,9 +41,7 @@ class InitializeMiddleware(Middleware):
         """Create a middleware with client factory."""
         super().__init__()
         self._client_factory = client_factory
-        self._backend_connected = False
         self._backend_capabilities: mt.ServerCapabilities | None = None
-        self._connect_lock = asyncio.Lock()
 
     @staticmethod
     def _backend_instructions(client) -> str | None:
@@ -151,8 +148,7 @@ class InitializeMiddleware(Middleware):
                 # and continue wait for a json rpc response message which will never come.
                 # Luckily, q cli calls list tool immediately after being connected to a mcp server
                 # that call reaches the backend again, so the failure is logged for them to find.
-                await client._connect()
-            self._backend_connected = True
+                await self._client_factory.ensure_connected()
 
             # Report the backend's instructions rather than the proxy's own. A handshake
             # snapshots them while `call_next` builds the result, so that result is rewritten
@@ -188,13 +184,11 @@ class InitializeMiddleware(Middleware):
             # pre-empt the handshake path and its per-client opt-outs. Leave it to that hook.
             return await call_next(context)
 
-        if not self._backend_connected:
+        if not (await self._client_factory.get_client()).is_connected():
             # Ahead of the connect, so the backend's initialize carries them.
             if get_client_capabilities() is None:
                 self._capture_client_capabilities(context)
-            async with self._connect_lock:
-                if not self._backend_connected:
-                    await self._connect_backend(context)
+            await self._connect_backend(context)
 
         result = await call_next(context)
         if context.method == 'server/discover':
@@ -202,25 +196,22 @@ class InitializeMiddleware(Middleware):
         return result
 
     async def _connect_backend(self, context: MiddlewareContext) -> None:
-        """Connect the backend, marking it connected only once that has worked.
+        """Connect the backend and publish what it reported about itself.
 
-        A backend that cannot be reached therefore fails each request until it can, not just
-        the first. ``server/discover`` is the exception: it is how a client works out which
+        A backend that cannot be reached fails each request until it can, not just the first. ``server/discover`` is the exception: it is how a client works out which
         protocol era this server speaks, and one that errors is taken for a legacy server and
         sent a handshake it will be refused. So a failed connect is logged there and left to
         the next request, which raises the real error.
         """
         logger.info('No initialize handshake seen; connecting backend on %s.', context.method)
         try:
-            client = await self._client_factory.get_client()
-            await client._connect()
+            client = await self._client_factory.ensure_connected()
         except Exception:
             logger.exception('Backend connect failed on %s.', context.method)
             if context.method != 'server/discover':
                 raise
             return
 
-        self._backend_connected = True
         self._backend_capabilities = self._backend_server_capabilities(client)
         instructions = self._backend_instructions(client)
         if instructions:

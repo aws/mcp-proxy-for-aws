@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import asyncio
+import inspect
 import mcp.types as mt
 import pytest
 from fastmcp import Client, FastMCP
@@ -28,10 +29,45 @@ from mcp_proxy_for_aws.context import (
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClient, AWSMCPProxyClientFactory
 from mcp_proxy_for_aws.sigv4_helper import _build_user_agent
+from typing import Any
 from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 
 
 PROXY_INSTRUCTIONS = 'PROXY PLACEHOLDER INSTRUCTIONS'
+
+
+def make_client(connect_effect=None) -> Mock:
+    """A mock backend client whose connected state follows its ``_connect`` calls.
+
+    ``connect_effect`` is what a connect does: an exception to raise, a callable (sync or
+    async) to run, a list of those consumed one per call, or ``None`` for a plain success. A
+    connect that raises leaves the client unconnected, as the real one does.
+    """
+    effects = iter(connect_effect) if isinstance(connect_effect, list) else None
+    state = {'connected': False}
+
+    async def connect(*args, **kwargs):
+        effect = next(effects) if effects is not None else connect_effect
+        if isinstance(effect, BaseException):
+            raise effect
+        if callable(effect):
+            result = effect()
+            if inspect.isawaitable(result):
+                await result
+        state['connected'] = True
+
+    client = Mock()
+    client._connect = AsyncMock(side_effect=connect)
+    client.is_connected = Mock(side_effect=lambda: state['connected'])
+    return client
+
+
+def make_factory(client) -> Any:
+    """A real factory handing out ``client``, so ``ensure_connected`` is the code under test."""
+    factory = AWSMCPProxyClientFactory(Mock())
+    factory._client = client
+    factory.set_init_params = Mock(wraps=factory.set_init_params)
+    return factory
 
 
 def create_initialize_request(client_name: str) -> mt.InitializeRequest:
@@ -49,17 +85,14 @@ def create_initialize_request(client_name: str) -> mt.InitializeRequest:
 @pytest.mark.asyncio
 async def test_on_initialize_connects_client():
     """Test that on_initialize calls client._connect()."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
+    mock_client = make_client()
     mock_client.initialize_result = mt.InitializeResult(
         protocol_version='2024-11-05',
         capabilities=mt.ServerCapabilities(),
         server_info=mt.Implementation(name='backend-server', version='2.0'),
     )
 
-    mock_factory = Mock()
-    mock_factory.set_init_params = Mock()
-    mock_factory.get_client = AsyncMock(return_value=mock_client)
+    mock_factory = make_factory(mock_client)
 
     # A backend that advertises no instructions must leave the proxy's own alone.
     mock_client.instructions = None
@@ -78,7 +111,6 @@ async def test_on_initialize_connects_client():
     await middleware.on_initialize(mock_context, mock_call_next)
 
     mock_factory.set_init_params.assert_called_once_with(mock_context.message)
-    mock_factory.get_client.assert_called_once()
     mock_client._connect.assert_called_once()
     mock_call_next.assert_called_once_with(mock_context)
 
@@ -90,20 +122,16 @@ async def test_on_initialize_connects_client():
 @pytest.mark.asyncio
 async def test_on_initialize_stores_client_capabilities():
     """Test that on_initialize stores the client's capabilities before connecting."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
+    call_order = []
+    mock_client = make_client(lambda: call_order.append('connect'))
     mock_client.initialize_result = None
 
-    mock_factory = Mock()
-    mock_factory.get_client = AsyncMock(return_value=mock_client)
+    mock_factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(mock_factory)
 
     mock_context = Mock()
     mock_context.message = create_initialize_request('test-client')
-
-    call_order = []
-    mock_client._connect.side_effect = lambda: call_order.append('connect')
 
     def record_capabilities(capabilities):
         call_order.append(('set_client_capabilities', capabilities))
@@ -123,12 +151,9 @@ async def test_on_initialize_stores_client_capabilities():
 @pytest.mark.asyncio
 async def test_on_initialize_fails_if_connect_fails():
     """Test that on_initialize raises exception if _connect() fails."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock(side_effect=Exception('Connection failed'))
+    mock_client = make_client(Exception('Connection failed'))
 
-    mock_factory = Mock()
-    mock_factory.set_init_params = Mock()
-    mock_factory.get_client = AsyncMock(return_value=mock_client)
+    mock_factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(mock_factory)
 
@@ -157,13 +182,10 @@ async def test_on_initialize_fails_if_connect_fails():
 )
 async def test_on_initialize_skips_connect_for_special_clients(client_name):
     """Test that on_initialize skips _connect() for Kiro CLI and Q Dev CLI."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
+    mock_client = make_client()
     mock_client.initialize_result = None
 
-    mock_factory = Mock()
-    mock_factory.set_init_params = Mock()
-    mock_factory.get_client = AsyncMock(return_value=mock_client)
+    mock_factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(mock_factory)
 
@@ -306,11 +328,9 @@ async def test_unreachable_backend_is_reported_to_a_client_that_sends_no_handsha
 @pytest.mark.asyncio
 async def test_on_request_retries_the_connect_until_it_works():
     """A failed connect leaves the backend unconnected, so the next request tries again."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock(side_effect=[MCPError(code=-32603, message='down'), None])
+    mock_client = make_client([MCPError(code=-32603, message='down'), None])
     mock_client.instructions = None
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     call_next = AsyncMock(return_value='result')
@@ -336,15 +356,13 @@ async def test_on_request_retries_the_connect_until_it_works():
 @pytest.mark.asyncio
 async def test_concurrent_first_requests_connect_the_backend_once():
     """Requests racing to be first must not each open their own connection."""
-    mock_client = Mock()
-    mock_client.instructions = None
 
     async def slow_connect():
         await asyncio.sleep(0.05)
 
-    mock_client._connect = AsyncMock(side_effect=slow_connect)
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client(slow_connect)
+    mock_client.instructions = None
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -361,10 +379,8 @@ async def test_concurrent_first_requests_connect_the_backend_once():
 @pytest.mark.asyncio
 async def test_on_request_raises_a_failed_connect_on_anything_but_discover():
     """Only the era probe is spared: any other request gets the real error."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock(side_effect=MCPError(code=-32603, message='down'))
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client(MCPError(code=-32603, message='down'))
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -455,10 +471,8 @@ async def test_on_request_connects_backend_when_no_handshake_ran():
     Otherwise the backend stays unconnected until the first tool call, turning a bad endpoint
     into a mid-call failure instead of a connect-time one.
     """
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -477,10 +491,8 @@ async def test_on_request_leaves_the_initialize_connect_to_on_initialize():
 
     Connecting here would pre-empt the handshake path and the per-client opt-outs it applies.
     """
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -496,10 +508,8 @@ async def test_on_request_leaves_the_initialize_connect_to_on_initialize():
 @pytest.mark.asyncio
 async def test_on_request_connects_backend_only_once():
     """The fallback runs on the first request only, not on every subsequent one."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -514,12 +524,9 @@ async def test_on_request_connects_backend_only_once():
 @pytest.mark.asyncio
 async def test_on_request_does_not_reconnect_after_handshake():
     """After a handshake, on_initialize already connected, so on_request must not repeat it."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
+    mock_client = make_client()
     mock_client.initialize_result = None
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
-    factory.set_init_params = Mock()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
 
@@ -561,12 +568,8 @@ async def test_on_request_stores_client_capabilities_before_connecting():
         }
     )
     call_order = []
-    mock_client = Mock()
-    mock_client._connect = AsyncMock(
-        side_effect=lambda: call_order.append(('connect', get_client_capabilities()))
-    )
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client(lambda: call_order.append(('connect', get_client_capabilities())))
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = _request_with_capabilities('tools/list', capabilities)
@@ -582,10 +585,8 @@ async def test_on_request_stores_client_capabilities_before_connecting():
 @pytest.mark.asyncio
 async def test_on_request_leaves_capabilities_unset_when_none_were_declared():
     """A client that declares nothing leaves the stored capabilities alone."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = _request_with_capabilities('tools/list', None)
@@ -602,10 +603,8 @@ async def test_on_request_does_not_replace_capabilities_after_connecting():
     """The backend connection is opened once, so later requests do not swap the capabilities."""
     first = mt.ClientCapabilities.model_validate({'experimental': {'first': {}}})
     later = mt.ClientCapabilities.model_validate({'experimental': {'later': {}}})
-    mock_client = Mock()
-    mock_client._connect = AsyncMock()
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client()
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
 
@@ -661,10 +660,8 @@ async def test_proxy_advertises_the_backends_capabilities_not_its_own(mode):
 @pytest.mark.asyncio
 async def test_failed_connect_in_on_initialize_does_not_mark_the_backend_connected():
     """A connect that failed must be retried by the next request, not skipped."""
-    mock_client = Mock()
-    mock_client._connect = AsyncMock(side_effect=MCPError(code=-1, message='unreachable'))
-    factory = Mock()
-    factory.get_client = AsyncMock(return_value=mock_client)
+    mock_client = make_client(MCPError(code=-1, message='unreachable'))
+    factory = make_factory(mock_client)
 
     middleware = InitializeMiddleware(factory)
     context = Mock()
@@ -673,4 +670,27 @@ async def test_failed_connect_in_on_initialize_does_not_mark_the_backend_connect
     with pytest.raises(MCPError):
         await middleware.on_initialize(context, AsyncMock())
 
-    assert middleware._backend_connected is False
+    assert not mock_client.is_connected()
+
+
+@pytest.mark.asyncio
+async def test_on_request_connects_for_a_client_whose_handshake_skipped_the_connect():
+    """Kiro CLI skips the connect during `initialize`, so its first request opens it."""
+    mock_client = make_client()
+    mock_client.initialize_result = None
+    factory = make_factory(mock_client)
+
+    middleware = InitializeMiddleware(factory)
+
+    init_context = Mock()
+    init_context.message = create_initialize_request('Kiro CLI')
+    init_context.fastmcp_context = None
+    await middleware.on_initialize(init_context, AsyncMock(return_value=None))
+    mock_client._connect.assert_not_awaited()
+
+    request_context = Mock()
+    request_context.method = 'tools/list'
+    await middleware.on_request(request_context, AsyncMock(return_value='result'))
+    await middleware.on_request(request_context, AsyncMock(return_value='result'))
+
+    mock_client._connect.assert_awaited_once()

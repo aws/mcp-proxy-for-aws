@@ -14,6 +14,7 @@
 
 """Tests for proxy module."""
 
+import asyncio
 import httpx2
 import pytest
 from fastmcp import FastMCP
@@ -341,3 +342,65 @@ class TestRejectedCredentialsThroughTheRealTransport:
         assert error.code == 403
         assert 'security token included in the request is invalid' in str(error)
         assert ToolErrorMiddleware._is_credential_error(error)
+
+
+def _factory_with_client(connect):
+    """A real factory around a mock client whose connected state follows ``connect``."""
+    state = {'connected': False}
+
+    async def _connect():
+        await connect()
+        state['connected'] = True
+
+    client = Mock()
+    client._connect = AsyncMock(side_effect=_connect)
+    client.is_connected = Mock(side_effect=lambda: state['connected'])
+    factory = AWSMCPProxyClientFactory(Mock())
+    factory._client = client
+    return factory, client
+
+
+@pytest.mark.asyncio
+async def test_ensure_connected_connects_once():
+    """Repeated calls leave the connection as the first one opened it."""
+    factory, client = _factory_with_client(AsyncMock())
+
+    for _ in range(3):
+        assert await factory.ensure_connected() is client
+
+    client._connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ensure_connected_connects_once_when_called_concurrently():
+    """Callers racing to be first must not each open their own connection."""
+
+    async def slow_connect():
+        await asyncio.sleep(0.05)
+
+    factory, client = _factory_with_client(slow_connect)
+
+    await asyncio.gather(*(factory.ensure_connected() for _ in range(5)))
+
+    client._connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ensure_connected_retries_after_a_failed_connect():
+    """A connect that failed leaves the client unconnected, so the next call tries again."""
+    attempts = []
+
+    async def flaky_connect():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise MCPError(code=-32603, message='down')
+
+    factory, client = _factory_with_client(flaky_connect)
+
+    with pytest.raises(MCPError, match='down'):
+        await factory.ensure_connected()
+    assert not client.is_connected()
+
+    await factory.ensure_connected()
+    assert client.is_connected()
+    assert client._connect.await_count == 2
