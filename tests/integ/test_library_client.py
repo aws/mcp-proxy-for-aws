@@ -20,11 +20,13 @@ therefore has no proxy middleware in front of it.
 """
 
 import asyncio
+import json
 import logging
 import os
 import pytest
 from botocore.credentials import Credentials
 from mcp import ClientSession, McpError
+from mcp.types import TextContent
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from mcp_proxy_for_aws.utils import get_service_name_and_region_from_endpoint
 from tests.integ.conftest import RemoteMCPServerConfiguration
@@ -63,6 +65,33 @@ async def test_library_client_completes_an_exchange(
     result = await asyncio.wait_for(exchange(), timeout=_BUDGET_SECONDS)
 
     assert len(result.tools) > 0, f'Remote MCP server should have tools, got {result}'
+
+
+@pytest.mark.asyncio(loop_scope='module')
+async def test_library_client_injects_metadata(
+    remote_mcp_server_configuration: RemoteMCPServerConfiguration,
+):
+    """Metadata passed to the library client reaches the server in the _meta field.
+
+    Against an endpoint that verifies SigV4, this also checks that the signature covers the
+    body with the injected metadata.
+    """
+
+    async def exchange():
+        async with open_session(
+            remote_mcp_server_configuration, metadata={'com.example/tenant': 'acme'}
+        ) as (read_stream, write_stream, _):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await session.call_tool('echo_metadata', {})
+
+    result = await asyncio.wait_for(exchange(), timeout=_BUDGET_SECONDS)
+
+    text = next(content.text for content in result.content if isinstance(content, TextContent))
+    received_meta = json.loads(text)['received_meta']
+    assert received_meta['com.example/tenant'] == 'acme', (
+        f'Server should receive the injected metadata, got: {received_meta}'
+    )
 
 
 @pytest.mark.skipif(
