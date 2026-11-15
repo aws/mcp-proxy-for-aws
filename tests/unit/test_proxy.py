@@ -345,16 +345,9 @@ class TestRejectedCredentialsThroughTheRealTransport:
 
 
 def _factory_with_client(connect):
-    """A real factory around a mock client whose connected state follows ``connect``."""
-    state = {'connected': False}
-
-    async def _connect():
-        await connect()
-        state['connected'] = True
-
+    """A real factory around a mock client whose ``_connect`` runs ``connect``."""
     client = Mock()
-    client._connect = AsyncMock(side_effect=_connect)
-    client.is_connected = Mock(side_effect=lambda: state['connected'])
+    client._connect = AsyncMock(side_effect=connect)
     factory = AWSMCPProxyClientFactory(Mock())
     factory._client = client
     return factory, client
@@ -369,6 +362,7 @@ async def test_ensure_connected_connects_once():
         assert await factory.ensure_connected() is client
 
     client._connect.assert_awaited_once()
+    assert factory.connected
 
 
 @pytest.mark.asyncio
@@ -387,7 +381,7 @@ async def test_ensure_connected_connects_once_when_called_concurrently():
 
 @pytest.mark.asyncio
 async def test_ensure_connected_retries_after_a_failed_connect():
-    """A connect that failed leaves the client unconnected, so the next call tries again."""
+    """A connect that failed leaves the factory unconnected, so the next call tries again."""
     attempts = []
 
     async def flaky_connect():
@@ -399,8 +393,33 @@ async def test_ensure_connected_retries_after_a_failed_connect():
 
     with pytest.raises(MCPError, match='down'):
         await factory.ensure_connected()
-    assert not client.is_connected()
+    assert not factory.connected
 
     await factory.ensure_connected()
-    assert client.is_connected()
+    assert factory.connected
+    assert client._connect.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_ensure_connected_does_not_trust_a_half_open_session():
+    """The client reports itself connected once its session object exists, before the handshake."""
+    factory, client = _factory_with_client(AsyncMock())
+    client.is_connected = Mock(return_value=True)
+
+    await factory.ensure_connected()
+
+    client._connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_disconnect_marks_the_factory_unconnected():
+    """After a disconnect the next caller opens a fresh connection."""
+    factory, client = _factory_with_client(AsyncMock())
+    client._disconnect = AsyncMock()
+
+    await factory.ensure_connected()
+    await factory.disconnect()
+    assert not factory.connected
+
+    await factory.ensure_connected()
     assert client._connect.await_count == 2

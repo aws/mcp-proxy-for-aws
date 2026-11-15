@@ -37,14 +37,13 @@ PROXY_INSTRUCTIONS = 'PROXY PLACEHOLDER INSTRUCTIONS'
 
 
 def make_client(connect_effect=None) -> Mock:
-    """A mock backend client whose connected state follows its ``_connect`` calls.
+    """A mock backend client whose ``_connect`` does what ``connect_effect`` says.
 
     ``connect_effect`` is what a connect does: an exception to raise, a callable (sync or
     async) to run, a list of those consumed one per call, or ``None`` for a plain success. A
-    connect that raises leaves the client unconnected, as the real one does.
+    connect that raises leaves the factory unconnected, as it would be for the real client.
     """
     effects = iter(connect_effect) if isinstance(connect_effect, list) else None
-    state = {'connected': False}
 
     async def connect(*args, **kwargs):
         effect = next(effects) if effects is not None else connect_effect
@@ -54,11 +53,9 @@ def make_client(connect_effect=None) -> Mock:
             result = effect()
             if inspect.isawaitable(result):
                 await result
-        state['connected'] = True
 
     client = Mock()
     client._connect = AsyncMock(side_effect=connect)
-    client.is_connected = Mock(side_effect=lambda: state['connected'])
     return client
 
 
@@ -670,7 +667,7 @@ async def test_failed_connect_in_on_initialize_does_not_mark_the_backend_connect
     with pytest.raises(MCPError):
         await middleware.on_initialize(context, AsyncMock())
 
-    assert not mock_client.is_connected()
+    assert not factory.connected
 
 
 @pytest.mark.asyncio
@@ -694,3 +691,29 @@ async def test_on_request_connects_for_a_client_whose_handshake_skipped_the_conn
     await middleware.on_request(request_context, AsyncMock(return_value='result'))
 
     mock_client._connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_all_fail_while_the_backend_is_unreachable():
+    """A request arriving mid-connect must not slip past the connect and get an empty answer.
+
+    The real client reports itself connected as soon as its session object exists, before the
+    handshake has succeeded, so the gate has to be a completed connect, not that.
+    """
+    mock_client = make_client(MCPError(code=-32603, message='down'))
+    mock_client.is_connected = Mock(return_value=True)
+    factory = make_factory(mock_client)
+
+    middleware = InitializeMiddleware(factory)
+    context = Mock()
+    context.method = 'tools/list'
+    context.fastmcp_context = None
+    call_next = AsyncMock(return_value='result')
+
+    results = await asyncio.gather(
+        *(middleware.on_request(context, call_next) for _ in range(3)), return_exceptions=True
+    )
+
+    assert all(isinstance(result, MCPError) for result in results)
+    call_next.assert_not_awaited()
+    assert not factory.connected

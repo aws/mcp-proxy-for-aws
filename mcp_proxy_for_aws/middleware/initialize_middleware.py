@@ -184,7 +184,7 @@ class InitializeMiddleware(Middleware):
             # pre-empt the handshake path and its per-client opt-outs. Leave it to that hook.
             return await call_next(context)
 
-        if not (await self._client_factory.get_client()).is_connected():
+        if not self._client_factory.connected:
             # Ahead of the connect, so the backend's initialize carries them.
             if get_client_capabilities() is None:
                 self._capture_client_capabilities(context)

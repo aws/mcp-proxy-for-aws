@@ -110,6 +110,7 @@ class AWSMCPProxyClientFactory:
         self._client: AWSMCPProxyClient | None = None
         self._initialize_request: InitializeRequest | None = None
         self._connect_lock = asyncio.Lock()
+        self._connected = False
 
     def set_init_params(self, initialize_request: InitializeRequest):
         """Set client init parameters."""
@@ -122,17 +123,28 @@ class AWSMCPProxyClientFactory:
 
         return self._client
 
+    @property
+    def connected(self) -> bool:
+        """Whether a connect has completed.
+
+        ``Client.is_connected()`` is no substitute: it turns true as soon as the session
+        object exists, while the handshake is still running or about to fail, so a request
+        arriving then would skip the connect and run against a backend that is not there.
+        """
+        return self._connected
+
     async def ensure_connected(self) -> Client:
-        """Get the client, connecting it first unless it already is.
+        """Get the client, connecting it first unless a connect has already completed.
 
         Safe to call from any number of entry points: the connection is opened once, and a
         failed attempt leaves it closed so the next call tries again.
         """
         client = await self.get_client()
-        if not client.is_connected():
+        if not self._connected:
             async with self._connect_lock:
-                if not client.is_connected():
+                if not self._connected:
                     await client._connect()
+                    self._connected = True
         return client
 
     async def __call__(self) -> Client:
@@ -141,6 +153,7 @@ class AWSMCPProxyClientFactory:
 
     async def disconnect(self):
         """Disconnect all the clients (no throw)."""
+        self._connected = False
         try:
             if self._client:
                 await self._client._disconnect(force=True)
