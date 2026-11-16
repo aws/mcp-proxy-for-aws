@@ -257,3 +257,69 @@ async def test_proxy_client_connect_credential_error():
         assert exc_info.value.error.code == -32603
         assert 'credentials' in exc_info.value.error.message.lower()
         assert '--skip-auth' in exc_info.value.error.message
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_retries_after_connect_error_during_cleanup() -> None:
+    """A failed session must not prevent recovery from one connection reset."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport))
+    connect_error = httpx.ConnectError('connection reset during TLS handshake')
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = connect_error
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect',
+        side_effect=[runtime_error, client],
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=connect_error
+        ) as disconnect:
+            assert await client._connect() is client
+
+    assert connect.await_count == 2
+    disconnect.assert_awaited_once_with(force=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('retry_limit', [0, 1, 3])
+async def test_proxy_client_cleanup_connect_errors_preserve_retry_limit(retry_limit: int) -> None:
+    """Persistent reset cleanup errors must preserve the existing finite attempt bound."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport), max_connect_retry=retry_limit)
+    connect_error = httpx.ConnectError('persistent TLS connection reset')
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = connect_error
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=connect_error
+        ) as disconnect:
+            with pytest.raises(RuntimeError) as error:
+                await client._connect()
+
+    assert error.value is runtime_error
+    # The existing counter starts at zero and stops when retry > retry_limit.
+    assert connect.await_count == retry_limit + 2
+    assert disconnect.await_count == retry_limit + 1
+    assert all(call.kwargs == {'force': True} for call in disconnect.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_does_not_ignore_unexpected_cleanup_error() -> None:
+    """An unrelated cleanup failure must still propagate without retrying."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport))
+    runtime_error = RuntimeError('Client failed to connect')
+    cleanup_error = ValueError('unexpected cleanup failure')
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=cleanup_error
+        ):
+            with pytest.raises(ValueError) as error:
+                await client._connect()
+
+    assert error.value is cleanup_error
+    connect.assert_awaited_once()
