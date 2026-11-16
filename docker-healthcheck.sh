@@ -14,13 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ "$(lsof +c 0 -p 1 | grep -e "^aws\..*\s1\s.*\sunix\s.*socket$" | wc -l)" -ne "0" ]; then
-  echo -n "$(lsof +c 0 -p 1 | grep -e "^aws\..*\s1\s.*\sunix\s.*socket$" | wc -l) aws.* streams found";
-  exit 0;
-else
-  echo -n "Zero aws.* streams found";
-  exit 1;
-fi;
+# Local stdio liveness only; do not contact the backend or resolve credentials.
+if ! tr '\000' '\n' < /proc/1/cmdline |
+  head -n 2 |
+  grep -Eq '(^|/)(mcp-proxy-for-aws(-cli)?|aws[.]mcp-proxy-for-aws)$'; then
+  echo "PID 1 is not the MCP proxy"
+  exit 1
+fi
 
-echo -n "Never should reach here";
-exit 99;
+for fd in 0 1; do
+  target=$(readlink "/proc/1/fd/$fd") || exit 1
+  case "$target" in
+    pipe:\[*\]|socket:\[*\]) ;;
+    *)
+      echo "Proxy stdio fd $fd is not a pipe or socket"
+      exit 1
+      ;;
+  esac
+done
+
+echo "Proxy stdio is live"
+exit 0
