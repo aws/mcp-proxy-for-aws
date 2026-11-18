@@ -22,14 +22,10 @@ rather than shipping a partially-pinned wrapper.
 import pytest
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from unittest.mock import patch
 
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # Python 3.10 has no tomllib.
-    import tomli as tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

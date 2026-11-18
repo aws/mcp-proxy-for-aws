@@ -42,7 +42,7 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 
 ## Prerequisites
 
-* [Install Python 3.10+](https://www.python.org/downloads/release/python-3100/)
+* [Install Python 3.11+](https://www.python.org/downloads/release/python-3110/)
 * [Install the `uv` package manager](https://docs.astral.sh/uv/getting-started/installation/)
 * AWS credentials configured (via [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html), environment variables, or IAM roles)
 * (Optional, for docker users) [Install Docker Desktop](https://www.docker.com/products/docker-desktop)
@@ -144,7 +144,7 @@ export AWS_MCP_PROXY_PROFILES="prod-readonly dev staging"
 > `AWS_MCP_PROXY_PROFILES` takes precedence over `--profile` / `AWS_PROFILE` when set.
 
 > [!NOTE]
-> When getting a `NoRegionError` (surfaced by MCP clients as `-32602: Invalid request parameters`) and using `aws login` profiles, please configure the region for the given profile using `aws configure set region <region>` or set `AWS_REGION`.
+> When getting a `NoRegionError` (surfaced by MCP clients as `-32603: You must specify a region.`) and using `aws login` profiles, please configure the region for the given profile using `aws configure set region <region>` or set `AWS_REGION`.
 
 ### Multi-account access
 
