@@ -409,11 +409,25 @@ async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request
     logger.debug('URL: %s', request.url)
     logger.debug('Method: %s', request.method)
 
+    await request.aread()
+    _inject_metadata(metadata, request)
+
+
+def _inject_metadata(metadata: dict[str, Any], request: httpx.Request) -> None:
+    """Inject metadata into the _meta field of a JSON-RPC request whose body has been read.
+
+    Content-Length is updated to match the new body. Sign the request afterwards, so the
+    signature covers the body that is sent.
+
+    Args:
+        metadata: Dictionary of metadata to inject into _meta field
+        request: The HTTP request object
+    """
     # Try to inject metadata if it's a JSON-RPC/MCP request
     if request.content and metadata:
         try:
             # Parse the request body
-            body = json.loads(await request.aread())
+            body = json.loads(request.content)
 
             # Check if it's a JSON-RPC request
             if isinstance(body, dict) and 'jsonrpc' in body:
@@ -448,6 +462,7 @@ async def _inject_metadata_hook(metadata: dict[str, Any], request: httpx.Request
                 # Update the request with new content
                 request.stream = httpx.ByteStream(new_content)
                 request._content = new_content
+                request.headers['Content-Length'] = str(len(new_content))
 
                 logger.info('Injected metadata into _meta: %s', body['params']['_meta'])
 
