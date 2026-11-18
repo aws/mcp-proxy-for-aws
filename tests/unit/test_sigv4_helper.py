@@ -15,9 +15,15 @@
 """Unit tests for sigv4_helper module."""
 
 import httpx
+import itertools
 import logging
 import pytest
-from botocore.credentials import BaseAssumeRoleCredentialFetcher
+from botocore.credentials import (
+    BaseAssumeRoleCredentialFetcher,
+    Credentials,
+    RefreshableCredentials,
+)
+from datetime import UTC, datetime, timedelta
 from httpx import __version__ as httpx_version
 from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
@@ -42,11 +48,7 @@ class TestSigV4HTTPXAuth:
     @pytest.mark.asyncio
     async def test_auth_flow_signs_request(self):
         """Test that auth_flow properly signs requests."""
-        # Create mock credentials
-        mock_credentials = Mock()
-        mock_credentials.access_key = 'test_access_key'
-        mock_credentials.secret_key = 'test_secret_key'
-        mock_credentials.token = 'test_token'
+        mock_credentials = Credentials('test_access_key', 'test_secret_key', 'test_token')
 
         # Create a test request
         request = httpx.Request('GET', 'https://example.com/test', headers={'Host': 'example.com'})
@@ -61,6 +63,49 @@ class TestSigV4HTTPXAuth:
         # Verify request was signed (check for required SigV4 headers)
         assert 'Authorization' in signed_request.headers
         assert 'X-Amz-Date' in signed_request.headers
+
+    @staticmethod
+    def _rotating_credentials() -> RefreshableCredentials:
+        """Return credentials that rotate on every read, like a short-lived credential_process."""
+        generations = itertools.count(1)
+
+        def refresh():
+            generation = next(generations)
+            expiry = datetime.now(UTC) + timedelta(seconds=900)
+            return {
+                'access_key': f'AKID{generation}',
+                'secret_key': f'secret{generation}',
+                'token': f'token{generation}',
+                'expiry_time': expiry.isoformat(),
+            }
+
+        return RefreshableCredentials.create_from_metadata(
+            metadata=refresh(), refresh_using=refresh, method='test'
+        )
+
+    @staticmethod
+    def _signed_generation(request: httpx.Request) -> tuple[str, str]:
+        access_key = request.headers['Authorization'].split('Credential=')[1].split('/')[0]
+        return access_key.removeprefix('AKID'), request.headers['X-Amz-Security-Token']
+
+    def test_auth_flow_signs_with_one_credential_generation(self):
+        """Test that rotating credentials never mix access key and token in one signature."""
+        auth = SigV4HTTPXAuth(self._rotating_credentials(), 'test-service', 'us-west-2')
+        request = httpx.Request('POST', 'https://example.com/mcp', content=b'{}')
+
+        signed_request = next(auth.auth_flow(request))
+
+        generation, token = self._signed_generation(signed_request)
+        assert token == f'token{generation}'
+
+    def test_auth_flow_picks_up_refreshed_credentials_per_request(self):
+        """Test that a reused auth instance signs later requests with refreshed credentials."""
+        auth = SigV4HTTPXAuth(self._rotating_credentials(), 'test-service', 'us-west-2')
+
+        first = next(auth.auth_flow(httpx.Request('POST', 'https://example.com/mcp')))
+        second = next(auth.auth_flow(httpx.Request('POST', 'https://example.com/mcp')))
+
+        assert self._signed_generation(first) != self._signed_generation(second)
 
 
 class TestCreateAwsSession:

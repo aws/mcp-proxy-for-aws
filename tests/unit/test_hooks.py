@@ -17,6 +17,7 @@
 import httpx
 import json
 import pytest
+from botocore.credentials import Credentials
 from functools import partial
 from mcp.types import ClientCapabilities
 from mcp_proxy_for_aws.sigv4_helper import (
@@ -46,10 +47,7 @@ def create_request_with_sigv4_headers(
 def create_mock_session():
     """Helper to create a mocked AWS session with credentials."""
     mock_session = MagicMock()
-    mock_credentials = MagicMock()
-    mock_credentials.access_key = 'test-access-key'
-    mock_credentials.secret_key = 'test-secret-key'
-    mock_credentials.token = 'test-token'
+    mock_credentials = Credentials('test-access-key', 'test-secret-key', 'test-token')
     mock_session.get_credentials.return_value = mock_credentials
     return mock_session
 

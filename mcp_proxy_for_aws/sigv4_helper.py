@@ -153,7 +153,6 @@ class SigV4HTTPXAuth(httpx.Auth):
         self.credentials = credentials
         self.service = service
         self.region = region
-        self.signer = SigV4Auth(credentials, service, region)
 
     def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
         """Signs the request with SigV4 and adds the signature to the request headers."""
@@ -170,8 +169,9 @@ class SigV4HTTPXAuth(httpx.Auth):
             headers=headers,
         )
 
-        # Sign the request with SigV4
-        self.signer.add_auth(aws_request)
+        # Refreshable credentials can rotate between field reads, so sign from one snapshot
+        frozen_credentials = self.credentials.get_frozen_credentials()
+        SigV4Auth(frozen_credentials, self.service, self.region).add_auth(aws_request)
 
         # Add the signature header to the original request
         request.headers.update(dict(aws_request.headers))
