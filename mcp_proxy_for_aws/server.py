@@ -132,6 +132,10 @@ async def run_proxy(args) -> None:
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
+        # Wrap both the default path and dedicated per-profile clients.
+        if args.retries:
+            add_retry_middleware(proxy, args.retries)
+
         # Pass user metadata only: the middleware resolves AWS_REGION per profile.
         profile_middleware = add_profile_override_middleware(
             proxy,
@@ -147,8 +151,6 @@ async def run_proxy(args) -> None:
             args.headers,
         )
 
-        if args.retries:
-            add_retry_middleware(proxy, args.retries)
         await proxy.run_async(transport='stdio', show_banner=False, log_level=args.log_level)
     except Exception as e:
         logger.error('Cannot start proxy server: %s', e)
@@ -259,7 +261,17 @@ def add_retry_middleware(mcp: FastMCP, retries: int) -> None:
         retries: number of retries with which to configure the retry middleware
     """
     logger.info('Adding retry middleware')
-    mcp.add_middleware(RetryMiddleware(retries))
+    mcp.add_middleware(
+        RetryMiddleware(
+            retries,
+            retry_exceptions=(
+                ConnectionError,
+                TimeoutError,
+                httpx.NetworkError,
+                httpx.TimeoutException,
+            ),
+        )
+    )
 
 
 def add_logging_middleware(mcp: FastMCP, log_level: str) -> None:
