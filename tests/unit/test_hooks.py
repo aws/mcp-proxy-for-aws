@@ -14,6 +14,7 @@
 
 """Unit tests for hooks module."""
 
+import hashlib
 import httpx
 import json
 import pytest
@@ -519,6 +520,7 @@ class TestSignRequestHook:
         assert 'x-amz-date' in request.headers
         assert 'x-amz-security-token' in request.headers
         assert request.headers['content-length'] == str(len(request_body))
+        assert request.headers['x-amz-content-sha256'] == hashlib.sha256(request_body).hexdigest()
 
     @pytest.mark.asyncio
     async def test_sign_request_hook_with_profile(self, mock_create_session):

@@ -14,10 +14,11 @@
 
 """Unit tests for sigv4_helper module."""
 
+import hashlib
 import httpx
 import logging
 import pytest
-from botocore.credentials import BaseAssumeRoleCredentialFetcher
+from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials
 from httpx import __version__ as httpx_version
 from mcp.types import Implementation
 from mcp_proxy_for_aws import __version__
@@ -61,6 +62,55 @@ class TestSigV4HTTPXAuth:
         # Verify request was signed (check for required SigV4 headers)
         assert 'Authorization' in signed_request.headers
         assert 'X-Amz-Date' in signed_request.headers
+
+    @staticmethod
+    def _auth() -> SigV4HTTPXAuth:
+        """Return a SigV4HTTPXAuth for the lambda service with static test credentials."""
+        return SigV4HTTPXAuth(
+            Credentials('test_access_key', 'test_secret_key'), 'lambda', 'us-east-1'
+        )
+
+    @staticmethod
+    def _signed_headers(request: httpx.Request) -> list[str]:
+        """Return the SignedHeaders list from a signed request's Authorization header."""
+        return request.headers['Authorization'].split('SignedHeaders=')[1].split(',')[0].split(';')
+
+    def test_auth_flow_signs_payload_hash_header(self):
+        """auth_flow sends the body's SHA-256 hash in X-Amz-Content-SHA256 and signs it."""
+        body = b'{"jsonrpc": "2.0", "id": 1, "method": "initialize"}'
+        request = httpx.Request('POST', 'https://example.com/mcp', content=body)
+        auth = self._auth()
+
+        signed_request = next(auth.auth_flow(request))
+
+        assert signed_request.headers['X-Amz-Content-SHA256'] == hashlib.sha256(body).hexdigest()
+        assert 'x-amz-content-sha256' in self._signed_headers(signed_request)
+
+    def test_auth_flow_signs_empty_payload_hash_without_body(self):
+        """Requests without a body, such as GET and DELETE, carry the empty payload's hash."""
+        auth = self._auth()
+
+        for method in ('GET', 'DELETE'):
+            request = httpx.Request(method, 'https://example.com/mcp')
+            signed_request = next(auth.auth_flow(request))
+
+            assert signed_request.headers['X-Amz-Content-SHA256'] == hashlib.sha256().hexdigest()
+            assert 'x-amz-content-sha256' in self._signed_headers(signed_request)
+
+    def test_auth_flow_keeps_caller_payload_hash(self):
+        """A caller's X-Amz-Content-SHA256 value, such as UNSIGNED-PAYLOAD, is kept and signed."""
+        request = httpx.Request(
+            'POST',
+            'https://example.com/mcp',
+            content=b'{}',
+            headers={'X-Amz-Content-SHA256': 'UNSIGNED-PAYLOAD'},
+        )
+        auth = self._auth()
+
+        signed_request = next(auth.auth_flow(request))
+
+        assert signed_request.headers.get_list('X-Amz-Content-SHA256') == ['UNSIGNED-PAYLOAD']
+        assert 'x-amz-content-sha256' in self._signed_headers(signed_request)
 
 
 class TestCreateAwsSession:

@@ -15,6 +15,7 @@
 """SigV4 Helper for AWS request signing functionality."""
 
 import boto3
+import hashlib
 import httpx
 import json
 import logging
@@ -162,6 +163,13 @@ class SigV4HTTPXAuth(httpx.Auth):
         # Header 'connection' = 'keep-alive' is not used in calculating the request
         # signature on the server-side, and results in a signature mismatch if included
         headers.pop('connection', None)  # Remove if present, ignore if not
+
+        # Send the payload hash in X-Amz-Content-SHA256, which Lambda Web Function
+        # endpoints require on every signed request because they don't hash the body
+        # themselves. botocore signs this value as the payload hash. Keep a value the
+        # caller set, such as UNSIGNED-PAYLOAD.
+        if 'x-amz-content-sha256' not in request.headers:
+            headers['x-amz-content-sha256'] = hashlib.sha256(request.content).hexdigest()
 
         aws_request = AWSRequest(
             method=request.method,
