@@ -49,10 +49,13 @@ def test_configure_logging_invalid_level():
 
 
 def test_httpx_logging_level():
-    """Test that httpx logging is set to WARNING."""
+    """Test that HTTP client logging is set to WARNING.
+
+    Both httpx and httpx2 logger names must be quietened, since dependencies may use either.
+    """
     # Configure logging
     configure_logging()
 
-    # Check httpx logger level
-    assert logging.getLogger('httpx').level == logging.WARNING
-    assert logging.getLogger('httpcore').level == logging.WARNING
+    # Check HTTP client logger levels
+    for name in ('httpx', 'httpx2', 'httpcore', 'httpcore2'):
+        assert logging.getLogger(name).level == logging.WARNING, name
