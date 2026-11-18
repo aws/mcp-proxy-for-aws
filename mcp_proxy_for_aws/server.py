@@ -127,7 +127,7 @@ async def run_proxy(args) -> None:
                 'This proxy handles authentication and request routing to the appropriate backend services.'
             ),
         )
-        proxy.add_middleware(InitializeMiddleware(client_factory))
+        add_initialize_middleware(proxy, client_factory)
         add_tool_error_middleware(proxy, args.tool_timeout)
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
@@ -157,6 +157,20 @@ async def run_proxy(args) -> None:
         if profile_middleware:
             await profile_middleware.disconnect_profile_clients()
         await client_factory.disconnect()
+
+
+def add_initialize_middleware(mcp: FastMCP, client_factory: AWSMCPProxyClientFactory) -> None:
+    """Add initialize middleware ahead of all other middleware.
+
+    It must run before FastMCPProxy's own ProxyInitializeMiddleware, which opens the
+    backend session, so the host's capabilities are known when that session starts.
+
+    Args:
+        mcp: The FastMCP instance to add the middleware to
+        client_factory: The client factory that receives the host's initialize request
+    """
+    logger.info('Adding initialize middleware')
+    mcp.middleware.insert(0, InitializeMiddleware(client_factory))
 
 
 def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:

@@ -14,8 +14,9 @@
 
 import mcp.types as mt
 import pytest
+from mcp_proxy_for_aws.context import get_client_capabilities
 from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 def create_initialize_request(client_name: str) -> mt.InitializeRequest:
@@ -74,6 +75,39 @@ async def test_on_initialize_connects_client():
 
 
 @pytest.mark.asyncio
+async def test_on_initialize_stores_client_capabilities():
+    """Test that on_initialize stores the client's capabilities before connecting."""
+    mock_client = Mock()
+    mock_client._connect = AsyncMock()
+    mock_client.initialize_result = None
+
+    mock_factory = Mock()
+    mock_factory.get_client = AsyncMock(return_value=mock_client)
+
+    middleware = InitializeMiddleware(mock_factory)
+
+    mock_context = Mock()
+    mock_context.message = create_initialize_request('test-client')
+
+    call_order = []
+    mock_client._connect.side_effect = lambda: call_order.append('connect')
+
+    def record_capabilities(capabilities):
+        call_order.append(('set_client_capabilities', capabilities))
+
+    with patch(
+        'mcp_proxy_for_aws.middleware.initialize_middleware.set_client_capabilities',
+        side_effect=record_capabilities,
+    ):
+        await middleware.on_initialize(mock_context, AsyncMock())
+
+    assert call_order == [
+        ('set_client_capabilities', mock_context.message.params.capabilities),
+        'connect',
+    ]
+
+
+@pytest.mark.asyncio
 async def test_on_initialize_fails_if_connect_fails():
     """Test that on_initialize raises exception if _connect() fails."""
     mock_client = Mock()
@@ -129,6 +163,7 @@ async def test_on_initialize_skips_connect_for_special_clients(client_name):
 
     mock_client._connect.assert_not_called()
     mock_call_next.assert_called_once_with(mock_context)
+    assert get_client_capabilities() == mock_context.message.params.capabilities
 
 
 @pytest.mark.asyncio

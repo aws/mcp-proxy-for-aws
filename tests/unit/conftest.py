@@ -32,3 +32,18 @@ def _reset_sensitive_headers():
     yield
     sigv4_helper._EXTRA_SENSITIVE_HEADERS.clear()
     sigv4_helper._EXTRA_SENSITIVE_HEADERS.update(snapshot)
+
+
+@pytest.fixture(autouse=True)
+def _reset_client_capabilities():
+    """Keep the process-global client capabilities from leaking between tests.
+
+    `set_client_capabilities` runs on every initialize and is never cleared in
+    normal operation, so without this a test that stores capabilities changes
+    what the capability-forwarding hook sees in later tests.
+    """
+    from mcp_proxy_for_aws import context
+
+    snapshot = context.get_client_capabilities()
+    yield
+    context.set_client_capabilities(snapshot)

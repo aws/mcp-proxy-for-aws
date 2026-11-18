@@ -6,7 +6,7 @@ This example demonstrates how to use `aws_iam_streamablehttp_client` from `mcp-p
 
 ## Prerequisites
 
-- [Python 3.10+](https://www.python.org/downloads) and [uv](https://docs.astral.sh/uv/getting-started/installation/) installed
+- [Python 3.11+](https://www.python.org/downloads) and [uv](https://docs.astral.sh/uv/getting-started/installation/) installed
 - AWS credentials configured (via [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html), environment variables, or IAM roles)
 - Access to Anthropic Claude on [Amazon Bedrock](https://aws.amazon.com/bedrock/)
 

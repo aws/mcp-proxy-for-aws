@@ -17,7 +17,7 @@ This guide covers the development workflow of MCP Proxy for AWS.
 
 Before you begin development, ensure you have the following installed:
 
-- **Python 3.10+**: [Download Python](https://www.python.org/downloads/release/python-3100/)
+- **Python 3.11+**: [Download Python](https://www.python.org/downloads/release/python-3110/)
 - **uv package manager**: [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
 - **AWS CLI**: [Install and configure AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
 - **Git**: For version control

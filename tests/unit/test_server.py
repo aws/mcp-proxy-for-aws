@@ -18,8 +18,11 @@ import httpx
 import os
 import pytest
 from fastmcp.client.transports import ClientTransport
+from fastmcp.server.providers.proxy import FastMCPProxy, ProxyInitializeMiddleware
+from mcp_proxy_for_aws.middleware.initialize_middleware import InitializeMiddleware
 from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddleware
 from mcp_proxy_for_aws.server import (
+    add_initialize_middleware,
     add_profile_override_middleware,
     add_retry_middleware,
     add_tool_filtering_middleware,
@@ -331,6 +334,55 @@ class TestServer:
 
         assert isinstance(call_args, RetryMiddleware)
 
+    def test_add_initialize_middleware(self):
+        """Test that initialize middleware is inserted ahead of existing middleware."""
+        # Arrange
+        mock_mcp = Mock()
+        mock_client_factory = Mock()
+
+        # Act
+        add_initialize_middleware(mock_mcp, mock_client_factory)
+
+        # Assert
+        mock_mcp.middleware.insert.assert_called_once()
+        position, middleware = mock_mcp.middleware.insert.call_args[0]
+        assert position == 0
+        assert isinstance(middleware, InitializeMiddleware)
+
+    @patch(
+        'sys.argv',
+        ['test', 'https://test.example.com', '--service', 'test-service', '--region', 'us-east-1'],
+    )
+    @patch('mcp_proxy_for_aws.server.create_transport_with_sigv4')
+    @patch('mcp_proxy_for_aws.server.determine_aws_region', return_value='us-east-1')
+    async def test_initialize_middleware_runs_before_proxy_initialize_middleware(
+        self, mock_determine_region, mock_create_transport
+    ):
+        """Test that InitializeMiddleware runs before FastMCP's ProxyInitializeMiddleware.
+
+        ProxyInitializeMiddleware opens the backend session, so if it ran first the host's
+        capabilities (e.g. the MCP Apps UI extension) would not be forwarded.
+        """
+        # Arrange
+        mock_create_transport.return_value = Mock(spec=ClientTransport)
+        args = parse_args()
+        middleware_at_run = []
+
+        async def capture_middleware(proxy, **kwargs):
+            middleware_at_run.extend(proxy.middleware)
+
+        # Act
+        with patch.object(FastMCPProxy, 'run_async', capture_middleware):
+            await run_proxy(args)
+
+        # Assert
+        middleware_types = [type(middleware) for middleware in middleware_at_run]
+        assert InitializeMiddleware in middleware_types
+        assert ProxyInitializeMiddleware in middleware_types
+        assert middleware_types.index(InitializeMiddleware) < middleware_types.index(
+            ProxyInitializeMiddleware
+        )
+
     @patch('sys.argv', ['test', 'https://test.example.com'])
     def test_parse_args_default(self):
         """Test parse_args with default arguments."""
@@ -420,7 +472,7 @@ class TestServer:
         assert 'request' in call_args[1]['event_hooks']
         assert 'response' in call_args[1]['event_hooks']
         # user-agent + metadata + sign hooks
-        assert len(call_args[1]['event_hooks']['request']) == 3
+        assert len(call_args[1]['event_hooks']['request']) == 4
 
     def test_create_sigv4_client_no_credentials(self):
         """Test that credential check happens in sign_request_hook, not during client creation."""

@@ -42,7 +42,7 @@ The **MCP Proxy for AWS** package provides two ways to connect AI applications t
 
 ## Prerequisites
 
-* [Install Python 3.10+](https://www.python.org/downloads/release/python-3100/)
+* [Install Python 3.11+](https://www.python.org/downloads/release/python-3110/)
 * [Install the `uv` package manager](https://docs.astral.sh/uv/getting-started/installation/)
 * AWS credentials configured (via [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html), environment variables, or IAM roles)
 * (Optional, for docker users) [Install Docker Desktop](https://www.docker.com/products/docker-desktop)

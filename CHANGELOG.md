@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.8.0 (2026-11-03)
+
+### Removed
+
+- drop support for Python 3.10, which reached end of life in October 2026; Python 3.11 or newer is now required
+
+### Fix
+
+- **utils**: enforce https in create_transport_with_sigv4 (#464)
+- forward host client capabilities to the upstream server (#451)
+- **middleware**: report an unresolved tool lookup instead of a read only denial (#389)
+- **deps**: upgrade dnspython to 2.9.1, fastmcp to 3.4.11 and opentelemetry-api to 1.45.2 to resolve CVE-2026-114605, GHSA-7xgj-8392-5q4r and CVE-2026-114603
+
 ## v1.7.0 (2026-09-15)
 
 ### Added
