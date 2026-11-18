@@ -9,18 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING CHANGE
 
-- Moves to fastmcp 4 and the MCP Python SDK v2. Library users of
-`aws_iam_streamablehttp_client` should note:
-  - it yields two streams, `(read, write)`, instead of three;
-  - `sse_read_timeout` is removed (it was already a no-op);
-  - an `httpx_client_factory` must return an `httpx2` client, since the SigV4 auth is now an
-    `httpx2` auth object.
-
-  Python 3.11 or newer is required (3.10 is dropped), `fastmcp>=4.0.3,<5` replaces fastmcp 3,
-  `--read-only` now reads `read_only_hint`, and the User-Agent reports
-  `python-httpx2/<version>`. The agent-framework and langchain examples leave the uv workspace
-  and pin `mcp-proxy-for-aws<2` until those frameworks admit `mcp>=2`. CLI users
-  (`mcp-proxy-for-aws-cli`) are unaffected: it pins its whole dependency tree.
+- Moves to fastmcp 4 and the MCP Python SDK v2:
+  - `aws_iam_streamablehttp_client` yields two streams instead of three.
+  - `sse_read_timeout` is removed.
+  - A custom `httpx_client_factory` must return an `httpx2` client.
+  - Python 3.11 or newer is required.
 
 ### Feat
 
