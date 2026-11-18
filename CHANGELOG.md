@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v2.0.0 (2026-11-18)
+
+### BREAKING CHANGE
+
+- Moves to fastmcp 4 and the MCP Python SDK v2:
+  - `aws_iam_streamablehttp_client` yields two streams instead of three.
+  - `sse_read_timeout` is removed.
+  - A custom `httpx_client_factory` must return an `httpx2` client.
+  - Python 3.11 or newer is required.
+
+### Feat
+
+- infer the `lambda` service and Region from Lambda Web Function endpoints (#462)
+- migrate to fastmcp 4 and the MCP Python SDK v2 (#421)
+
+### Fix
+
+- report http status to library client callers (#479)
+- surface botocore error messages during initialization (#457)
+
 ## v1.8.0 (2026-11-03)
 
 ### Removed
