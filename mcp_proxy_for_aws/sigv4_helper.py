@@ -322,6 +322,22 @@ async def _handle_error_response(response: httpx2.Response) -> None:
         _report_rejected_credentials(response)
 
 
+async def _report_rejected_credentials_hook(response: httpx2.Response) -> None:
+    """Response hook that restores the HTTP status on a rejected request.
+
+    For a client that has no error logging of its own to attach: it reads the body of a 401/403
+    and hands it to ``_report_rejected_credentials``. Every other response is left untouched.
+    """
+    if response.status_code not in (401, 403):
+        return
+    try:
+        await response.aread()
+    except Exception as e:
+        logger.debug('Failed to read response: %s', e)
+        return
+    _report_rejected_credentials(response)
+
+
 def _report_rejected_credentials(response: httpx2.Response) -> None:
     """Give a 401/403 to a request the SDK answers itself a JSON-RPC error that names the status.
 

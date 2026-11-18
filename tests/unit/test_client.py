@@ -14,9 +14,12 @@
 
 """Unit tests for the client, parameterized by internal call."""
 
+import asyncio
+import httpx2
 import pytest
 from botocore.credentials import Credentials
 from datetime import timedelta
+from mcp import ClientSession, MCPError
 from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -438,3 +441,38 @@ async def test_metadata_preserves_factory_headers_and_auth(mock_session, mock_st
                 factory_kwargs = mock_factory.call_args[1]
                 assert factory_kwargs['headers'] == headers
                 assert factory_kwargs['auth'] is mock_auth
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('status', [401, 403])
+async def test_rejected_credentials_reach_the_caller_with_the_http_status(status):
+    """A 401/403 names its HTTP status in the error the library caller gets.
+
+    The SDK answers a failed POST with a stand-in error that drops the status, so the client
+    has to put it back. Driven through a real session and transport: a mocked client would
+    report success whether or not the status survived.
+    """
+
+    def reject(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(status, text='denied by the endpoint')
+
+    def factory(headers=None, timeout=None, auth=None) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(
+            transport=httpx2.MockTransport(reject), headers=headers, timeout=timeout, auth=auth
+        )
+
+    credentials = Credentials(access_key='AKIAIOSFODNN7EXAMPLE', secret_key='x' * 40)
+
+    async with aws_iam_streamablehttp_client(
+        'https://example.com/mcp',
+        'bedrock-agentcore',
+        aws_region='us-west-2',
+        credentials=credentials,
+        httpx_client_factory=factory,
+    ) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            with pytest.raises(MCPError) as rejected:
+                await asyncio.wait_for(session.initialize(), timeout=10)
+
+    assert f'HTTP {status}' in str(rejected.value)
+    assert 'denied by the endpoint' in str(rejected.value)
