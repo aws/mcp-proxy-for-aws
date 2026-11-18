@@ -22,7 +22,11 @@ from functools import partial
 from mcp.client._transport import TransportStreams
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import McpHttpClientFactory, create_mcp_http_client
-from mcp_proxy_for_aws.sigv4_helper import SigV4HTTPXAuth, _inject_metadata_hook
+from mcp_proxy_for_aws.sigv4_helper import (
+    SigV4HTTPXAuth,
+    _inject_metadata_hook,
+    _report_rejected_credentials_hook,
+)
 from mcp_proxy_for_aws.utils import validate_endpoint_url
 
 
@@ -120,6 +124,10 @@ def aws_iam_streamablehttp_client(
         timeout.total_seconds() if isinstance(timeout, timedelta) else timeout
     )
     http_client = httpx_client_factory(headers=headers, timeout=httpx_timeout, auth=auth)
+
+    # The SDK answers a failed POST with an error that drops the HTTP status, so a rejected
+    # request is rewritten to carry it back to the caller.
+    http_client.event_hooks.setdefault('response', []).append(_report_rejected_credentials_hook)
 
     # Append metadata injection hook if metadata is provided
     if metadata:
