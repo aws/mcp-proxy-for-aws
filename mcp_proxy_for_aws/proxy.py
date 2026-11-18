@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import httpx
+import asyncio
+import httpx2
 import logging
 from botocore.exceptions import BotoCoreError
 from fastmcp import Client
 from fastmcp.client.transports import ClientTransport
 from fastmcp.server.providers.proxy import StatefulProxyClient
-from mcp import McpError
-from mcp.types import InitializeRequest, JSONRPCError, JSONRPCMessage
+from mcp import MCPError
+from mcp.types import InitializeRequest, JSONRPCError
+from mcp_types.jsonrpc import jsonrpc_message_adapter
 from typing_extensions import override
 
 
@@ -27,7 +29,17 @@ logger = logging.getLogger(__name__)
 
 
 class AWSMCPProxyClient(StatefulProxyClient):
-    """Proxy client that handles HTTP errors when connection fails."""
+    """Proxy client that handles HTTP errors when connection fails.
+
+    ``StatefulProxyClient`` is the base because this proxy bridges stdio to HTTP (SigV4), and
+    the backend connection has to stay up for as long as the stdio pipe does. stdio has no
+    equivalent of streamable-http's DELETE to end a session -- closing stdin terminates the
+    subprocess -- so the connection is only torn down at program exit. That base releases each
+    ``async with`` without disconnecting, which is exactly that lifecycle; overriding
+    ``__aexit__`` to do nothing would also skip its nesting bookkeeping.
+
+    https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#stdio
+    """
 
     def __init__(self, transport: ClientTransport, max_connect_retry=3, **kwargs):
         """Constructor of AWSMCPProxyClient."""
@@ -42,24 +54,28 @@ class AWSMCPProxyClient(StatefulProxyClient):
             result = await super()._connect()
             logger.debug('Connected %s', self)
             return result
-        except httpx.HTTPStatusError as http_error:
+        except httpx2.HTTPStatusError as http_error:
             logger.exception('Connection failed')
             response = http_error.response
             try:
                 body = await response.aread()
-                jsonrpc_msg = JSONRPCMessage.model_validate_json(body).root
+                jsonrpc_msg = jsonrpc_message_adapter.validate_json(body)
             except Exception as e:
                 logger.debug('HTTP error is not a valid MCP message.', exc_info=e)
                 raise http_error
 
             if isinstance(jsonrpc_msg, JSONRPCError):
                 logger.debug('Converting HTTP error to MCP error', exc_info=http_error)
-                # raising McpError so that the sdk can handle the exception properly
-                raise McpError(error=jsonrpc_msg.error) from http_error
+                # raising MCPError so that the sdk can handle the exception properly
+                raise MCPError(
+                    code=jsonrpc_msg.error.code,
+                    message=jsonrpc_msg.error.message,
+                    data=jsonrpc_msg.error.data,
+                ) from http_error
             else:
                 raise http_error
         except RuntimeError as e:
-            if isinstance(e.__cause__, McpError):
+            if isinstance(e.__cause__, MCPError):
                 raise e.__cause__
 
             # Credential resolution and SigV4 signing fail with a BotoCoreError (an expired
@@ -68,11 +84,9 @@ class AWSMCPProxyClient(StatefulProxyClient):
             if isinstance(e.__cause__, BotoCoreError) or (
                 isinstance(e.__cause__, ValueError) and 'credentials' in str(e.__cause__).lower()
             ):
-                from mcp.types import INTERNAL_ERROR, ErrorData
+                from mcp.types import INTERNAL_ERROR
 
-                raise McpError(
-                    error=ErrorData(code=INTERNAL_ERROR, message=str(e.__cause__)),
-                ) from e
+                raise MCPError(code=INTERNAL_ERROR, message=str(e.__cause__)) from e
 
             if retry > self._max_connect_retry:
                 raise e
@@ -80,7 +94,7 @@ class AWSMCPProxyClient(StatefulProxyClient):
             try:
                 logger.warning('encountered runtime error, try force disconnect.', exc_info=e)
                 await self._disconnect(force=True)
-            except (httpx.TimeoutException, httpx.HTTPStatusError):
+            except (httpx2.TimeoutException, httpx2.HTTPStatusError):
                 # _disconnect(force=True) resets the nesting counter then awaits the
                 # session_task. That task may re-raise the exception that killed the
                 # session (e.g. HTTPStatusError from a prior 401) or a TimeoutException.
@@ -92,21 +106,6 @@ class AWSMCPProxyClient(StatefulProxyClient):
 
             return await self._connect(retry + 1)
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """The MCP Proxy for AWS project is a proxy from stdio to http (sigv4).
-
-        We want the client to remain connected until the stdio connection is closed.
-
-        https://modelcontextprotocol.io/specification/2024-11-05/basic/transports#stdio
-
-            1. close stdin
-            2. terminate subprocess
-
-        There is no equivalent of the streamble-http DELETE concept in stdio to terminate a session.
-        Hence the connection will be terminated only at program exit.
-        """
-        pass
-
 
 class AWSMCPProxyClientFactory:
     """Client factory that returns a connected client."""
@@ -116,6 +115,8 @@ class AWSMCPProxyClientFactory:
         self._transport = transport
         self._client: AWSMCPProxyClient | None = None
         self._initialize_request: InitializeRequest | None = None
+        self._connect_lock = asyncio.Lock()
+        self._connected = False
 
     def set_init_params(self, initialize_request: InitializeRequest):
         """Set client init parameters."""
@@ -128,12 +129,37 @@ class AWSMCPProxyClientFactory:
 
         return self._client
 
+    @property
+    def connected(self) -> bool:
+        """Whether a connect has completed.
+
+        ``Client.is_connected()`` is no substitute: it turns true as soon as the session
+        object exists, while the handshake is still running or about to fail, so a request
+        arriving then would skip the connect and run against a backend that is not there.
+        """
+        return self._connected
+
+    async def ensure_connected(self) -> Client:
+        """Get the client, connecting it first unless a connect has already completed.
+
+        Safe to call from any number of entry points: the connection is opened once, and a
+        failed attempt leaves it closed so the next call tries again.
+        """
+        client = await self.get_client()
+        if not self._connected:
+            async with self._connect_lock:
+                if not self._connected:
+                    await client._connect()
+                    self._connected = True
+        return client
+
     async def __call__(self) -> Client:
         """Implement the callable factory interface."""
         return await self.get_client()
 
     async def disconnect(self):
         """Disconnect all the clients (no throw)."""
+        self._connected = False
         try:
             if self._client:
                 await self._client._disconnect(force=True)

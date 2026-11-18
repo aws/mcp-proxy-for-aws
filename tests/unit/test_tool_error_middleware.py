@@ -15,14 +15,13 @@
 """Unit tests for ToolErrorMiddleware."""
 
 import anyio
-import httpx
+import httpx2
 import mcp.types as mt
 import pytest
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.tools import ToolResult
-from mcp import McpError
-from mcp.types import ErrorData
+from mcp import MCPError
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from unittest.mock import AsyncMock, Mock
 
@@ -63,9 +62,7 @@ class TestToolErrorMiddleware:
     async def test_catches_exception_raises_tool_error(self):
         """Exceptions are caught and raised as ToolError."""
         middleware = _make_middleware()
-        call_next = AsyncMock(
-            side_effect=McpError(ErrorData(code=-1, message='Connection closed'))
-        )
+        call_next = AsyncMock(side_effect=MCPError(code=-1, message='Connection closed'))
         context = _make_context()
 
         with pytest.raises(ToolError, match='Connection closed'):
@@ -89,10 +86,10 @@ class TestToolErrorMiddleware:
     async def test_credential_error_suggests_profile(self):
         """Credential errors suggest using long-lived credentials."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
         call_next = AsyncMock(
-            side_effect=httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+            side_effect=httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         )
         context = _make_context()
 
@@ -104,10 +101,10 @@ class TestToolErrorMiddleware:
     async def test_credential_error_on_403(self):
         """403 Forbidden is recognised as a credential error."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 403
         call_next = AsyncMock(
-            side_effect=httpx.HTTPStatusError('Forbidden', request=Mock(), response=response)
+            side_effect=httpx2.HTTPStatusError('Forbidden', request=Mock(), response=response)
         )
         context = _make_context()
 
@@ -118,9 +115,9 @@ class TestToolErrorMiddleware:
     async def test_credential_error_wrapped_in_cause(self):
         """401 wrapped via __cause__ is still detected."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
-        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        inner = httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         outer = RuntimeError('request failed')
         outer.__cause__ = inner
 
@@ -134,9 +131,9 @@ class TestToolErrorMiddleware:
     async def test_credential_error_wrapped_in_context(self):
         """401 wrapped via __context__ (implicit chaining) is still detected."""
         middleware = _make_middleware()
-        response = Mock(spec=httpx.Response)
+        response = Mock(spec=httpx2.Response)
         response.status_code = 401
-        inner = httpx.HTTPStatusError('Unauthorized', request=Mock(), response=response)
+        inner = httpx2.HTTPStatusError('Unauthorized', request=Mock(), response=response)
         outer = RuntimeError('wrapped')
         outer.__context__ = inner
 
@@ -170,3 +167,23 @@ class TestToolErrorMiddleware:
 
         with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
             await middleware.on_call_tool(context, call_next)
+
+
+class TestCredentialErrorFromTheSdk:
+    """The SDK reports a rejected request as an MCPError carrying the HTTP status as its code."""
+
+    @pytest.mark.parametrize('code', [401, 403])
+    def test_mcp_error_with_a_rejection_status_is_a_credential_error(self, code):
+        """A 401 or 403 code marks the error as a credential error."""
+        assert ToolErrorMiddleware._is_credential_error(MCPError(code=code, message='denied'))
+
+    def test_wrapped_mcp_error_is_a_credential_error(self):
+        """The chain is walked, so a wrapped error is still found."""
+        wrapper = RuntimeError('wrapped')
+        wrapper.__cause__ = MCPError(code=403, message='denied')
+        assert ToolErrorMiddleware._is_credential_error(wrapper)
+
+    @pytest.mark.parametrize('code', [-32603, 404, 500])
+    def test_other_mcp_errors_are_not(self, code):
+        """Other codes are not credential errors."""
+        assert not ToolErrorMiddleware._is_credential_error(MCPError(code=code, message='x'))
