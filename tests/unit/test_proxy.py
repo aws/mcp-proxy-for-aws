@@ -17,6 +17,7 @@
 import asyncio
 import httpx2
 import pytest
+from botocore.exceptions import LoginRefreshRequired, LoginTokenLoadError, NoRegionError
 from fastmcp import FastMCP
 from fastmcp.client.transports import ClientTransport, FastMCPTransport
 from mcp import MCPError
@@ -423,3 +424,42 @@ async def test_disconnect_marks_the_factory_unconnected():
 
     await factory.ensure_connected()
     assert client._connect.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('botocore_error', 'expected_hint'),
+    [
+        (LoginRefreshRequired(), "'aws login'"),
+        (
+            LoginTokenLoadError(
+                error_msg='Unable to load a existing login session for session '
+                'arn:aws:iam::123456789012:user/example. '
+                "Please reauthenticate with 'aws login'."
+            ),
+            "'aws login'",
+        ),
+        (NoRegionError(), 'You must specify a region.'),
+    ],
+    ids=['login_refresh_required', 'login_token_load_error', 'no_region_error'],
+)
+async def test_proxy_client_connect_botocore_error(botocore_error, expected_hint):
+    """Test connection converts RuntimeError wrapping a botocore error to MCPError without retry."""
+    mock_transport = Mock(spec=ClientTransport)
+    client = AWSMCPProxyClient(mock_transport)
+
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = botocore_error
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error
+    ) as mock_connect:
+        with patch.object(client, '_disconnect', new_callable=AsyncMock) as mock_disconnect:
+            with pytest.raises(MCPError) as exc_info:
+                await client._connect()
+
+    assert exc_info.value.error.code == -32603
+    assert exc_info.value.error.message == str(botocore_error)
+    assert expected_hint in exc_info.value.error.message
+    assert mock_connect.call_count == 1
+    mock_disconnect.assert_not_called()
