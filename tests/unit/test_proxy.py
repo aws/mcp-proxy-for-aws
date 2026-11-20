@@ -150,6 +150,7 @@ async def test_client_factory_get_client_when_disconnected():
     client = await factory.get_client()
     assert isinstance(client, AWSMCPProxyClient)
     assert factory._client == client
+    assert client.mode == 'auto'  # Do not force a legacy initialize on modern HTTP backends.
 
 
 @pytest.mark.asyncio
