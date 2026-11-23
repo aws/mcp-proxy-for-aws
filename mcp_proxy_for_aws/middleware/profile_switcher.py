@@ -34,6 +34,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import Tool, ToolResult
+from mcp_proxy_for_aws.middleware.tool_error_middleware import _format_error
 from mcp_proxy_for_aws.utils import create_transport_with_sigv4, determine_aws_region
 from typing import Any, cast
 from typing_extensions import override
@@ -277,6 +278,6 @@ class ProfileOverrideMiddleware(Middleware):
             logger.exception('Error calling tool via profile %s', profile)
             await self._invalidate_profile_client(profile, client)
             raise ToolError(
-                f'Tool call failed using profile {profile!r}. '
+                f'Tool call failed using profile {profile!r}: {_format_error(e)}. '
                 'The request could not be completed with the specified profile.'
             ) from e

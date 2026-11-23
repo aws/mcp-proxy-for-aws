@@ -255,7 +255,7 @@ class TestPerCallProfileOverride:
 
     @pytest.mark.asyncio
     async def test_profile_override_tool_call_failure(self, middleware, mock_context):
-        """Tool call failure raises ToolError with sanitized message."""
+        """Tool call failure raises ToolError that includes the error detail (issue #476)."""
         mock_client = AsyncMock()
         mock_client.call_tool.side_effect = Exception('backend error')
 
@@ -268,7 +268,10 @@ class TestPerCallProfileOverride:
             with pytest.raises(ToolError, match='Tool call failed') as exc_info:
                 await middleware.on_call_tool(mock_context, call_next)
 
-        assert 'backend error' not in str(exc_info.value)
+        # The error detail is now included so the agent can tell a network problem
+        # from a credential or permission problem (issue #476).
+        assert 'backend error' in str(exc_info.value)
+        assert 'could not be completed with the specified profile' in str(exc_info.value)
 
 
 class TestProfileClientInvalidation:

@@ -168,6 +168,49 @@ class TestToolErrorMiddleware:
         with pytest.raises(ToolError, match='expired or invalid AWS credentials'):
             await middleware.on_call_tool(context, call_next)
 
+    @pytest.mark.asyncio
+    async def test_empty_str_error_shows_type_name(self):
+        """When str(e) is empty, the error type name appears in the message (issue #476)."""
+        e = httpx2.ConnectError(anyio.BrokenResourceError())
+        middleware = _make_middleware()
+        call_next = AsyncMock(side_effect=e)
+        context = _make_context(tool_name='aws___run_script')
+
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        msg = str(exc_info.value)
+        assert 'failed: .' not in msg
+        assert 'ConnectError' in msg
+        assert 'Please retry' in msg
+
+    @pytest.mark.asyncio
+    async def test_empty_str_error_shows_cause_type(self):
+        """When str(e) is empty, the cause type name is included too (issue #476)."""
+        e = httpx2.ConnectError(anyio.BrokenResourceError())
+        middleware = _make_middleware()
+        call_next = AsyncMock(side_effect=e)
+        context = _make_context(tool_name='aws___run_script')
+
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        msg = str(exc_info.value)
+        assert 'BrokenResourceError' in msg
+
+    @pytest.mark.asyncio
+    async def test_error_with_message_still_shows_message(self):
+        """Normal errors whose str() is non-empty still show the original message."""
+        middleware = _make_middleware()
+        call_next = AsyncMock(side_effect=RuntimeError('transport died'))
+        context = _make_context(tool_name='my_tool')
+
+        with pytest.raises(ToolError) as exc_info:
+            await middleware.on_call_tool(context, call_next)
+
+        msg = str(exc_info.value)
+        assert 'transport died' in msg
+
 
 class TestCredentialErrorFromTheSdk:
     """The SDK reports a rejected request as an MCPError carrying the HTTP status as its code."""

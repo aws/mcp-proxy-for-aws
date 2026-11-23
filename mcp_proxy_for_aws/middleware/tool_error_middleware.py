@@ -25,6 +25,27 @@ from mcp import MCPError
 logger = logging.getLogger(__name__)
 
 
+def _format_error(e: BaseException) -> str:
+    """Return a non-empty human-readable description of an exception.
+
+    Falls back to the class name when str(e) is empty (e.g. httpx.ConnectError
+    wrapping anyio.BrokenResourceError), and appends the first cause's description
+    so the agent can distinguish network errors from permission or server errors.
+
+    Checks both __cause__ (explicit chaining) and args[0] (implicit wrapping used by
+    httpx, where the inner exception is passed as the first positional argument).
+    """
+    detail = str(e) or type(e).__name__
+    # Prefer explicit chaining; fall back to args[0] if it is an exception instance
+    cause: BaseException | None = e.__cause__
+    if cause is None and e.args and isinstance(e.args[0], BaseException):
+        cause = e.args[0]
+    if cause is not None:
+        cause_detail = str(cause) or type(cause).__name__
+        detail = f'{detail} ({cause_detail})'
+    return detail
+
+
 class ToolErrorMiddleware(Middleware):
     """Middleware that ensures tool calls never hang and always return a response.
 
@@ -60,8 +81,9 @@ class ToolErrorMiddleware(Middleware):
                 return await call_next(context)
         except Exception as e:
             tool_name = context.message.name
-            logger.error('Tool call %r failed: %s.', tool_name, e)
-            message = f'Tool call {tool_name!r} failed: {e}. Please retry.'
+            detail = _format_error(e)
+            logger.error('Tool call %r failed: %s.', tool_name, detail)
+            message = f'Tool call {tool_name!r} failed: {detail}. Please retry.'
             if self._is_credential_error(e):
                 message = (
                     f'Tool call {tool_name!r} failed due to expired or invalid AWS credentials.'
@@ -93,3 +115,11 @@ class ToolErrorMiddleware(Middleware):
                 return True
             current = current.__cause__ or current.__context__
         return False
+
+    def _format_error(e: BaseException) -> str:
+        detail = str(e) or type(e).__name__
+        cause = e.__cause__
+        if cause is not None:
+            cause_detail = str(cause) or type(cause).__name__
+            detail = f'{detail} ({cause_detail})'
+        return detail
