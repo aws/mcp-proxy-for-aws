@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import anyio
+import anyio.to_thread
 import httpx2
 import logging
 import mcp.types as mt
+from collections.abc import Callable
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import ToolResult
@@ -39,15 +41,19 @@ class ToolErrorMiddleware(Middleware):
     def __init__(
         self,
         tool_call_timeout: float = 300.0,
+        check_credentials: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the middleware.
 
         Args:
             tool_call_timeout: Maximum seconds a tool call may take before being
                 cancelled.
+            check_credentials: Called after a failed tool call; raises when the AWS
+                credentials used for signing cannot be resolved.
         """
         super().__init__()
         self._tool_call_timeout = tool_call_timeout
+        self._check_credentials = check_credentials
 
     async def on_call_tool(
         self,
@@ -62,13 +68,34 @@ class ToolErrorMiddleware(Middleware):
             tool_name = context.message.name
             logger.error('Tool call %r failed: %s.', tool_name, e)
             message = f'Tool call {tool_name!r} failed: {e}. Please retry.'
-            if self._is_credential_error(e):
+            credential_error = await self._credential_error()
+            if credential_error is not None:
+                message = (
+                    f'Tool call {tool_name!r} failed because AWS credentials could not be resolved:'
+                    f' {credential_error}. Please refresh your credentials and retry.'
+                    ' The proxy will automatically use the new credentials on the next request.'
+                )
+            elif self._is_credential_error(e):
                 message = (
                     f'Tool call {tool_name!r} failed due to expired or invalid AWS credentials.'
                     ' Please refresh your credentials and retry.'
                     ' The proxy will automatically use the new credentials on the next request.'
                 )
             raise ToolError(message) from e
+
+    async def _credential_error(self) -> str | None:
+        """Return why credentials cannot be resolved, or None when they can.
+
+        A failure to sign surfaces far from its cause: the SDK reports the request as a
+        closed connection, and a failed tool listing reports every tool as unknown.
+        """
+        if self._check_credentials is None:
+            return None
+        try:
+            await anyio.to_thread.run_sync(self._check_credentials)
+        except Exception as e:
+            return str(e)
+        return None
 
     @staticmethod
     def _is_credential_error(error: Exception) -> bool:

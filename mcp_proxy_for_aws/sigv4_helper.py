@@ -201,6 +201,22 @@ def create_aws_session(profile: str | None = None) -> boto3.Session:
     return session
 
 
+def check_credentials(profile: str | None = None) -> None:
+    """Resolve credentials the way request signing does, raising when none are usable.
+
+    Args:
+        profile: AWS profile to resolve credentials for (optional)
+
+    Raises:
+        ValueError: If no credentials resolve for the profile
+        botocore.exceptions.BotoCoreError, botocore.exceptions.ClientError: If resolving them fails
+    """
+    credentials = create_aws_session(profile).get_credentials()
+    if credentials is None:
+        raise ValueError('No AWS credentials available.')
+    credentials.get_frozen_credentials()
+
+
 def create_sigv4_client(
     service: str,
     region: str,

@@ -144,6 +144,32 @@ class TestToolErrorMiddleware:
             await middleware.on_call_tool(context, call_next)
 
     @pytest.mark.asyncio
+    async def test_unresolvable_credentials_replace_the_error(self):
+        """A tool call that fails while credentials cannot be resolved reports why."""
+
+        def check_credentials():
+            raise RuntimeError(
+                'An error occurred (ForbiddenException) when calling GetRoleCredentials: No access'
+            )
+
+        middleware = ToolErrorMiddleware(
+            tool_call_timeout=5.0, check_credentials=check_credentials
+        )
+        call_next = AsyncMock(side_effect=Exception("Unknown tool: 'my_tool'"))
+
+        with pytest.raises(ToolError, match='AWS credentials could not be resolved: .*No access'):
+            await middleware.on_call_tool(_make_context('my_tool'), call_next)
+
+    @pytest.mark.asyncio
+    async def test_resolvable_credentials_keep_the_error(self):
+        """A tool call that fails while credentials resolve keeps its own error."""
+        middleware = ToolErrorMiddleware(tool_call_timeout=5.0, check_credentials=lambda: None)
+        call_next = AsyncMock(side_effect=Exception("Unknown tool: 'my_tool'"))
+
+        with pytest.raises(ToolError, match="failed: Unknown tool: 'my_tool'. Please retry"):
+            await middleware.on_call_tool(_make_context('my_tool'), call_next)
+
+    @pytest.mark.asyncio
     async def test_non_credential_error_no_suggestion(self):
         """Non-credential errors do not suggest credential remediation."""
         middleware = _make_middleware()
