@@ -26,10 +26,12 @@ import asyncio
 import httpx2
 import logging
 import os
+from collections.abc import Callable
 from fastmcp.server.middleware.error_handling import RetryMiddleware
 from fastmcp.server.middleware.logging import LoggingMiddleware
 from fastmcp.server.providers.proxy import FastMCPProxy
 from fastmcp.server.server import FastMCP
+from functools import partial
 from mcp_proxy_for_aws import __version__
 from mcp_proxy_for_aws.cli import parse_args
 from mcp_proxy_for_aws.logging_config import configure_logging
@@ -38,6 +40,7 @@ from mcp_proxy_for_aws.middleware.profile_switcher import ProfileOverrideMiddlew
 from mcp_proxy_for_aws.middleware.tool_error_middleware import ToolErrorMiddleware
 from mcp_proxy_for_aws.middleware.tool_filter import ToolFilteringMiddleware
 from mcp_proxy_for_aws.proxy import AWSMCPProxyClientFactory
+from mcp_proxy_for_aws.sigv4_helper import check_credentials
 from mcp_proxy_for_aws.utils import (
     create_transport_with_sigv4,
     determine_aws_region,
@@ -128,7 +131,11 @@ async def run_proxy(args) -> None:
             ),
         )
         add_initialize_middleware(proxy, client_factory)
-        add_tool_error_middleware(proxy, args.tool_timeout)
+        add_tool_error_middleware(
+            proxy,
+            args.tool_timeout,
+            None if args.skip_auth else partial(check_credentials, default_profile),
+        )
         add_logging_middleware(proxy, args.log_level)
         add_tool_filtering_middleware(proxy, args.read_only)
 
@@ -173,15 +180,22 @@ def add_initialize_middleware(mcp: FastMCP, client_factory: AWSMCPProxyClientFac
     mcp.middleware.insert(0, InitializeMiddleware(client_factory))
 
 
-def add_tool_error_middleware(mcp: FastMCP, tool_timeout: float) -> None:
+def add_tool_error_middleware(
+    mcp: FastMCP,
+    tool_timeout: float,
+    check_credentials: Callable[[], None] | None = None,
+) -> None:
     """Add tool error middleware.
 
     Args:
         mcp: The FastMCP instance to add the middleware to
         tool_timeout: Maximum seconds a tool call may take.
+        check_credentials: Raises when signing credentials cannot be resolved.
     """
     logger.info('Adding tool error middleware with tool_timeout=%s', tool_timeout)
-    mcp.add_middleware(ToolErrorMiddleware(tool_call_timeout=tool_timeout))
+    mcp.add_middleware(
+        ToolErrorMiddleware(tool_call_timeout=tool_timeout, check_credentials=check_credentials)
+    )
 
 
 def add_profile_override_middleware(
