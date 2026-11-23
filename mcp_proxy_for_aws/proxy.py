@@ -125,7 +125,8 @@ class AWSMCPProxyClientFactory:
     async def get_client(self) -> Client:
         """Get client."""
         if self._client is None:
-            self._client = AWSMCPProxyClient(self._transport)
+            # Negotiate the HTTP backend independently of the stdio client's protocol era.
+            self._client = AWSMCPProxyClient(self._transport, mode='auto')
 
         return self._client
 
