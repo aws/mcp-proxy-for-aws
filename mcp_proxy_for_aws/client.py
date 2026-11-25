@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import anyio
 import boto3
 import httpx2
 import logging
 from botocore.credentials import Credentials
-from contextlib import _AsyncGeneratorContextManager
+from collections.abc import AsyncIterator
+from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
 from datetime import timedelta
 from functools import partial
 from mcp.client._transport import TransportStreams
@@ -136,7 +138,16 @@ def aws_iam_streamablehttp_client(
         )
         logger.debug('Metadata injection enabled with %d keys', len(metadata))
 
-    # Return the streamable HTTP client context manager with AWS IAM authentication
-    return streamable_http_client(
-        url=endpoint, http_client=http_client, terminate_on_close=terminate_on_close
-    )
+    @asynccontextmanager
+    async def managed_transport() -> AsyncIterator[TransportStreams]:
+        try:
+            async with streamable_http_client(
+                url=endpoint, http_client=http_client, terminate_on_close=terminate_on_close
+            ) as streams:
+                yield streams
+        finally:
+            # The SDK does not close a supplied client; this wrapper created it.
+            with anyio.CancelScope(shield=True):
+                await http_client.aclose()
+
+    return managed_transport()
