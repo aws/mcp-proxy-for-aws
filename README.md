@@ -224,6 +224,21 @@ Add the following configuration to your MCP client config file (e.g., for Kiro C
 
 #### Using Docker
 
+With Podman, explicitly register the healthcheck for OCI images by adding these
+options before the image name in `podman run` (or the MCP client's `args` array):
+
+```text
+--health-cmd=/usr/local/bin/docker-healthcheck.sh
+--health-interval=60s
+--health-timeout=10s
+--health-start-period=10s
+--health-retries=3
+```
+
+The check verifies that PID 1 is the proxy and its stdin/stdout are pipe or socket
+descriptors. It does not validate backend reachability, AWS credentials, or the
+success of an MCP operation.
+
 Using the pre-built public ECR image:
 
 ```json
