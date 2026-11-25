@@ -94,10 +94,10 @@ class AWSMCPProxyClient(StatefulProxyClient):
             try:
                 logger.warning('encountered runtime error, try force disconnect.', exc_info=e)
                 await self._disconnect(force=True)
-            except (httpx2.TimeoutException, httpx2.HTTPStatusError):
+            except (httpx2.TimeoutException, httpx2.HTTPStatusError, httpx2.ConnectError):
                 # _disconnect(force=True) resets the nesting counter then awaits the
                 # session_task. That task may re-raise the exception that killed the
-                # session (e.g. HTTPStatusError from a prior 401) or a TimeoutException.
+                # session (e.g. HTTPStatusError, TimeoutException, or ConnectError).
                 # Either way the error is safe to ignore: the counter is already 0 and
                 # the retry below will establish a fresh session with refreshed credentials.
                 logger.warning(

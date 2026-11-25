@@ -464,3 +464,118 @@ async def test_proxy_client_connect_botocore_error(botocore_error, expected_hint
     assert expected_hint in exc_info.value.error.message
     assert mock_connect.call_count == 1
     mock_disconnect.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_retries_after_connect_error_during_cleanup() -> None:
+    """A failed session must not prevent recovery from one connection reset."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport))
+    connect_error = httpx2.ConnectError('connection reset during TLS handshake')
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = connect_error
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect',
+        side_effect=[runtime_error, client],
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=connect_error
+        ) as disconnect:
+            assert await client._connect() is client
+
+    assert connect.await_count == 2
+    disconnect.assert_awaited_once_with(force=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('retry_limit', [0, 1, 3])
+async def test_proxy_client_cleanup_connect_errors_preserve_retry_limit(retry_limit: int) -> None:
+    """Persistent reset cleanup errors must preserve the existing finite attempt bound."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport), max_connect_retry=retry_limit)
+    connect_error = httpx2.ConnectError('persistent TLS connection reset')
+    runtime_error = RuntimeError('Client failed to connect')
+    runtime_error.__cause__ = connect_error
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=connect_error
+        ) as disconnect:
+            with pytest.raises(RuntimeError) as error:
+                await client._connect()
+
+    assert error.value is runtime_error
+    # The existing counter starts at zero and stops when retry > retry_limit.
+    assert connect.await_count == retry_limit + 2
+    assert disconnect.await_count == retry_limit + 1
+    assert all(call.kwargs == {'force': True} for call in disconnect.await_args_list)
+
+
+@pytest.mark.asyncio
+async def test_proxy_client_does_not_ignore_unexpected_cleanup_error() -> None:
+    """An unrelated cleanup failure must still propagate without retrying."""
+    client = AWSMCPProxyClient(Mock(spec=ClientTransport))
+    runtime_error = RuntimeError('Client failed to connect')
+    cleanup_error = ValueError('unexpected cleanup failure')
+
+    with patch(
+        'mcp_proxy_for_aws.proxy.StatefulProxyClient._connect', side_effect=runtime_error
+    ) as connect:
+        with patch.object(
+            client, '_disconnect', new_callable=AsyncMock, side_effect=cleanup_error
+        ):
+            with pytest.raises(ValueError) as error:
+                await client._connect()
+
+    assert error.value is cleanup_error
+    connect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode', ['legacy', 'auto'])
+@pytest.mark.parametrize('failures', [0, 1, 99])
+async def test_reconnect_uses_real_session_lifecycle(mode: str, failures: int) -> None:
+    """Exercise transport failure through the dependency's real session task and cleanup."""
+    from collections.abc import AsyncGenerator
+    from contextlib import asynccontextmanager, suppress
+    from fastmcp import FastMCP
+    from fastmcp.client.transports import FastMCPTransport
+    from mcp import ClientSession
+    from typing import Any
+
+    backend = FastMCP('Reconnect control')
+
+    @backend.tool
+    def healthy() -> str:
+        """Return a local control value."""
+        return 'healthy'
+
+    class FailingTransport(FastMCPTransport):
+        """Inject connection failures before entering the real in-memory transport."""
+
+        attempts = 0
+
+        @asynccontextmanager
+        async def connect_session(self, **kwargs: Any) -> AsyncGenerator[ClientSession, None]:
+            self.attempts += 1
+            if self.attempts <= failures:
+                raise httpx2.ConnectError('synthetic connection reset')
+            async with super().connect_session(**kwargs) as session:
+                yield session
+
+    transport = FailingTransport(backend)
+    client = AWSMCPProxyClient(transport, mode=mode)
+    try:
+        if failures == 99:
+            with pytest.raises(RuntimeError, match='Client failed to connect'):
+                await client._connect()
+            assert transport.attempts == 5
+        else:
+            await client._connect()
+            result = await client.call_tool('healthy', {})
+            assert result.data == 'healthy'
+            assert transport.attempts == failures + 1
+    finally:
+        with suppress(Exception):
+            await client._disconnect(force=True)
