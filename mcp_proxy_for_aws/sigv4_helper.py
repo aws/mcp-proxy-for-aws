@@ -137,6 +137,8 @@ def _build_user_agent(disable_telemetry: bool) -> str:
 class SigV4HTTPXAuth(httpx2.Auth):
     """HTTPX Auth class that signs requests with AWS SigV4."""
 
+    requires_request_body = True
+
     def __init__(
         self,
         credentials: Credentials,
