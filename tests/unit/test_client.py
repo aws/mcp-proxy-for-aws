@@ -101,6 +101,7 @@ async def test_sigv4_auth_is_created_and_used(mock_session, mock_streams, servic
                 mock_auth = Mock()
                 mock_auth_cls.return_value = mock_auth
                 mock_http_client = Mock()
+                mock_http_client.aclose = AsyncMock()
                 mock_factory = Mock(return_value=mock_http_client)
                 mock_stream_client.return_value.__aenter__ = AsyncMock(
                     return_value=(mock_read, mock_write)
@@ -147,6 +148,7 @@ async def test_streamable_client_parameters(
     with patch('boto3.Session', return_value=mock_session):
         with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
             mock_http_client = Mock()
+            mock_http_client.aclose = AsyncMock()
             mock_factory = Mock(return_value=mock_http_client)
             mock_stream_client.return_value.__aenter__ = AsyncMock(
                 return_value=(mock_read, mock_write)
@@ -183,6 +185,7 @@ async def test_custom_httpx_client_factory_is_passed(mock_session, mock_streams)
     mock_read, mock_write = mock_streams
     custom_factory = Mock()
     mock_http_client = Mock()
+    mock_http_client.aclose = AsyncMock()
     custom_factory.return_value = mock_http_client
 
     with patch('boto3.Session', return_value=mock_session):
@@ -324,6 +327,7 @@ async def test_http_localhost_endpoint_allowed(mock_session, mock_streams):
     with patch('boto3.Session', return_value=mock_session):
         with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
             mock_http_client = Mock()
+            mock_http_client.aclose = AsyncMock()
             mock_factory = Mock(return_value=mock_http_client)
             mock_stream_client.return_value.__aenter__ = AsyncMock(
                 return_value=(mock_read, mock_write)
@@ -356,6 +360,7 @@ async def test_metadata_adds_event_hook(mock_session, mock_streams, metadata):
     with patch('boto3.Session', return_value=mock_session):
         with patch('mcp_proxy_for_aws.client.streamable_http_client') as mock_stream_client:
             mock_http_client = Mock()
+            mock_http_client.aclose = AsyncMock()
             mock_http_client.event_hooks = {'request': []}
             mock_factory = Mock(return_value=mock_http_client)
             mock_stream_client.return_value.__aenter__ = AsyncMock(
@@ -388,6 +393,7 @@ async def test_metadata_falsy_no_hook_added(mock_session, mock_streams, metadata
     """Test that falsy metadata (None or empty) does not add event hooks."""
     mock_read, mock_write = mock_streams
     mock_http_client = Mock()
+    mock_http_client.aclose = AsyncMock()
     mock_http_client.event_hooks = {'request': []}
     mock_factory = Mock(return_value=mock_http_client)
 
@@ -422,6 +428,7 @@ async def test_metadata_preserves_factory_headers_and_auth(mock_session, mock_st
                 mock_auth = Mock()
                 mock_auth_cls.return_value = mock_auth
                 mock_http_client = Mock()
+                mock_http_client.aclose = AsyncMock()
                 mock_http_client.event_hooks = {'request': []}
                 mock_factory = Mock(return_value=mock_http_client)
                 mock_stream_client.return_value.__aenter__ = AsyncMock(
