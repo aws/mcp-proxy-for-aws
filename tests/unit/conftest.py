@@ -47,3 +47,13 @@ def _reset_client_capabilities():
     snapshot = context.get_client_capabilities()
     yield
     context.set_client_capabilities(snapshot)
+
+
+@pytest.fixture(autouse=True)
+def _reset_session_cache():
+    """Keep the process-global AWS session cache from leaking between tests."""
+    from mcp_proxy_for_aws import sigv4_helper
+
+    sigv4_helper._session_cache.clear()
+    yield
+    sigv4_helper._session_cache.clear()
