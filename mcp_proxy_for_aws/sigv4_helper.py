@@ -15,15 +15,25 @@
 """SigV4 Helper for AWS request signing functionality."""
 
 import boto3
+import hashlib
 import httpx2
 import json
 import logging
+import os
 import subprocess
+import threading
 import time
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.credentials import BaseAssumeRoleCredentialFetcher, Credentials, ProcessProvider
+from botocore.credentials import (
+    BaseAssumeRoleCredentialFetcher,
+    Credentials,
+    DeferredRefreshableCredentials,
+    ProcessProvider,
+    RefreshableCredentials,
+)
 from collections.abc import Generator, Iterable
+from dataclasses import dataclass
 from functools import partial
 from httpx2 import __version__ as httpx_version
 from mcp_proxy_for_aws import __version__
@@ -283,6 +293,11 @@ async def _handle_error_response(response: httpx2.Response) -> None:
         response: The HTTP response object
     """
     if response.is_error:
+        # Invalidate the cached session on auth failures before reading the body so
+        # even a stream-read error still triggers a fresh session on the next request.
+        if response.status_code in (401, 403):
+            _invalidate_session_for_response(response)
+
         # warning only because the SDK logs error
         log_level = logging.WARNING
         if (
@@ -302,6 +317,9 @@ async def _handle_error_response(response: httpx2.Response) -> None:
             logger.debug('Failed to read response: %s', e)
             # do nothing and let the client and SDK handle the error
             return
+
+        if response.status_code == 400 and _is_credential_error_response(response):
+            _invalidate_session_for_response(response)
 
         # Try to extract error details with fallbacks
         try:
@@ -382,6 +400,257 @@ def _report_rejected_credentials(response: httpx2.Response) -> None:
         logger.debug('Could not report rejected credentials as a JSON-RPC error: %s', e)
 
 
+_SESSION_CACHE_ENTRY_EXT = 'mcp_proxy_for_aws.session_cache_entry'
+_CREDENTIAL_EXPIRY_BUFFER_SECONDS = 60
+
+# Environment variables that influence botocore's credential resolution chain.
+_CREDENTIAL_ENV_VARS = (
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_SESSION_TOKEN',
+    'AWS_SECURITY_TOKEN',
+    'AWS_CREDENTIAL_EXPIRATION',
+    'AWS_ACCOUNT_ID',
+    'AWS_PROFILE',
+    'AWS_DEFAULT_PROFILE',
+    'AWS_CONFIG_FILE',
+    'AWS_SHARED_CREDENTIALS_FILE',
+    'AWS_LOGIN_CACHE_DIRECTORY',
+    'AWS_ROLE_ARN',
+    'AWS_WEB_IDENTITY_TOKEN_FILE',
+    'AWS_ROLE_SESSION_NAME',
+    'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
+    'AWS_CONTAINER_CREDENTIALS_FULL_URI',
+    'AWS_CONTAINER_AUTHORIZATION_TOKEN',
+    'AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE',
+    'AWS_REGION',
+    'AWS_DEFAULT_REGION',
+)
+
+# AWS SigV4 error markers that some endpoints return with HTTP 400 instead of 401/403.
+_CREDENTIAL_ERROR_MARKERS = (
+    'expiredtoken',
+    'invalidsignatureexception',
+    'invalidclienttokenid',
+    'unrecognizedclientexception',
+)
+
+
+def _expand_path(raw_path: str) -> str:
+    """Expand environment variables and ``~`` in a filesystem path."""
+    return os.path.expanduser(os.path.expandvars(raw_path))
+
+
+def _stat_file(path: str) -> tuple[str, tuple[int, int, int] | None]:
+    """Return a lightweight metadata tuple for a single file, or None if unavailable."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return (path, None)
+    return (path, (st.st_mtime_ns, st.st_size, st.st_ino))
+
+
+def _stat_cache_dir(
+    path: str,
+) -> tuple[str, tuple[int, int] | None, tuple[tuple[str, int, int, int], ...]]:
+    """Return metadata for a cache directory and its direct entries.
+
+    Inspecting each entry catches in-place overwrites of cached token files, which do not
+    update the parent directory's mtime on POSIX filesystems.
+    """
+    try:
+        dir_st = os.stat(path)
+        entries: list[tuple[str, int, int, int]] = []
+        with os.scandir(path) as it:
+            for entry in it:
+                try:
+                    st = entry.stat(follow_symlinks=True)
+                except OSError:
+                    continue
+                entries.append((entry.name, st.st_mtime_ns, st.st_size, st.st_ino))
+    except OSError:
+        return (path, None, ())
+    entries.sort()
+    return (path, (dir_st.st_mtime_ns, dir_st.st_ino), tuple(entries))
+
+
+def _credential_env_digest() -> bytes:
+    """Return a SHA-256 digest of AWS credential/config environment variables."""
+    hasher = hashlib.sha256()
+    for var in _CREDENTIAL_ENV_VARS:
+        value = os.environ.get(var)
+        if value is None:
+            hasher.update(b'\x00')
+        else:
+            encoded = value.encode('utf-8', errors='surrogateescape')
+            hasher.update(b'\x01')
+            hasher.update(len(encoded).to_bytes(8, 'big'))
+            hasher.update(encoded)
+    return hasher.digest()
+
+
+def _credential_sources_fingerprint() -> tuple[Any, ...]:
+    """Snapshot disk metadata and AWS env vars that determine resolved credentials."""
+    config_file = _expand_path(os.environ.get('AWS_CONFIG_FILE') or '~/.aws/config')
+    creds_file = _expand_path(
+        os.environ.get('AWS_SHARED_CREDENTIALS_FILE') or '~/.aws/credentials'
+    )
+    sso_cache_dir = _expand_path('~/.aws/sso/cache')
+    cli_cache_dir = _expand_path('~/.aws/cli/cache')
+    login_cache_dir = _expand_path(
+        os.environ.get('AWS_LOGIN_CACHE_DIRECTORY') or '~/.aws/login/cache'
+    )
+
+    extra_files: list[tuple[str, tuple[int, int, int] | None]] = []
+    for var in ('AWS_WEB_IDENTITY_TOKEN_FILE', 'AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE'):
+        raw_token_file = os.environ.get(var)
+        if raw_token_file:
+            extra_files.append(_stat_file(_expand_path(raw_token_file)))
+
+    return (
+        _credential_env_digest(),
+        _stat_file(config_file),
+        _stat_file(creds_file),
+        tuple(extra_files),
+        _stat_cache_dir(sso_cache_dir),
+        _stat_cache_dir(cli_cache_dir),
+        _stat_cache_dir(login_cache_dir),
+    )
+
+
+def _credentials_near_expiry(credentials: Credentials) -> bool:
+    """Return whether refreshable credentials are expired or within the refresh buffer."""
+    if not isinstance(credentials, RefreshableCredentials):
+        return False
+    # DeferredRefreshableCredentials reports refresh_needed() == True before its first fetch;
+    # let signing populate it once rather than treating an unused deferred instance as expired.
+    if (
+        isinstance(credentials, DeferredRefreshableCredentials)
+        and getattr(credentials, '_frozen_credentials', None) is None
+    ):
+        return False
+    return bool(credentials.refresh_needed(refresh_in=_CREDENTIAL_EXPIRY_BUFFER_SECONDS))
+
+
+def _is_credential_error_response(response: httpx2.Response) -> bool:
+    """Return whether an HTTP 400 response reports expired or invalid AWS credentials."""
+    error_type = response.headers.get('x-amzn-errortype', '').lower()
+    if any(marker in error_type for marker in _CREDENTIAL_ERROR_MARKERS):
+        return True
+    try:
+        body_text = response.text.lower()
+    except Exception:
+        return False
+    return any(marker in body_text for marker in _CREDENTIAL_ERROR_MARKERS)
+
+
+@dataclass(frozen=True)
+class _CachedSession:
+    """Cached boto3 session and resolved credentials tied to a source fingerprint."""
+
+    session: boto3.Session
+    credentials: Credentials
+    fingerprint: tuple[Any, ...]
+
+
+class _SessionCache:
+    """Thread-safe per-profile cache for boto3 sessions with automatic invalidation."""
+
+    def __init__(self) -> None:
+        """Initialize an empty session cache."""
+        self._lock = threading.Lock()
+        self._entries: dict[str | None, _CachedSession] = {}
+        self._profile_locks: dict[str | None, threading.Lock] = {}
+
+    def _get_profile_lock(self, profile: str | None) -> threading.Lock:
+        """Return the per-profile lock, creating it on first use."""
+        with self._lock:
+            lock = self._profile_locks.get(profile)
+            if lock is None:
+                lock = threading.Lock()
+                self._profile_locks[profile] = lock
+            return lock
+
+    def get_entry(self, profile: str | None) -> _CachedSession | None:
+        """Return a valid cached session entry or create a fresh one.
+
+        Captures the credential-source fingerprint before building a new session so any
+        concurrent external change forces a rebuild on the next request. Sessions that
+        resolve no credentials are not cached.
+        """
+        profile_lock = self._get_profile_lock(profile)
+        with profile_lock:
+            fingerprint = _credential_sources_fingerprint()
+            with self._lock:
+                entry = self._entries.get(profile)
+            if (
+                entry is not None
+                and entry.fingerprint == fingerprint
+                and not _credentials_near_expiry(entry.credentials)
+            ):
+                return entry
+
+            # Evict stale entry before rebuilding so a failed rebuild never leaves stale
+            # credentials behind.
+            if entry is not None:
+                with self._lock:
+                    if self._entries.get(profile) is entry:
+                        self._entries.pop(profile, None)
+
+            session = create_aws_session(profile)
+            credentials = session.get_credentials()
+            if credentials is None:
+                return None
+
+            new_entry = _CachedSession(
+                session=session,
+                credentials=credentials,
+                fingerprint=fingerprint,
+            )
+            with self._lock:
+                self._entries[profile] = new_entry
+            return new_entry
+
+    def invalidate(
+        self,
+        profile: str | None,
+        expected: _CachedSession | None = None,
+    ) -> None:
+        """Remove the cached entry for ``profile`` if it matches ``expected`` (when given)."""
+        with self._lock:
+            current = self._entries.get(profile)
+            if current is None:
+                return
+            if expected is not None and current is not expected:
+                return
+            self._entries.pop(profile, None)
+
+    def clear(self) -> None:
+        """Clear all cached sessions."""
+        with self._lock:
+            self._entries.clear()
+
+
+_session_cache = _SessionCache()
+
+
+def _invalidate_session_for_response(response: httpx2.Response) -> None:
+    """Invalidate the cached session that signed the request for ``response``."""
+    try:
+        request = response.request
+    except RuntimeError:
+        return
+    extensions = getattr(request, 'extensions', None)
+    if not isinstance(extensions, dict):
+        return
+    cached = extensions.get(_SESSION_CACHE_ENTRY_EXT)
+    if not isinstance(cached, tuple) or len(cached) != 2:
+        return
+    profile, entry = cached
+    if isinstance(entry, _CachedSession):
+        _session_cache.invalidate(profile, expected=entry)
+
+
 async def _sign_request_hook(
     region: str,
     service: str,
@@ -405,12 +674,12 @@ async def _sign_request_hook(
     # Set Content-Length for signing
     request.headers['Content-Length'] = str(len(request.content))
 
-    # Always read fresh credentials from disk so account switches
-    # and credential refreshes take effect immediately.
-    session = create_aws_session(profile)
-    credentials = session.get_credentials()
+    # Reuse the cached session while disk files, cache dirs, and env vars are unchanged so
+    # SSO profiles avoid a per-request sso:GetRoleCredentials round-trip, while account
+    # switches and credential refreshes take effect immediately.
+    entry = _session_cache.get_entry(profile)
 
-    if credentials is None:
+    if entry is None:
         if skip_auth:
             logger.debug('No AWS credentials available, sending request unsigned (--skip-auth)')
             return
@@ -418,12 +687,18 @@ async def _sign_request_hook(
             'No AWS credentials available. Configure credentials or use --skip-auth to send unsigned requests.'
         )
 
+    request.extensions[_SESSION_CACHE_ENTRY_EXT] = (profile, entry)
+
     # Create SigV4 auth and use its signing logic
-    auth = SigV4HTTPXAuth(credentials, service, region)
+    auth = SigV4HTTPXAuth(entry.credentials, service, region)
 
     # Call auth_flow to sign the request (it modifies request in-place)
-    auth_flow = auth.auth_flow(request)
-    next(auth_flow)  # Execute the generator to perform signing
+    try:
+        auth_flow = auth.auth_flow(request)
+        next(auth_flow)  # Execute the generator to perform signing
+    except Exception:
+        _session_cache.invalidate(profile, expected=entry)
+        raise
 
     logger.debug('Request headers after signing: %s', _sanitize_headers(dict(request.headers)))
 
